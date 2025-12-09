@@ -1,0 +1,147 @@
+// Prisma schema for CollabFlow
+// Uses NextAuth.js compatible schema + Document + Kanban models
+// Prisma 7 - datasource URL is configured in prisma.config.ts
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// NextAuth.js required models
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  
+  accounts      Account[]
+  sessions      Session[]
+  documents     Document[]
+  boards        Board[]
+  documentEdits DocumentHistory[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+  
+  @@unique([identifier, token])
+}
+
+// CollabFlow specific models
+model Document {
+  id        String   @id @default(cuid())
+  title     String   @default("Untitled Document")
+  content   String?  @db.Text  // HTML content
+  
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  
+  isPublic  Boolean  @default(false)
+  
+  history   DocumentHistory[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([authorId])
+}
+
+// Document edit history
+model DocumentHistory {
+  id          String   @id @default(cuid())
+  
+  documentId  String
+  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  action      String   // "created", "edited", "renamed"
+  details     String?  // e.g., "Changed title from X to Y"
+  
+  createdAt   DateTime @default(now())
+  
+  @@index([documentId])
+  @@index([userId])
+}
+
+// Kanban models
+model Board {
+  id        String   @id @default(cuid())
+  title     String   @default("Untitled Board")
+  
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  
+  columns   Column[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([authorId])
+}
+
+model Column {
+  id      String @id @default(cuid())
+  title   String
+  order   Int    @default(0)
+  
+  boardId String
+  board   Board  @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  
+  cards   Card[]
+  
+  @@index([boardId])
+}
+
+model Card {
+  id          String  @id @default(cuid())
+  title       String
+  description String? @db.Text
+  order       Int     @default(0)
+  
+  columnId    String
+  column      Column  @relation(fields: [columnId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([columnId])
+}

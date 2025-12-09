@@ -11,6 +11,7 @@ CollabFlow is a comprehensive collaboration platform built with Next.js 15, feat
 ## ✨ Features
 
 ### 📝 Document Editor
+
 - Rich text editing with **TipTap**
 - Document history tracking (who edited what)
 - Auto-save with Ctrl+S
@@ -18,18 +19,21 @@ CollabFlow is a comprehensive collaboration platform built with Next.js 15, feat
 - Share documents via URL
 
 ### 📋 Kanban Board
+
 - Drag-and-drop task management
 - Create, edit, and delete cards
 - Multiple columns (To Do, In Progress, Review, Done)
 - Full database persistence
 - Real-time updates
 
-### 💬 Team Chat *(Coming Soon)*
+### 💬 Team Chat _(Coming Soon)_
+
 - Real-time messaging
 - Channel-based conversations
 - Direct messages
 
-### 📹 Video Calling *(Coming Soon)*
+### 📹 Video Calling _(Coming Soon)_
+
 - WebRTC-based video conferencing
 - Screen sharing
 - Multiple participants
@@ -38,17 +42,17 @@ CollabFlow is a comprehensive collaboration platform built with Next.js 15, feat
 
 ## 🛠️ Tech Stack
 
-| Category | Technology |
-|----------|------------|
-| **Framework** | Next.js 15 (App Router) |
-| **Language** | TypeScript |
-| **Styling** | TailwindCSS + shadcn/ui |
-| **Database** | PostgreSQL |
-| **ORM** | Prisma 7 |
+| Category           | Technology                    |
+| ------------------ | ----------------------------- |
+| **Framework**      | Next.js 15 (App Router)       |
+| **Language**       | TypeScript                    |
+| **Styling**        | TailwindCSS + shadcn/ui       |
+| **Database**       | PostgreSQL                    |
+| **ORM**            | Prisma 7                      |
 | **Authentication** | NextAuth.js v5 (Google OAuth) |
-| **Editor** | TipTap (ProseMirror) |
-| **Drag & Drop** | dnd-kit |
-| **Animations** | Framer Motion |
+| **Editor**         | TipTap (ProseMirror)          |
+| **Drag & Drop**    | dnd-kit                       |
+| **Animations**     | Framer Motion                 |
 
 ---
 
@@ -63,34 +67,39 @@ CollabFlow is a comprehensive collaboration platform built with Next.js 15, feat
 ### Installation
 
 1. **Clone the repository**
+
    ```bash
    git clone https://github.com/yourusername/collabflow.git
    cd collabflow
    ```
 
 2. **Install dependencies**
+
    ```bash
    npm install --legacy-peer-deps
    ```
 
 3. **Configure environment variables**
-   
+
    Create a `.env` file:
+
    ```env
    DATABASE_URL="postgresql://postgres:yourpassword@localhost:5432/collabflow"
-   
+
    AUTH_SECRET="your-secret-key-here"
    AUTH_GOOGLE_ID="your-google-client-id"
    AUTH_GOOGLE_SECRET="your-google-client-secret"
    ```
 
 4. **Set up the database**
+
    ```bash
    npx prisma generate
    npx prisma db push
    ```
 
 5. **Run the development server**
+
    ```bash
    npm run dev
    ```
@@ -143,29 +152,33 @@ collabflow/
 
 ## 🗄️ Database Models
 
-| Model | Description |
-|-------|-------------|
-| `User` | User accounts (NextAuth) |
-| `Document` | Rich text documents |
-| `DocumentHistory` | Edit history tracking |
-| `Board` | Kanban boards |
-| `Column` | Board columns |
-| `Card` | Task cards |
+| Model             | Description              |
+| ----------------- | ------------------------ |
+| `User`            | User accounts (NextAuth) |
+| `Document`        | Rich text documents      |
+| `DocumentHistory` | Edit history tracking    |
+| `Board`           | Kanban boards            |
+| `Column`          | Board columns            |
+| `Card`            | Task cards               |
 
 ---
 
 ## 🎨 Screenshots
 
 ### Landing Page
+
 Modern, animated landing page with feature highlights.
 
 ### Dashboard
+
 Quick overview with recent documents and activity.
 
 ### Document Editor
+
 Rich text editor with formatting toolbar and history panel.
 
 ### Kanban Board
+
 Drag-and-drop task management with multiple columns.
 
 ---
@@ -199,11 +212,5 @@ This project is licensed under the MIT License.
 
 ## 👨‍💻 Author
 
-**Your Name**  
+**Bhanuteja-c**  
 Final Year Project - 2025
-
----
-
-<p align="center">
-  Made with ❤️ using Next.js
-</p>

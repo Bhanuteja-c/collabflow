@@ -1,0 +1,233 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* ═══════════════════════════════════════════════════════════════
+   CollabFlow - Professional Theme
+   Clean, minimal, enterprise-grade design with excellent readability
+   ═══════════════════════════════════════════════════════════════ */
+
+@theme {
+    /* Light Mode - Clean White */
+    --color-background: hsl(0 0% 100%);
+    --color-foreground: hsl(222 47% 11%);
+    --color-card: hsl(0 0% 100%);
+    --color-card-foreground: hsl(222 47% 11%);
+    --color-popover: hsl(0 0% 100%);
+    --color-popover-foreground: hsl(222 47% 11%);
+
+    /* Primary - Deep Blue */
+    --color-primary: hsl(222 47% 11%);
+    --color-primary-foreground: hsl(0 0% 100%);
+
+    /* Secondary */
+    --color-secondary: hsl(210 40% 96%);
+    --color-secondary-foreground: hsl(222 47% 11%);
+
+    /* Muted */
+    --color-muted: hsl(210 40% 96%);
+    --color-muted-foreground: hsl(215 16% 47%);
+
+    /* Accent */
+    --color-accent: hsl(210 40% 96%);
+    --color-accent-foreground: hsl(222 47% 11%);
+
+    /* Destructive */
+    --color-destructive: hsl(0 84% 60%);
+    --color-destructive-foreground: hsl(0 0% 100%);
+
+    /* Border & Input */
+    --color-border: hsl(214 32% 91%);
+    --color-input: hsl(214 32% 91%);
+    --color-ring: hsl(222 47% 11%);
+
+    /* Sidebar */
+    --color-sidebar: hsl(0 0% 98%);
+    --color-sidebar-foreground: hsl(222 47% 11%);
+    --color-sidebar-border: hsl(214 32% 91%);
+    --color-sidebar-accent: hsl(210 40% 96%);
+    --color-sidebar-accent-foreground: hsl(222 47% 11%);
+    --color-sidebar-ring: hsl(222 47% 11%);
+
+    --radius: 0.625rem;
+}
+
+/* Dark Mode - Clean Slate (High Readability) */
+.dark {
+    --color-background: hsl(222 47% 11%);
+    --color-foreground: hsl(210 40% 98%);
+    --color-card: hsl(217 33% 17%);
+    --color-card-foreground: hsl(210 40% 98%);
+    --color-popover: hsl(217 33% 17%);
+    --color-popover-foreground: hsl(210 40% 98%);
+    --color-primary: hsl(0 0% 100%);
+    --color-primary-foreground: hsl(222 47% 11%);
+    --color-secondary: hsl(217 33% 17%);
+    --color-secondary-foreground: hsl(210 40% 98%);
+    --color-muted: hsl(217 33% 17%);
+    --color-muted-foreground: hsl(215 20% 65%);
+    --color-accent: hsl(217 33% 17%);
+    --color-accent-foreground: hsl(210 40% 98%);
+    --color-border: hsl(217 33% 25%);
+    --color-input: hsl(217 33% 25%);
+    --color-ring: hsl(0 0% 100%);
+    --color-sidebar: hsl(222 47% 11%);
+    --color-sidebar-foreground: hsl(210 40% 98%);
+    --color-sidebar-border: hsl(217 33% 17%);
+    --color-sidebar-accent: hsl(217 33% 17%);
+    --color-sidebar-accent-foreground: hsl(210 40% 98%);
+}
+
+/* Base */
+* {
+    border-color: var(--color-border);
+}
+
+body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Professional Utilities
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Gradient text */
+.gradient-text {
+    background: linear-gradient(135deg, hsl(222 47% 11%), hsl(220 60% 50%));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.dark .gradient-text {
+    background: linear-gradient(135deg, hsl(210 40% 98%), hsl(220 60% 70%));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+/* Primary button */
+.btn-primary {
+    background: hsl(222 47% 11%);
+    color: white;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+}
+
+.btn-primary:hover {
+    background: hsl(222 47% 20%);
+    box-shadow: 0 4px 12px -2px rgb(0 0 0 / 0.12);
+    transform: translateY(-1px);
+}
+
+.dark .btn-primary {
+    background: white;
+    color: hsl(222 47% 11%);
+}
+
+.dark .btn-primary:hover {
+    background: hsl(210 40% 96%);
+}
+
+/* Glass effect */
+.glass {
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.dark .glass {
+    background: rgba(30, 41, 59, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Hover lift */
+.hover-lift {
+    transition: all 0.2s ease;
+}
+
+.hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.1);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Prose Styles - Editor content
+   ═══════════════════════════════════════════════════════════════ */
+
+.prose {
+    color: var(--color-foreground);
+}
+
+.prose h1,
+.prose h2,
+.prose h3 {
+    color: var(--color-foreground);
+}
+
+.prose p,
+.prose li {
+    color: var(--color-foreground);
+}
+
+.prose h1 {
+    font-size: 2rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    margin-bottom: 1rem;
+}
+
+.prose h2 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin-bottom: 0.75rem;
+}
+
+.prose p {
+    margin-bottom: 1rem;
+    line-height: 1.7;
+}
+
+.prose ul,
+.prose ol {
+    margin-bottom: 1rem;
+    padding-left: 1.5rem;
+}
+
+.prose li {
+    margin-bottom: 0.5rem;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Scrollbar - Minimal
+   ═══════════════════════════════════════════════════════════════ */
+
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: hsl(220 9% 80%);
+    border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: hsl(220 9% 60%);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+    background: hsl(217 33% 30%);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+    background: hsl(217 33% 40%);
+}
