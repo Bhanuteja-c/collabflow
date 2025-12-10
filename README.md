@@ -69,7 +69,7 @@ CollabFlow is a comprehensive collaboration platform built with Next.js 15, feat
 1. **Clone the repository**
 
    ```bash
-   git clone https://github.com/Bhanuteja-c/collabflow.git
+   git clone https://github.com/yourusername/collabflow.git
    cd collabflow
    ```
 

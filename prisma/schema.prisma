@@ -24,6 +24,14 @@ model User {
   boards        Board[]
   documentEdits DocumentHistory[]
   
+  // Chat relations
+  channelMemberships ChannelMember[]
+  messages           Message[]
+  reactions          Reaction[]
+  
+  // Document sharing
+  sharedDocuments    DocumentShare[]
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -76,6 +84,7 @@ model Document {
   isPublic  Boolean  @default(false)
   
   history   DocumentHistory[]
+  shares    DocumentShare[]
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -98,6 +107,25 @@ model DocumentHistory {
   
   createdAt   DateTime @default(now())
   
+  @@index([documentId])
+  @@index([userId])
+}
+
+// Document sharing permissions
+model DocumentShare {
+  id          String   @id @default(cuid())
+  
+  documentId  String
+  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  permission  String   @default("view") // "view" or "edit"
+  
+  createdAt   DateTime @default(now())
+  
+  @@unique([documentId, userId])
   @@index([documentId])
   @@index([userId])
 }
@@ -145,3 +173,73 @@ model Card {
   
   @@index([columnId])
 }
+
+// Chat models
+model Channel {
+  id        String    @id @default(cuid())
+  name      String
+  type      String    @default("public") // public, private, direct
+  
+  members   ChannelMember[]
+  messages  Message[]
+  
+  createdById String?
+  
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model ChannelMember {
+  id        String   @id @default(cuid())
+  
+  channelId String
+  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  role      String   @default("member") // admin, member
+  
+  joinedAt  DateTime @default(now())
+  
+  @@unique([channelId, userId])
+  @@index([channelId])
+  @@index([userId])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  content   String   @db.Text
+  attachments Json? // Array of { type: 'image', url: '...' }
+  
+  channelId String
+  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  
+  reactions Reaction[]
+  
+  createdAt DateTime @default(now())
+  
+  @@index([channelId])
+  @@index([authorId])
+}
+
+model Reaction {
+  id        String   @id @default(cuid())
+  emoji     String
+  
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
+  @@index([userId])
+}
+

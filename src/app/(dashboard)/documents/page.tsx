@@ -23,6 +23,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useRouter } from "next/navigation";
 
 interface Document {
     id: string;
@@ -57,6 +58,8 @@ export default function DocumentsPage() {
         }
     };
 
+    const router = useRouter(); // add this hook at top
+
     const createDocument = async () => {
         if (!newDocName.trim()) {
             alert("Please enter a document name");
@@ -74,14 +77,15 @@ export default function DocumentsPage() {
                 const doc = await res.json();
                 setShowNameInput(false);
                 setNewDocName("");
-                window.location.href = `/editor/${doc.id}`;
+                router.push(`/editor/${doc.id}`);
             } else {
                 const err = await res.json();
-                alert("Failed to create: " + (err.details || err.error));
+                console.error("Create failed:", err);
+                alert(`Failed to create: ${err.error || "Unknown error"}\nDetails: ${err.details || ""}`);
             }
         } catch (error) {
             console.error("Error creating document:", error);
-            alert("Failed to create document");
+            alert("Failed to create document. Check console for details.");
         } finally {
             setCreating(false);
         }
@@ -185,8 +189,22 @@ export default function DocumentsPage() {
 
             {/* Documents Grid */}
             {loading ? (
-                <div className="flex items-center justify-center py-12">
-                    <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {[1, 2, 3, 4, 5, 6].map((i) => (
+                        <div key={i} className="animate-pulse">
+                            <div className="rounded-xl border bg-card p-5 space-y-4">
+                                <div className="flex items-start justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-lg bg-muted" />
+                                        <div className="space-y-2">
+                                            <div className="h-4 w-32 bg-muted rounded" />
+                                            <div className="h-3 w-24 bg-muted rounded" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
                 </div>
             ) : filteredDocuments.length === 0 ? (
                 <motion.div

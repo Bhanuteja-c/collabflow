@@ -20,7 +20,7 @@ export default function SignInPage() {
                     <CardHeader className="text-center pb-2">
                         <Link href="/" className="inline-block mx-auto mb-4">
                             <Image
-                                src="/CollabFlow.png"
+                                src="/Minimal-CollabFlow-Icon.png"
                                 alt="CollabFlow"
                                 width={48}
                                 height={48}
