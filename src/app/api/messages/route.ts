@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ensureUser } from "@/lib/ensureUser";
-import { pusherServer } from "@/lib/pusher";
+import { emitToChannel } from "@/lib/socket";
 
 // GET /api/messages?channelId=xxx - Get messages for a channel
 export async function GET(req: NextRequest) {
@@ -40,6 +40,7 @@ export async function GET(req: NextRequest) {
                 author: {
                     select: { id: true, name: true, image: true },
                 },
+                reactions: true,
             },
         });
 
@@ -106,14 +107,8 @@ export async function POST(req: NextRequest) {
             data: { updatedAt: new Date() },
         });
 
-        // Trigger Pusher/Soketi event for real-time update (non-blocking)
-        try {
-            await pusherServer.trigger(`channel-${channelId}`, "new-message", message);
-            await pusherServer.trigger(`presence-channel-${channelId}`, "new-message", message);
-        } catch (pusherError) {
-            // Log but don't fail the request if real-time push fails
-            console.error("[API/messages] Pusher trigger failed:", pusherError);
-        }
+        // Emit via Socket.io for real-time update
+        emitToChannel(channelId, "new-message", message);
 
         return NextResponse.json(message);
     } catch (error) {

@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 import { useTheme } from "next-themes";
+import { useSession, signOut } from "next-auth/react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,16 +20,34 @@ import {
     Moon,
     Sun,
     Save,
+    LogOut,
+    Loader2,
 } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function SettingsPage() {
+    const { data: session } = useSession();
     const { theme, setTheme } = useTheme();
+    const [saving, setSaving] = useState(false);
+    const [signingOut, setSigningOut] = useState(false);
+
     const [notifications, setNotifications] = useState({
         email: true,
         push: false,
         updates: true,
     });
+
+    const handleSignOut = async () => {
+        setSigningOut(true);
+        await signOut({ callbackUrl: "/" });
+    };
+
+    const handleSaveProfile = async () => {
+        setSaving(true);
+        // Simulate save - in real app, this would update the user in DB
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        setSaving(false);
+    };
 
     const container = {
         hidden: { opacity: 0 },
@@ -74,15 +93,16 @@ export default function SettingsPage() {
                         <CardContent className="space-y-4">
                             <div className="flex items-center gap-4">
                                 <Avatar className="w-16 h-16">
-                                    <AvatarImage src="" />
-                                    <AvatarFallback className="bg-slate-900 text-white dark:bg-white dark:text-slate-900 text-xl">
-                                        U
+                                    <AvatarImage src={session?.user?.image || ""} />
+                                    <AvatarFallback className="bg-primary text-primary-foreground text-xl">
+                                        {session?.user?.name?.[0]?.toUpperCase() || "U"}
                                     </AvatarFallback>
                                 </Avatar>
                                 <div>
-                                    <Button variant="outline" size="sm">
-                                        Change avatar
-                                    </Button>
+                                    <p className="font-medium">{session?.user?.name || "User"}</p>
+                                    <p className="text-sm text-muted-foreground">
+                                        {session?.user?.email || "No email"}
+                                    </p>
                                 </div>
                             </div>
 
@@ -91,16 +111,33 @@ export default function SettingsPage() {
                             <div className="grid gap-4 sm:grid-cols-2">
                                 <div className="space-y-2">
                                     <Label htmlFor="name">Display name</Label>
-                                    <Input id="name" placeholder="Your name" />
+                                    <Input
+                                        id="name"
+                                        defaultValue={session?.user?.name || ""}
+                                        placeholder="Your name"
+                                    />
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="email">Email</Label>
-                                    <Input id="email" type="email" placeholder="your@email.com" />
+                                    <Input
+                                        id="email"
+                                        type="email"
+                                        defaultValue={session?.user?.email || ""}
+                                        disabled
+                                        className="bg-muted"
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        Email is managed by your OAuth provider
+                                    </p>
                                 </div>
                             </div>
 
-                            <Button className="btn-primary">
-                                <Save className="w-4 h-4 mr-2" />
+                            <Button onClick={handleSaveProfile} disabled={saving}>
+                                {saving ? (
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                ) : (
+                                    <Save className="w-4 h-4 mr-2" />
+                                )}
                                 Save changes
                             </Button>
                         </CardContent>
@@ -124,8 +161,8 @@ export default function SettingsPage() {
                                 <button
                                     onClick={() => setTheme("light")}
                                     className={`p-4 rounded-lg border-2 transition-all ${theme === "light"
-                                            ? "border-slate-900 dark:border-white"
-                                            : "border-slate-200 dark:border-slate-700 hover:border-slate-300"
+                                            ? "border-primary bg-primary/5"
+                                            : "border-muted hover:border-muted-foreground/30"
                                         }`}
                                 >
                                     <Sun className="w-5 h-5 mx-auto mb-2" />
@@ -134,8 +171,8 @@ export default function SettingsPage() {
                                 <button
                                     onClick={() => setTheme("dark")}
                                     className={`p-4 rounded-lg border-2 transition-all ${theme === "dark"
-                                            ? "border-slate-900 dark:border-white"
-                                            : "border-slate-200 dark:border-slate-700 hover:border-slate-300"
+                                            ? "border-primary bg-primary/5"
+                                            : "border-muted hover:border-muted-foreground/30"
                                         }`}
                                 >
                                     <Moon className="w-5 h-5 mx-auto mb-2" />
@@ -144,8 +181,8 @@ export default function SettingsPage() {
                                 <button
                                     onClick={() => setTheme("system")}
                                     className={`p-4 rounded-lg border-2 transition-all ${theme === "system"
-                                            ? "border-slate-900 dark:border-white"
-                                            : "border-slate-200 dark:border-slate-700 hover:border-slate-300"
+                                            ? "border-primary bg-primary/5"
+                                            : "border-muted hover:border-muted-foreground/30"
                                         }`}
                                 >
                                     <Monitor className="w-5 h-5 mx-auto mb-2" />
@@ -217,40 +254,50 @@ export default function SettingsPage() {
                     </Card>
                 </motion.div>
 
-                {/* Security Section */}
+                {/* Security/Account Section */}
                 <motion.div variants={item}>
                     <Card>
                         <CardHeader>
                             <div className="flex items-center gap-2">
                                 <Shield className="w-5 h-5 text-muted-foreground" />
-                                <CardTitle className="text-lg">Security</CardTitle>
+                                <CardTitle className="text-lg">Account</CardTitle>
                             </div>
                             <CardDescription>
-                                Manage your account security
+                                Manage your account
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <p className="font-medium text-sm">Change password</p>
+                                    <p className="font-medium text-sm">Sign out</p>
                                     <p className="text-xs text-muted-foreground">
-                                        Update your account password
+                                        Sign out of your account on this device
                                     </p>
                                 </div>
-                                <Button variant="outline" size="sm">
-                                    Update
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleSignOut}
+                                    disabled={signingOut}
+                                >
+                                    {signingOut ? (
+                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    ) : (
+                                        <LogOut className="w-4 h-4 mr-2" />
+                                    )}
+                                    Sign out
                                 </Button>
                             </div>
                             <Separator />
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <p className="font-medium text-sm">Two-factor authentication</p>
+                                    <p className="font-medium text-sm text-red-500">Delete account</p>
                                     <p className="text-xs text-muted-foreground">
-                                        Add an extra layer of security
+                                        Permanently delete your account and data
                                     </p>
                                 </div>
-                                <Button variant="outline" size="sm">
-                                    Enable
+                                <Button variant="destructive" size="sm" disabled>
+                                    Delete
                                 </Button>
                             </div>
                         </CardContent>

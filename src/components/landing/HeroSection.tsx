@@ -3,44 +3,57 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { ArrowRight, Play } from "lucide-react";
+import { ArrowRight, Github, Sparkles } from "lucide-react";
 import { useSession } from "next-auth/react";
-import Image from "next/image";
-import { useTheme } from "next-themes";
+import Logo from "@/components/ui/Logo";
 
 const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
         opacity: 1,
-        transition: {
-            staggerChildren: 0.12,
-            delayChildren: 0.1,
-        },
+        transition: { staggerChildren: 0.1, delayChildren: 0.1 },
     },
 };
 
 const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
+    hidden: { opacity: 0, y: 24 },
     visible: {
         opacity: 1,
         y: 0,
-        transition: { duration: 0.5, ease: "easeOut" },
+        transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] as const },
     },
 };
 
 export default function HeroSection() {
-    const { data: session, status } = useSession();
-    const { theme, resolvedTheme } = useTheme();
+    const { status } = useSession();
     const isLoggedIn = status === "authenticated";
-    const isDark = resolvedTheme === "dark";
 
     return (
-        <section className="relative min-h-[90vh] flex items-center justify-center px-4 py-20 bg-gradient-to-b from-slate-50 to-white dark:from-slate-950 dark:to-slate-900">
-            {/* Subtle Grid Pattern */}
+        <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
+            {/* Aurora Background */}
+            <div className="bg-aurora absolute inset-0" aria-hidden="true" />
+
+            {/* Gradient Overlay */}
             <div
-                className="absolute inset-0 opacity-[0.03] dark:opacity-[0.05]"
+                aria-hidden="true"
+                className="absolute inset-0 bg-gradient-to-b from-transparent via-background/50 to-background"
+            />
+
+            {/* Grid Pattern */}
+            <div
+                aria-hidden="true"
+                className="absolute inset-0 bg-grid opacity-[0.02] dark:opacity-[0.03]"
+            />
+
+            {/* Noise Texture */}
+            <div className="noise absolute inset-0" aria-hidden="true" />
+
+            {/* Radial Glow */}
+            <div
+                aria-hidden="true"
+                className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[600px] rounded-full opacity-30 dark:opacity-40"
                 style={{
-                    backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000000' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+                    background: "radial-gradient(circle, hsl(221 83% 53% / 0.15) 0%, transparent 70%)",
                 }}
             />
 
@@ -48,75 +61,76 @@ export default function HeroSection() {
                 variants={containerVariants}
                 initial="hidden"
                 animate="visible"
-                className="max-w-4xl mx-auto text-center relative z-10"
+                className="relative z-10 max-w-5xl mx-auto px-6 py-32 text-center"
             >
-                {/* Logo - Theme Aware */}
+                {/* Badge */}
                 <motion.div variants={itemVariants} className="mb-8">
-                    <Image
-                        src={isDark ? "/DarkMode-CollabFlow-logo-transparent.png" : "/whiteMode-CollabFlow-minimal-icon.png"}
-                        alt="CollabFlow"
-                        width={200}
-                        height={80}
-                        className="mx-auto h-20 w-auto"
-                        priority
-                    />
+                    <Link
+                        href="https://github.com"
+                        target="_blank"
+                        className="inline-flex items-center gap-3 px-4 py-2 rounded-full glass shimmer text-sm font-medium text-foreground/80 hover:text-foreground transition-colors group"
+                    >
+                        <span className="flex items-center gap-2">
+                            <Sparkles className="w-4 h-4 text-accent" />
+                            <span>Introducing CollabFlow v1.0</span>
+                        </span>
+                        <span className="flex items-center gap-1 text-accent group-hover:translate-x-0.5 transition-transform">
+                            <span>Star on GitHub</span>
+                            <Github className="w-4 h-4" />
+                        </span>
+                    </Link>
                 </motion.div>
 
-                {/* Badge */}
-                <motion.div variants={itemVariants} className="mb-6">
-                    <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-sm font-medium">
-                        <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-                        100% Open Source
-                    </span>
+                {/* Logo */}
+                <motion.div variants={itemVariants} className="mb-8 flex justify-center">
+                    <Logo size="lg" showText={false} />
                 </motion.div>
 
                 {/* Heading */}
                 <motion.h1
                     variants={itemVariants}
-                    className="text-4xl sm:text-5xl md:text-6xl font-semibold tracking-tight mb-6 text-slate-900 dark:text-white"
+                    className="text-5xl sm:text-6xl md:text-7xl font-bold tracking-tight mb-6"
                 >
-                    The modern way to
-                    <br />
-                    <span className="gradient-text">collaborate</span> with your team
+                    <span className="block">The modern way to</span>
+                    <span className="gradient-text">collaborate</span>
                 </motion.h1>
 
                 {/* Subheading */}
                 <motion.p
                     variants={itemVariants}
-                    className="text-lg md:text-xl text-slate-600 dark:text-slate-400 mb-10 max-w-2xl mx-auto leading-relaxed"
+                    className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-12 leading-relaxed"
                 >
-                    Create documents, manage projects, and communicate seamlessly.
-                    Everything your team needs in one powerful workspace.
+                    Documents, projects, and conversations—unified in one beautiful workspace.
+                    Built for teams who ship fast.
                 </motion.p>
 
                 {/* CTA Buttons */}
                 <motion.div
                     variants={itemVariants}
-                    className="flex flex-col sm:flex-row gap-3 justify-center"
+                    className="flex flex-col sm:flex-row gap-4 justify-center mb-16"
                 >
                     {isLoggedIn ? (
                         <Link
                             href="/dashboard"
-                            className="btn-primary px-6 py-3 rounded-lg text-base inline-flex items-center justify-center gap-2"
+                            className="btn-glow px-8 py-4 rounded-xl text-base inline-flex items-center justify-center gap-2"
                         >
                             Go to Dashboard
-                            <ArrowRight className="w-4 h-4" />
+                            <ArrowRight className="w-5 h-5" />
                         </Link>
                     ) : (
                         <>
                             <Link
                                 href="/sign-in"
-                                className="btn-primary px-6 py-3 rounded-lg text-base inline-flex items-center justify-center gap-2"
+                                className="btn-glow px-8 py-4 rounded-xl text-base inline-flex items-center justify-center gap-2"
                             >
-                                Get started free
-                                <ArrowRight className="w-4 h-4" />
+                                Start for free
+                                <ArrowRight className="w-5 h-5" />
                             </Link>
                             <Link
                                 href="#features"
-                                className="px-6 py-3 rounded-lg text-base font-medium border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors inline-flex items-center justify-center gap-2"
+                                className="btn-secondary px-8 py-4 rounded-xl text-base inline-flex items-center justify-center gap-2"
                             >
-                                <Play className="w-4 h-4" />
-                                Watch demo
+                                See how it works
                             </Link>
                         </>
                     )}
@@ -125,17 +139,63 @@ export default function HeroSection() {
                 {/* Social Proof */}
                 <motion.div
                     variants={itemVariants}
-                    className="mt-12 flex items-center justify-center gap-6 text-sm text-slate-500"
+                    className="flex flex-col sm:flex-row items-center justify-center gap-6"
                 >
-                    <div className="flex -space-x-2">
-                        {[1, 2, 3, 4, 5].map((i) => (
-                            <div
-                                key={i}
-                                className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 border-2 border-white dark:border-slate-900"
-                            />
-                        ))}
+                    {/* Avatars */}
+                    <div className="flex items-center">
+                        <div className="flex -space-x-3">
+                            {["bg-blue-500", "bg-emerald-500", "bg-violet-500", "bg-amber-500", "bg-rose-500"].map((color, i) => (
+                                <div
+                                    key={i}
+                                    className={`w-10 h-10 rounded-full ${color} border-[3px] border-background flex items-center justify-center text-white text-xs font-semibold`}
+                                >
+                                    {String.fromCharCode(65 + i)}
+                                </div>
+                            ))}
+                        </div>
+                        <div className="ml-4 text-left">
+                            <div className="flex items-center gap-1 text-amber-500">
+                                {[1, 2, 3, 4, 5].map((i) => (
+                                    <svg key={i} className="w-4 h-4 fill-current" viewBox="0 0 20 20">
+                                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                    </svg>
+                                ))}
+                            </div>
+                            <p className="text-sm text-muted-foreground">
+                                Loved by <span className="text-foreground font-medium">1,000+</span> teams
+                            </p>
+                        </div>
                     </div>
-                    <span>Trusted by 1,000+ teams worldwide</span>
+
+                    <div className="hidden sm:block w-px h-12 bg-border" />
+
+                    {/* Stats */}
+                    <div className="flex gap-8 text-center">
+                        <div>
+                            <div className="text-2xl font-bold">99.9%</div>
+                            <div className="text-sm text-muted-foreground">Uptime</div>
+                        </div>
+                        <div>
+                            <div className="text-2xl font-bold">&lt;50ms</div>
+                            <div className="text-sm text-muted-foreground">Sync latency</div>
+                        </div>
+                    </div>
+                </motion.div>
+            </motion.div>
+
+            {/* Scroll Indicator */}
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1.5 }}
+                className="absolute bottom-8 left-1/2 -translate-x-1/2"
+            >
+                <motion.div
+                    animate={{ y: [0, 8, 0] }}
+                    transition={{ duration: 2, repeat: Infinity }}
+                    className="w-6 h-10 rounded-full border-2 border-muted-foreground/30 flex items-start justify-center p-2"
+                >
+                    <motion.div className="w-1.5 h-1.5 rounded-full bg-muted-foreground" />
                 </motion.div>
             </motion.div>
         </section>

@@ -1,23 +1,15 @@
 // src/lib/prisma.ts
 // Prisma 7 client with PostgreSQL adapter
-import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
+import { PrismaClient } from "@prisma/client";
 
 const globalForPrisma = globalThis as unknown as {
     prisma: PrismaClient | undefined;
-    pool: Pool | undefined;
 };
 
 function createPrismaClient() {
-    // Reuse pool if it exists
-    if (!globalForPrisma.pool) {
-        globalForPrisma.pool = new Pool({
-            connectionString: process.env.DATABASE_URL,
-        });
-    }
-
-    const adapter = new PrismaPg(globalForPrisma.pool);
+    const connectionString = process.env.DATABASE_URL!;
+    const adapter = new PrismaPg({ connectionString });
 
     return new PrismaClient({
         adapter,
@@ -30,3 +22,5 @@ export const prisma = globalForPrisma.prisma ?? createPrismaClient();
 if (process.env.NODE_ENV !== "production") {
     globalForPrisma.prisma = prisma;
 }
+
+

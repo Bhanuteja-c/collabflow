@@ -91,11 +91,8 @@ export default function KanbanPage() {
         }
     };
 
-    const addCard = async (columnId: string) => {
-        if (!board) return;
-
-        const title = prompt("Enter task name:");
-        if (!title?.trim()) return;
+    const addCard = async (columnId: string, title: string) => {
+        if (!board || !title.trim()) return;
 
         try {
             const res = await fetch("/api/cards", {
@@ -320,15 +317,22 @@ export default function KanbanPage() {
     return (
         <div className="h-[calc(100vh-3.5rem)] flex flex-col bg-background">
             {/* Header */}
-            <div className="p-4 border-b">
+            <div className="p-4 lg:p-6 border-b">
                 <motion.div
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
+                    className="flex items-center justify-between"
                 >
-                    <h1 className="text-2xl font-semibold text-foreground">{board.title}</h1>
-                    <p className="text-sm text-muted-foreground">
-                        Drag and drop cards to organize your tasks
-                    </p>
+                    <div>
+                        <h1 className="text-2xl font-bold tracking-tight">{board.title}</h1>
+                        <p className="text-sm text-muted-foreground mt-1">
+                            Drag cards to organize your tasks
+                        </p>
+                    </div>
+                    <Button onClick={createBoard} className="btn-glow" disabled={creating}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add Column
+                    </Button>
                 </motion.div>
             </div>
 
@@ -351,7 +355,7 @@ export default function KanbanPage() {
                             >
                                 <KanbanColumn
                                     column={column}
-                                    onAddCard={() => addCard(column.id)}
+                                    onAddCard={addCard}
                                     onUpdateCard={updateCard}
                                     onDeleteCard={deleteCard}
                                 />

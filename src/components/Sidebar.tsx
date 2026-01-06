@@ -31,11 +31,11 @@ import {
 import { useTheme } from "next-themes";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import Image from "next/image";
+import Logo from "@/components/ui/Logo";
 
 export default function AppSidebar() {
     const { data: session } = useSession();
-    const { theme, setTheme, resolvedTheme } = useTheme();
+    const { setTheme, resolvedTheme } = useTheme();
     const pathname = usePathname();
     const isDark = resolvedTheme === "dark";
 
@@ -51,41 +51,31 @@ export default function AppSidebar() {
     ];
 
     return (
-        <Sidebar collapsible="icon" className="border-r">
+        <Sidebar collapsible="icon" className="border-r border-border">
             {/* Header */}
-            <SidebarHeader className="p-4 border-b">
+            <SidebarHeader className="p-4 border-b border-border">
                 <Link href="/dashboard" className="flex items-center gap-3">
-                    <Image
-                        src={isDark ? "/DarkMode-CollabFlow-logo-transparent.png" : "/whiteMode-CollabFlow-minimal-icon.png"}
-                        alt="CollabFlow"
-                        width={180}
-                        height={48}
-                        className="h-12 w-auto group-data-[collapsible=icon]:hidden"
-                        priority
-                    />
-                    <Image
-                        src="/Minimal-CollabFlow-Icon.png"
-                        alt="CollabFlow"
-                        width={40}
-                        height={40}
-                        className="h-10 w-10 hidden group-data-[collapsible=icon]:block"
-                    />
+                    {/* Full logo - shown when expanded */}
+                    <div className="group-data-[collapsible=icon]:hidden">
+                        <Logo size="sm" />
+                    </div>
+                    {/* Icon only - shown when collapsed */}
+                    <div className="hidden group-data-[collapsible=icon]:block">
+                        <Logo size="sm" showText={false} />
+                    </div>
                 </Link>
             </SidebarHeader>
 
             {/* Content */}
             <SidebarContent className="px-2">
                 {/* Quick Actions */}
-                <SidebarGroup className="mt-2">
-                    <SidebarGroupLabel className="text-xs uppercase tracking-wider text-muted-foreground">
-                        Quick Actions
-                    </SidebarGroupLabel>
+                <SidebarGroup className="mt-4">
                     <SidebarMenu>
                         <SidebarMenuItem>
                             <SidebarMenuButton asChild tooltip="New Document">
                                 <Link
                                     href="/editor"
-                                    className="bg-primary text-primary-foreground hover:bg-primary/90"
+                                    className="bg-accent text-accent-foreground hover:bg-accent/90"
                                 >
                                     <Plus className="h-4 w-4" />
                                     <span>New Document</span>
@@ -96,22 +86,23 @@ export default function AppSidebar() {
                 </SidebarGroup>
 
                 {/* Navigation */}
-                <SidebarGroup className="mt-4">
-                    <SidebarGroupLabel className="text-xs uppercase tracking-wider text-muted-foreground">
+                <SidebarGroup className="mt-2">
+                    <SidebarGroupLabel className="text-xs uppercase tracking-wider text-muted-foreground px-2">
                         Navigation
                     </SidebarGroupLabel>
                     <SidebarMenu>
                         {menuItems.map((item) => {
-                            const isActive = pathname === item.href;
+                            const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
                             return (
                                 <SidebarMenuItem key={item.label}>
                                     <SidebarMenuButton
                                         asChild
                                         isActive={isActive}
                                         tooltip={item.label}
+                                        className={isActive ? "bg-accent/10 text-accent font-medium" : ""}
                                     >
                                         <Link href={item.href}>
-                                            <item.icon className="h-4 w-4" />
+                                            <item.icon className={`h-4 w-4 ${isActive ? "text-accent" : ""}`} />
                                             <span>{item.label}</span>
                                         </Link>
                                     </SidebarMenuButton>
@@ -123,11 +114,11 @@ export default function AppSidebar() {
             </SidebarContent>
 
             {/* Footer */}
-            <SidebarFooter className="p-3 border-t">
-                <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted transition-colors">
-                    <Avatar className="h-8 w-8">
+            <SidebarFooter className="p-3 border-t border-border">
+                <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors">
+                    <Avatar className="h-8 w-8 ring-2 ring-border">
                         <AvatarImage src={user?.image || ""} />
-                        <AvatarFallback className="bg-primary text-primary-foreground text-sm">
+                        <AvatarFallback className="bg-accent text-accent-foreground text-sm font-medium">
                             {user?.name?.[0] || "G"}
                         </AvatarFallback>
                     </Avatar>
@@ -143,7 +134,7 @@ export default function AppSidebar() {
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8 group-data-[collapsible=icon]:hidden"
-                        onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                        onClick={() => setTheme(isDark ? "light" : "dark")}
                     >
                         {isDark ? (
                             <Sun className="h-4 w-4" />
@@ -156,7 +147,7 @@ export default function AppSidebar() {
                 <Button
                     variant="ghost"
                     size="sm"
-                    className="w-full justify-start text-muted-foreground hover:text-destructive group-data-[collapsible=icon]:justify-center"
+                    className="w-full justify-start text-muted-foreground hover:text-destructive group-data-[collapsible=icon]:justify-center mt-1"
                     onClick={() => signOut({ callbackUrl: "/" })}
                 >
                     <LogOut className="h-4 w-4" />

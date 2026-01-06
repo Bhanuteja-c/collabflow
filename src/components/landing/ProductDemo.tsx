@@ -2,171 +2,194 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { MousePointer2, Sparkles, Users } from "lucide-react";
+import { MousePointer2, MessageSquare, LayoutGrid, FileText } from "lucide-react";
 
 export default function ProductDemo() {
     return (
-        <section className="py-24 px-4 bg-slate-50 dark:bg-slate-900/50">
-            <div className="max-w-6xl mx-auto">
-                {/* Header */}
-                <motion.div
-                    initial={{ opacity: 0, y: 16 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    className="text-center mb-12"
-                >
-                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">
-                        See it in action
-                    </p>
-                    <h2 className="text-3xl md:text-4xl font-semibold tracking-tight text-slate-900 dark:text-white">
-                        Real-time collaboration, reimagined
-                    </h2>
-                </motion.div>
+        <section className="relative py-32 px-6 overflow-hidden">
+            {/* Background */}
+            <div className="absolute inset-0 bg-surface" aria-hidden="true" />
+            <div className="noise absolute inset-0" aria-hidden="true" />
 
-                {/* Demo Window */}
+            <div className="relative z-10 max-w-6xl mx-auto">
+                {/* Header */}
                 <motion.div
                     initial={{ opacity: 0, y: 24 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
-                    transition={{ delay: 0.1 }}
+                    transition={{ duration: 0.6 }}
+                    className="text-center mb-16"
+                >
+                    <span className="inline-block px-3 py-1 mb-4 text-xs font-medium text-accent bg-accent-muted rounded-full">
+                        Live Preview
+                    </span>
+                    <h2 className="text-4xl md:text-5xl font-bold tracking-tight mb-4">
+                        Real-time collaboration,{" "}
+                        <span className="gradient-text">reimagined</span>
+                    </h2>
+                    <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+                        See your team's changes instantly. No refresh, no conflicts, just flow.
+                    </p>
+                </motion.div>
+
+                {/* Browser Window */}
+                <motion.div
+                    initial={{ opacity: 0, y: 48 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.8, delay: 0.2 }}
                     className="relative"
                 >
+                    {/* Glow */}
+                    <div
+                        aria-hidden="true"
+                        className="absolute -inset-8 rounded-3xl opacity-50"
+                        style={{
+                            background: "radial-gradient(ellipse at center, hsl(221 83% 53% / 0.15) 0%, transparent 70%)",
+                        }}
+                    />
+
                     {/* Browser Frame */}
-                    <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-2xl overflow-hidden">
+                    <div className="relative rounded-2xl border border-border bg-card shadow-lg overflow-hidden">
                         {/* Browser Header */}
-                        <div className="flex items-center gap-2 px-4 py-3 bg-slate-100 dark:bg-slate-700 border-b border-slate-200 dark:border-slate-600">
-                            <div className="flex gap-1.5">
+                        <div className="flex items-center gap-3 px-4 py-3 bg-surface border-b border-border">
+                            <div className="flex gap-2">
                                 <div className="w-3 h-3 rounded-full bg-red-400" />
                                 <div className="w-3 h-3 rounded-full bg-amber-400" />
                                 <div className="w-3 h-3 rounded-full bg-emerald-400" />
                             </div>
                             <div className="flex-1 flex justify-center">
-                                <div className="px-4 py-1 bg-white dark:bg-slate-600 rounded-md text-xs text-slate-500 dark:text-slate-300">
-                                    collabflow.app/document/project-plan
+                                <div className="px-4 py-1.5 bg-background rounded-lg text-xs text-muted-foreground font-mono">
+                                    collabflow.app/doc/project-roadmap
+                                </div>
+                            </div>
+                            <div className="flex gap-2">
+                                <div className="flex -space-x-2">
+                                    {["bg-blue-500", "bg-emerald-500", "bg-violet-500"].map((color, i) => (
+                                        <div key={i} className={`w-6 h-6 rounded-full ${color} border-2 border-card flex items-center justify-center text-white text-[10px] font-bold`}>
+                                            {String.fromCharCode(65 + i)}
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         </div>
 
-                        {/* Editor Preview */}
-                        <div className="p-6 min-h-[400px] relative">
-                            {/* Toolbar */}
-                            <div className="flex items-center gap-2 pb-4 border-b border-slate-100 dark:border-slate-700 mb-6">
-                                <div className="flex gap-1">
-                                    {["B", "I", "U"].map((btn) => (
+                        {/* App Layout */}
+                        <div className="flex min-h-[500px]">
+                            {/* Sidebar */}
+                            <div className="w-56 border-r border-border p-3 bg-surface/50 hidden md:block">
+                                <div className="space-y-1">
+                                    {[
+                                        { icon: FileText, label: "Documents", active: true },
+                                        { icon: LayoutGrid, label: "Kanban" },
+                                        { icon: MessageSquare, label: "Chat" },
+                                    ].map((item) => (
+                                        <div
+                                            key={item.label}
+                                            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${item.active
+                                                    ? "bg-accent text-accent-foreground"
+                                                    : "text-muted-foreground hover:bg-surface"
+                                                }`}
+                                        >
+                                            <item.icon className="w-4 h-4" />
+                                            {item.label}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Editor */}
+                            <div className="flex-1 p-8">
+                                {/* Toolbar */}
+                                <div className="flex items-center gap-2 pb-4 border-b border-border mb-6">
+                                    {["B", "I", "U", "H1", "H2", "•"].map((btn) => (
                                         <div
                                             key={btn}
-                                            className="w-8 h-8 rounded bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-sm font-semibold text-slate-600 dark:text-slate-300"
+                                            className="w-8 h-8 rounded-lg bg-surface hover:bg-surface/80 flex items-center justify-center text-xs font-semibold text-muted-foreground cursor-pointer transition-colors"
                                         >
                                             {btn}
                                         </div>
                                     ))}
                                 </div>
-                                <div className="w-px h-6 bg-slate-200 dark:bg-slate-600 mx-2" />
-                                <div className="flex gap-1">
-                                    {["H1", "H2", "¶"].map((btn) => (
-                                        <div
-                                            key={btn}
-                                            className="w-8 h-8 rounded bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-xs font-medium text-slate-600 dark:text-slate-300"
-                                        >
-                                            {btn}
-                                        </div>
-                                    ))}
-                                </div>
-                                <div className="flex-1" />
-                                {/* Live Users */}
-                                <div className="flex -space-x-2">
-                                    <div className="w-8 h-8 rounded-full bg-blue-500 border-2 border-white dark:border-slate-800 flex items-center justify-center text-white text-xs font-medium">
-                                        A
-                                    </div>
-                                    <div className="w-8 h-8 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-800 flex items-center justify-center text-white text-xs font-medium">
-                                        B
-                                    </div>
-                                    <div className="w-8 h-8 rounded-full bg-amber-500 border-2 border-white dark:border-slate-800 flex items-center justify-center text-white text-xs font-medium">
-                                        C
-                                    </div>
-                                </div>
-                            </div>
 
-                            {/* Document Content */}
-                            <div className="space-y-4">
-                                <h1 className="text-2xl font-semibold text-slate-900 dark:text-white">
-                                    Q4 Product Roadmap
-                                </h1>
-                                <p className="text-slate-600 dark:text-slate-400">
-                                    This quarter we will focus on three key initiatives:
-                                </p>
-                                <ul className="list-disc list-inside text-slate-600 dark:text-slate-400 space-y-2">
-                                    <li>Launch collaborative editing features</li>
-                                    <li>Improve real-time synchronization</li>
-                                    <li>
-                                        Add team workspaces
-                                        <span className="inline-block ml-1 px-1 bg-blue-500 text-white text-xs rounded animate-pulse">
-                                            |
-                                        </span>
-                                    </li>
-                                </ul>
-                            </div>
+                                {/* Document */}
+                                <div className="space-y-4 max-w-2xl">
+                                    <h1 className="text-2xl font-bold">Q4 Product Roadmap</h1>
+                                    <p className="text-muted-foreground">
+                                        This quarter we focus on three key initiatives:
+                                    </p>
+                                    <ul className="space-y-2 text-muted-foreground">
+                                        <li className="flex items-start gap-2">
+                                            <span className="text-accent">•</span>
+                                            Launch collaborative editing features
+                                        </li>
+                                        <li className="flex items-start gap-2">
+                                            <span className="text-accent">•</span>
+                                            Improve real-time synchronization
+                                        </li>
+                                        <li className="flex items-start gap-2 relative">
+                                            <span className="text-accent">•</span>
+                                            <span>Add team workspaces</span>
+                                            <motion.span
+                                                animate={{ opacity: [1, 0, 1] }}
+                                                transition={{ duration: 1, repeat: Infinity }}
+                                                className="inline-block w-0.5 h-5 bg-blue-500 ml-1"
+                                            />
+                                        </li>
+                                    </ul>
+                                </div>
 
-                            {/* Animated Cursors */}
-                            <motion.div
-                                className="absolute"
-                                initial={{ x: 200, y: 180 }}
-                                animate={{
-                                    x: [200, 350, 280, 200],
-                                    y: [180, 200, 240, 180],
-                                }}
-                                transition={{
-                                    duration: 8,
-                                    repeat: Infinity,
-                                    ease: "easeInOut",
-                                }}
-                            >
-                                <div className="relative">
-                                    <MousePointer2 className="w-5 h-5 text-blue-500 fill-blue-500" />
-                                    <span className="absolute top-4 left-2 px-2 py-0.5 bg-blue-500 text-white text-xs rounded-full whitespace-nowrap">
+                                {/* Animated Cursors */}
+                                <motion.div
+                                    className="absolute pointer-events-none"
+                                    initial={{ x: 280, y: 300 }}
+                                    animate={{ x: [280, 420, 350, 280], y: [300, 340, 380, 300] }}
+                                    transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
+                                >
+                                    <MousePointer2 className="w-5 h-5 text-blue-500 fill-blue-500 drop-shadow-lg" />
+                                    <span className="absolute top-5 left-1 px-2 py-0.5 bg-blue-500 text-white text-xs rounded-full font-medium shadow-lg">
                                         Alice
                                     </span>
-                                </div>
-                            </motion.div>
+                                </motion.div>
 
-                            <motion.div
-                                className="absolute"
-                                initial={{ x: 300, y: 220 }}
-                                animate={{
-                                    x: [300, 180, 400, 300],
-                                    y: [220, 280, 200, 220],
-                                }}
-                                transition={{
-                                    duration: 10,
-                                    repeat: Infinity,
-                                    ease: "easeInOut",
-                                }}
-                            >
-                                <div className="relative">
-                                    <MousePointer2 className="w-5 h-5 text-emerald-500 fill-emerald-500" />
-                                    <span className="absolute top-4 left-2 px-2 py-0.5 bg-emerald-500 text-white text-xs rounded-full whitespace-nowrap">
+                                <motion.div
+                                    className="absolute pointer-events-none"
+                                    initial={{ x: 360, y: 360 }}
+                                    animate={{ x: [360, 240, 440, 360], y: [360, 420, 340, 360] }}
+                                    transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
+                                >
+                                    <MousePointer2 className="w-5 h-5 text-emerald-500 fill-emerald-500 drop-shadow-lg" />
+                                    <span className="absolute top-5 left-1 px-2 py-0.5 bg-emerald-500 text-white text-xs rounded-full font-medium shadow-lg">
                                         Bob
                                     </span>
-                                </div>
-                            </motion.div>
+                                </motion.div>
+                            </div>
                         </div>
                     </div>
+                </motion.div>
 
-                    {/* Feature Badges */}
-                    <div className="flex flex-wrap justify-center gap-4 mt-8">
-                        <div className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 rounded-full border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-300">
-                            <Users className="w-4 h-4" />
-                            Live presence
-                        </div>
-                        <div className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 rounded-full border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-300">
-                            <MousePointer2 className="w-4 h-4" />
-                            Real-time cursors
-                        </div>
-                        <div className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 rounded-full border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-300">
-                            <Sparkles className="w-4 h-4" />
-                            Instant sync
-                        </div>
-                    </div>
+                {/* Feature Chips */}
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    whileInView={{ opacity: 1 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: 0.5 }}
+                    className="flex flex-wrap justify-center gap-3 mt-10"
+                >
+                    {[
+                        "Real-time cursors",
+                        "Live presence",
+                        "Instant sync",
+                        "Version history",
+                        "Offline support",
+                    ].map((feature) => (
+                        <span
+                            key={feature}
+                            className="px-4 py-2 rounded-full bg-card border border-border text-sm text-muted-foreground"
+                        >
+                            {feature}
+                        </span>
+                    ))}
                 </motion.div>
             </div>
         </section>

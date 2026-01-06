@@ -2,7 +2,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Star } from "lucide-react";
+import { Star, Quote } from "lucide-react";
 
 const testimonials = [
     {
@@ -10,92 +10,132 @@ const testimonials = [
         role: "Product Manager",
         company: "TechStartup",
         avatar: "SC",
-        content:
-            "CollabFlow transformed how our remote team works together. The real-time collaboration is seamless.",
+        content: "CollabFlow completely transformed how our remote team collaborates. The real-time sync is genuinely instant—no more 'can you refresh?' moments.",
         rating: 5,
+        gradient: "from-blue-500 to-cyan-500",
     },
     {
-        name: "Michael Roberts",
+        name: "Marcus Johnson",
         role: "Engineering Lead",
         company: "DevAgency",
-        avatar: "MR",
-        content:
-            "Finally, a collaboration tool that doesn't slow us down. The sync speed is incredible.",
+        avatar: "MJ",
+        content: "We evaluated 6 different tools. CollabFlow won because it just works. The open-source nature means we can actually trust it.",
         rating: 5,
+        gradient: "from-violet-500 to-purple-500",
     },
     {
         name: "Emily Watson",
         role: "Design Director",
         company: "CreativeStudio",
         avatar: "EW",
-        content:
-            "The clean interface lets us focus on what matters - our work. No distractions, just productivity.",
+        content: "The dark mode is chef's kiss. Finally a productivity tool that understands designers don't want eye strain at 2am.",
         rating: 5,
+        gradient: "from-pink-500 to-rose-500",
     },
 ];
 
 export default function Testimonials() {
     return (
-        <section className="py-24 px-4 bg-white dark:bg-slate-900">
-            <div className="max-w-6xl mx-auto">
+        <section className="relative py-32 px-6 overflow-hidden">
+            <div className="absolute inset-0 bg-surface" aria-hidden="true" />
+            <div className="noise absolute inset-0" aria-hidden="true" />
+
+            <div className="relative z-10 max-w-6xl mx-auto">
                 {/* Header */}
                 <motion.div
-                    initial={{ opacity: 0, y: 16 }}
+                    initial={{ opacity: 0, y: 24 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
                     className="text-center mb-16"
                 >
-                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">
+                    <span className="inline-block px-3 py-1 mb-4 text-xs font-medium text-accent bg-accent-muted rounded-full">
                         Testimonials
-                    </p>
-                    <h2 className="text-3xl md:text-4xl font-semibold tracking-tight text-slate-900 dark:text-white">
-                        Loved by teams everywhere
+                    </span>
+                    <h2 className="text-4xl md:text-5xl font-bold tracking-tight mb-4">
+                        Loved by teams{" "}
+                        <span className="gradient-text">everywhere</span>
                     </h2>
+                    <div className="flex items-center justify-center gap-3 mt-6">
+                        <div className="flex items-center gap-1">
+                            {[1, 2, 3, 4, 5].map((i) => (
+                                <Star key={i} className="w-5 h-5 text-amber-400 fill-amber-400" />
+                            ))}
+                        </div>
+                        <span className="text-muted-foreground">
+                            <span className="font-semibold text-foreground">4.9/5</span> from 500+ reviews
+                        </span>
+                    </div>
                 </motion.div>
 
                 {/* Testimonials Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {testimonials.map((testimonial, index) => (
+                    {testimonials.map((testimonial, i) => (
                         <motion.div
                             key={testimonial.name}
-                            initial={{ opacity: 0, y: 20 }}
+                            initial={{ opacity: 0, y: 24 }}
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true }}
-                            transition={{ delay: index * 0.1 }}
-                            className="p-6 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50"
+                            transition={{ delay: i * 0.1 }}
+                            className="relative p-6 rounded-2xl border border-border bg-card card-hover"
                         >
+                            {/* Quote Icon */}
+                            <Quote className="absolute top-4 right-4 w-8 h-8 text-border" />
+
                             {/* Stars */}
                             <div className="flex gap-1 mb-4">
-                                {Array.from({ length: testimonial.rating }).map((_, i) => (
-                                    <Star
-                                        key={i}
-                                        className="w-4 h-4 text-amber-400 fill-amber-400"
-                                    />
+                                {Array.from({ length: testimonial.rating }).map((_, idx) => (
+                                    <Star key={idx} className="w-4 h-4 text-amber-400 fill-amber-400" />
                                 ))}
                             </div>
 
-                            {/* Quote */}
-                            <p className="text-slate-700 dark:text-slate-300 mb-6 leading-relaxed">
+                            {/* Content */}
+                            <p className="text-foreground mb-6 leading-relaxed">
                                 "{testimonial.content}"
                             </p>
 
                             {/* Author */}
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-sm font-medium text-slate-600 dark:text-slate-300">
+                                <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${testimonial.gradient} flex items-center justify-center text-white text-sm font-semibold`}>
                                     {testimonial.avatar}
                                 </div>
                                 <div>
-                                    <p className="font-medium text-slate-900 dark:text-white text-sm">
-                                        {testimonial.name}
-                                    </p>
-                                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                                    <div className="font-medium text-sm">{testimonial.name}</div>
+                                    <div className="text-xs text-muted-foreground">
                                         {testimonial.role} at {testimonial.company}
-                                    </p>
+                                    </div>
                                 </div>
                             </div>
                         </motion.div>
                     ))}
                 </div>
+
+                {/* Trust Badges */}
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    whileInView={{ opacity: 1 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: 0.3 }}
+                    className="flex flex-wrap justify-center gap-6 mt-12 text-sm text-muted-foreground"
+                >
+                    <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-card border border-border">
+                        <svg className="w-5 h-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                        100% Open Source
+                    </div>
+                    <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-card border border-border">
+                        <svg className="w-5 h-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                        MIT Licensed
+                    </div>
+                    <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-card border border-border">
+                        <svg className="w-5 h-5 text-emerald-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                        Self-hostable
+                    </div>
+                </motion.div>
             </div>
         </section>
     );

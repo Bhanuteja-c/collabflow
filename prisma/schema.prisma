@@ -24,6 +24,10 @@ model User {
   boards        Board[]
   documentEdits DocumentHistory[]
   
+  // Workspace relations
+  ownedWorkspaces    Workspace[]       @relation("OwnedWorkspaces")
+  workspaceMemberships WorkspaceMember[]
+  
   // Chat relations
   channelMemberships ChannelMember[]
   messages           Message[]
@@ -34,6 +38,47 @@ model User {
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// Workspace - top-level container for team collaboration
+model Workspace {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  image       String?
+  
+  ownerId     String
+  owner       User     @relation("OwnedWorkspaces", fields: [ownerId], references: [id], onDelete: Cascade)
+  
+  members     WorkspaceMember[]
+  documents   Document[]
+  boards      Board[]
+  channels    Channel[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([ownerId])
+}
+
+// Workspace membership with roles
+model WorkspaceMember {
+  id          String   @id @default(cuid())
+  
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  role        String    @default("member") // owner, admin, member, viewer
+  
+  joinedAt    DateTime  @default(now())
+  
+  @@unique([workspaceId, userId])
+  @@index([workspaceId])
+  @@index([userId])
 }
 
 model Account {
@@ -81,6 +126,9 @@ model Document {
   authorId  String
   author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
   
+  workspaceId String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  
   isPublic  Boolean  @default(false)
   
   history   DocumentHistory[]
@@ -90,6 +138,7 @@ model Document {
   updatedAt DateTime @updatedAt
   
   @@index([authorId])
+  @@index([workspaceId])
 }
 
 // Document edit history
@@ -138,12 +187,16 @@ model Board {
   authorId  String
   author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
   
+  workspaceId String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  
   columns   Column[]
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   
   @@index([authorId])
+  @@index([workspaceId])
 }
 
 model Column {
@@ -180,6 +233,9 @@ model Channel {
   name      String
   type      String    @default("public") // public, private, direct
   
+  workspaceId String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  
   members   ChannelMember[]
   messages  Message[]
   
@@ -187,6 +243,8 @@ model Channel {
   
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+  
+  @@index([workspaceId])
 }
 
 model ChannelMember {

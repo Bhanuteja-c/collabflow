@@ -4,8 +4,8 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ensureUser } from "@/lib/ensureUser";
 
-// GET /api/documents - List all documents for the current user
-export async function GET() {
+// GET /api/documents - List documents (optionally filtered by workspace)
+export async function GET(request: NextRequest) {
     try {
         const session = await auth();
 
@@ -13,18 +13,47 @@ export async function GET() {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        // Ensure user exists in database
         const userId = await ensureUser(session.user as any);
 
+        // Get query params
+        const searchParams = request.nextUrl.searchParams;
+        const workspaceId = searchParams.get("workspaceId");
+        const limit = parseInt(searchParams.get("limit") || "50");
+
+        // Build where clause
+        const where: any = {};
+
+        if (workspaceId) {
+            // Check workspace membership
+            const membership = await prisma.workspaceMember.findUnique({
+                where: { workspaceId_userId: { workspaceId, userId } },
+            });
+            if (!membership) {
+                return NextResponse.json({ error: "Not a workspace member" }, { status: 403 });
+            }
+            where.workspaceId = workspaceId;
+        } else {
+            // Personal docs (no workspace) or authored by user
+            where.OR = [
+                { authorId: userId, workspaceId: null },
+                { shares: { some: { userId } } },
+            ];
+        }
+
         const documents = await prisma.document.findMany({
-            where: { authorId: userId },
+            where,
             orderBy: { updatedAt: "desc" },
+            take: limit,
             select: {
                 id: true,
                 title: true,
                 isPublic: true,
+                workspaceId: true,
                 createdAt: true,
                 updatedAt: true,
+                author: {
+                    select: { id: true, name: true, image: true },
+                },
             },
         });
 
@@ -47,17 +76,27 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        // Ensure user exists in database
         const userId = await ensureUser(session.user as any);
 
         const body = await req.json();
-        const { title, content } = body;
+        const { title, content, workspaceId } = body;
+
+        // If workspaceId provided, verify membership
+        if (workspaceId) {
+            const membership = await prisma.workspaceMember.findUnique({
+                where: { workspaceId_userId: { workspaceId, userId } },
+            });
+            if (!membership || membership.role === "viewer") {
+                return NextResponse.json({ error: "Permission denied" }, { status: 403 });
+            }
+        }
 
         const document = await prisma.document.create({
             data: {
                 title: title || "Untitled Document",
                 content: content || "",
                 authorId: userId,
+                workspaceId: workspaceId || null,
             },
         });
 

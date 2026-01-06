@@ -13,6 +13,8 @@ import {
     Users,
     MoreHorizontal,
     ArrowUpRight,
+    Zap,
+    Calendar,
 } from "lucide-react";
 import Link from "next/link";
 import { motion } from "framer-motion";
@@ -63,30 +65,47 @@ const stats = [
         value: "12",
         icon: FileText,
         change: "+3",
+        color: "from-blue-500 to-indigo-500",
     },
     {
         label: "Active Today",
         value: "3",
-        icon: Clock,
+        icon: Zap,
         change: "",
+        color: "from-amber-500 to-orange-500",
     },
     {
         label: "Team Members",
         value: "8",
         icon: Users,
         change: "+2",
+        color: "from-emerald-500 to-green-500",
     },
     {
-        label: "This Week",
+        label: "Productivity",
         value: "94%",
         icon: TrendingUp,
         change: "+12%",
+        color: "from-violet-500 to-purple-500",
     },
+];
+
+const quickActions = [
+    { icon: FileText, label: "New Doc", href: "/editor", color: "bg-blue-500" },
+    { icon: Calendar, label: "Schedule", href: "/kanban", color: "bg-violet-500" },
+    { icon: Users, label: "Invite", href: "/settings", color: "bg-emerald-500" },
 ];
 
 export default function Dashboard() {
     const { data: session } = useSession();
     const user = session?.user;
+
+    const getGreeting = () => {
+        const hour = new Date().getHours();
+        if (hour < 12) return "Good morning";
+        if (hour < 18) return "Good afternoon";
+        return "Good evening";
+    };
 
     return (
         <div className="p-6 lg:p-8 max-w-6xl mx-auto space-y-8">
@@ -97,14 +116,14 @@ export default function Dashboard() {
                 className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4"
             >
                 <div>
-                    <h1 className="text-2xl lg:text-3xl font-semibold tracking-tight">
-                        Welcome back, {user?.name?.split(" ")[0] || "there"}
+                    <h1 className="text-2xl lg:text-3xl font-bold tracking-tight">
+                        {getGreeting()}, {user?.name?.split(" ")[0] || "there"} 👋
                     </h1>
                     <p className="text-muted-foreground mt-1">
-                        Here's what's happening with your projects.
+                        Here's what's happening with your projects today.
                     </p>
                 </div>
-                <Button asChild className="btn-primary w-fit">
+                <Button asChild className="btn-glow w-fit">
                     <Link href="/editor" className="flex items-center gap-2">
                         <Plus className="w-4 h-4" />
                         New Document
@@ -121,21 +140,47 @@ export default function Dashboard() {
             >
                 {stats.map((stat) => (
                     <motion.div key={stat.label} variants={item}>
-                        <Card className="hover:shadow-md transition-shadow">
-                            <CardContent className="p-4">
-                                <div className="flex items-center justify-between mb-2">
-                                    <stat.icon className="w-4 h-4 text-muted-foreground" />
+                        <Card className="hover:shadow-md transition-all hover:scale-[1.02] overflow-hidden">
+                            <CardContent className="p-4 relative">
+                                {/* Gradient icon background */}
+                                <div
+                                    className={`absolute -top-4 -right-4 w-20 h-20 rounded-full bg-gradient-to-br ${stat.color} opacity-10`}
+                                    aria-hidden="true"
+                                />
+                                <div className="flex items-center justify-between mb-3 relative">
+                                    <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${stat.color} flex items-center justify-center`}>
+                                        <stat.icon className="w-5 h-5 text-white" />
+                                    </div>
                                     {stat.change && (
-                                        <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                                        <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-full">
                                             {stat.change}
                                         </span>
                                     )}
                                 </div>
-                                <p className="text-2xl font-semibold">{stat.value}</p>
+                                <p className="text-2xl font-bold">{stat.value}</p>
                                 <p className="text-sm text-muted-foreground">{stat.label}</p>
                             </CardContent>
                         </Card>
                     </motion.div>
+                ))}
+            </motion.div>
+
+            {/* Quick Actions */}
+            <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15 }}
+                className="flex flex-wrap gap-3"
+            >
+                {quickActions.map((action) => (
+                    <Link key={action.label} href={action.href}>
+                        <Button variant="outline" className="gap-2 hover:shadow-sm">
+                            <div className={`w-5 h-5 rounded ${action.color} flex items-center justify-center`}>
+                                <action.icon className="w-3 h-3 text-white" />
+                            </div>
+                            {action.label}
+                        </Button>
+                    </Link>
                 ))}
             </motion.div>
 
@@ -146,9 +191,9 @@ export default function Dashboard() {
                 transition={{ delay: 0.2 }}
             >
                 <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-medium">Recent Documents</h2>
+                    <h2 className="text-lg font-semibold">Recent Documents</h2>
                     <Button variant="ghost" size="sm" asChild>
-                        <Link href="/documents" className="flex items-center gap-1">
+                        <Link href="/documents" className="flex items-center gap-1 text-muted-foreground hover:text-foreground">
                             View all
                             <ArrowUpRight className="w-3 h-3" />
                         </Link>
@@ -158,11 +203,11 @@ export default function Dashboard() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     {recentDocuments.map((doc) => (
                         <Link href="/editor" key={doc.id}>
-                            <Card className="group hover:shadow-md hover:border-slate-300 dark:hover:border-slate-600 transition-all cursor-pointer h-full">
+                            <Card className="group hover:shadow-md hover:border-accent/50 transition-all cursor-pointer h-full">
                                 <CardContent className="p-4">
                                     <div className="flex items-start justify-between mb-3">
-                                        <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-                                            <FileText className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+                                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center">
+                                            <FileText className="w-5 h-5 text-white" />
                                         </div>
                                         <div className="flex items-center gap-1">
                                             {doc.starred && (
@@ -177,7 +222,7 @@ export default function Dashboard() {
                                             </Button>
                                         </div>
                                     </div>
-                                    <h3 className="font-medium text-sm group-hover:text-primary transition-colors line-clamp-2">
+                                    <h3 className="font-medium text-sm group-hover:text-accent transition-colors line-clamp-2">
                                         {doc.title}
                                     </h3>
                                     <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
@@ -191,9 +236,11 @@ export default function Dashboard() {
 
                     {/* New Document */}
                     <Link href="/editor">
-                        <Card className="group hover:shadow-md hover:border-slate-300 dark:hover:border-slate-600 transition-all cursor-pointer h-full border-dashed">
-                            <CardContent className="p-4 flex flex-col items-center justify-center h-full min-h-[120px] text-muted-foreground group-hover:text-primary">
-                                <Plus className="w-6 h-6 mb-2" />
+                        <Card className="group hover:shadow-md hover:border-accent/50 transition-all cursor-pointer h-full border-dashed">
+                            <CardContent className="p-4 flex flex-col items-center justify-center h-full min-h-[140px] text-muted-foreground group-hover:text-accent">
+                                <div className="w-12 h-12 rounded-xl border-2 border-dashed border-current flex items-center justify-center mb-2 group-hover:border-accent">
+                                    <Plus className="w-6 h-6" />
+                                </div>
                                 <span className="text-sm font-medium">Create New</span>
                             </CardContent>
                         </Card>

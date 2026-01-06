@@ -2,24 +2,31 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { Github, Twitter, Linkedin } from "lucide-react";
-import { useTheme } from "next-themes";
+import Logo from "@/components/ui/Logo";
 
 const footerLinks = {
     product: [
         { label: "Features", href: "#features" },
         { label: "Pricing", href: "#pricing" },
         { label: "Documentation", href: "#docs" },
+        { label: "Changelog", href: "#changelog" },
     ],
     company: [
         { label: "About", href: "#about" },
         { label: "Blog", href: "#blog" },
+        { label: "Careers", href: "#careers" },
         { label: "Contact", href: "#contact" },
+    ],
+    resources: [
+        { label: "Community", href: "#community" },
+        { label: "Help Center", href: "#help" },
+        { label: "Status", href: "#status" },
     ],
     legal: [
         { label: "Privacy", href: "#privacy" },
         { label: "Terms", href: "#terms" },
+        { label: "Security", href: "#security" },
     ],
 };
 
@@ -30,27 +37,40 @@ const socialLinks = [
 ];
 
 export default function Footer() {
-    const { resolvedTheme } = useTheme();
-    const isDark = resolvedTheme === "dark";
-
     return (
-        <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-            <div className="max-w-6xl mx-auto px-4 py-12">
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-8">
+        <footer className="relative border-t border-border bg-background">
+            {/* Gradient Line */}
+            <div
+                aria-hidden="true"
+                className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-accent/50 to-transparent"
+            />
+
+            <div className="max-w-6xl mx-auto px-6 py-16">
+                <div className="grid grid-cols-2 md:grid-cols-6 gap-8 mb-12">
                     {/* Brand */}
                     <div className="col-span-2">
-                        <Link href="/" className="flex items-center gap-3 mb-4">
-                            <Image
-                                src={isDark ? "/DarkMode-CollabFlow-logo-transparent.png" : "/whiteMode-CollabFlow-minimal-icon.png"}
-                                alt="CollabFlow"
-                                width={150}
-                                height={40}
-                                className="h-10 w-auto"
-                            />
+                        <Link href="/" className="inline-block mb-4">
+                            <Logo size="sm" />
                         </Link>
-                        <p className="text-slate-500 dark:text-slate-400 text-sm max-w-xs mb-4">
-                            The open-source collaboration platform for modern teams.
+                        <p className="text-sm text-muted-foreground max-w-xs mb-4">
+                            The open-source collaboration platform for teams who ship fast.
                         </p>
+
+                        {/* Newsletter */}
+                        <form className="flex gap-2 mb-4" onSubmit={(e) => e.preventDefault()}>
+                            <input
+                                type="email"
+                                placeholder="Enter your email"
+                                className="flex-1 px-4 py-2 text-sm rounded-lg border border-border bg-surface focus:outline-none focus:ring-2 focus:ring-accent"
+                            />
+                            <button
+                                type="submit"
+                                className="px-4 py-2 text-sm font-medium rounded-lg bg-accent text-accent-foreground hover:opacity-90 transition-opacity"
+                            >
+                                Subscribe
+                            </button>
+                        </form>
+
                         <div className="flex gap-2">
                             {socialLinks.map((social) => (
                                 <a
@@ -58,7 +78,7 @@ export default function Footer() {
                                     href={social.href}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="w-9 h-9 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-center text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
+                                    className="w-9 h-9 rounded-lg border border-border hover:bg-surface hover:border-muted-foreground/50 flex items-center justify-center text-muted-foreground hover:text-foreground transition-all focus-ring"
                                     aria-label={social.label}
                                 >
                                     <social.icon className="w-4 h-4" />
@@ -67,17 +87,15 @@ export default function Footer() {
                         </div>
                     </div>
 
-                    {/* Product */}
+                    {/* Links */}
                     <div>
-                        <h4 className="font-semibold text-slate-900 dark:text-white mb-4 text-sm">
-                            Product
-                        </h4>
-                        <ul className="space-y-2">
+                        <h4 className="font-semibold text-sm mb-4">Product</h4>
+                        <ul className="space-y-3">
                             {footerLinks.product.map((link) => (
                                 <li key={link.label}>
                                     <Link
                                         href={link.href}
-                                        className="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 transition-colors"
+                                        className="text-sm text-muted-foreground hover:text-foreground transition-colors"
                                     >
                                         {link.label}
                                     </Link>
@@ -86,17 +104,14 @@ export default function Footer() {
                         </ul>
                     </div>
 
-                    {/* Company */}
                     <div>
-                        <h4 className="font-semibold text-slate-900 dark:text-white mb-4 text-sm">
-                            Company
-                        </h4>
-                        <ul className="space-y-2">
+                        <h4 className="font-semibold text-sm mb-4">Company</h4>
+                        <ul className="space-y-3">
                             {footerLinks.company.map((link) => (
                                 <li key={link.label}>
                                     <Link
                                         href={link.href}
-                                        className="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 transition-colors"
+                                        className="text-sm text-muted-foreground hover:text-foreground transition-colors"
                                     >
                                         {link.label}
                                     </Link>
@@ -105,17 +120,30 @@ export default function Footer() {
                         </ul>
                     </div>
 
-                    {/* Legal */}
                     <div>
-                        <h4 className="font-semibold text-slate-900 dark:text-white mb-4 text-sm">
-                            Legal
-                        </h4>
-                        <ul className="space-y-2">
+                        <h4 className="font-semibold text-sm mb-4">Resources</h4>
+                        <ul className="space-y-3">
+                            {footerLinks.resources.map((link) => (
+                                <li key={link.label}>
+                                    <Link
+                                        href={link.href}
+                                        className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                                    >
+                                        {link.label}
+                                    </Link>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+
+                    <div>
+                        <h4 className="font-semibold text-sm mb-4">Legal</h4>
+                        <ul className="space-y-3">
                             {footerLinks.legal.map((link) => (
                                 <li key={link.label}>
                                     <Link
                                         href={link.href}
-                                        className="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 transition-colors"
+                                        className="text-sm text-muted-foreground hover:text-foreground transition-colors"
                                     >
                                         {link.label}
                                     </Link>
@@ -126,13 +154,16 @@ export default function Footer() {
                 </div>
 
                 {/* Bottom */}
-                <div className="border-t border-slate-200 dark:border-slate-800 mt-12 pt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
-                    <p className="text-sm text-slate-500 dark:text-slate-400">
-                        © {new Date().getFullYear()} CollabFlow. Open-source under MIT License.
+                <div className="pt-8 border-t border-border flex flex-col sm:flex-row justify-between items-center gap-4">
+                    <p className="text-sm text-muted-foreground">
+                        © {new Date().getFullYear()} CollabFlow. Open source under MIT License.
                     </p>
-                    <p className="text-xs text-slate-400">
-                        Built with Next.js, NextAuth.js, Yjs, Prisma & PostgreSQL
-                    </p>
+                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                        <span className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                            All systems operational
+                        </span>
+                    </div>
                 </div>
             </div>
         </footer>

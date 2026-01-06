@@ -1,216 +1,164 @@
-# CollabFlow 🚀
+# CollabFlow
 
 > **Real-time Collaboration Platform for Modern Teams**
 
-CollabFlow is a comprehensive collaboration platform built with Next.js 15, featuring real-time document editing, Kanban boards, team chat, and video conferencing.
-
-![CollabFlow](public/DarkMode-CollabFlow-logo-transparent.png)
+CollabFlow is an open-source collaboration platform built with Next.js 15, featuring real-time document editing, Kanban boards, team chat, and video conferencing.
 
 ---
 
-## ✨ Features
+## Features
 
-### 📝 Document Editor
-
-- Rich text editing with **TipTap**
-- Document history tracking (who edited what)
+### Document Editor
+- Rich text editing with TipTap
+- Document history tracking
 - Auto-save with Ctrl+S
-- Create, edit, and delete documents
+- Grid/List view toggle
+- Sort by date or name
 - Share documents via URL
 
-### 📋 Kanban Board
+### Kanban Board
+- Drag-and-drop entire cards
+- Inline card creation
+- Color-coded columns (To Do, In Progress, Review, Done)
+- Visual drag feedback with scale/rotate effects
 
-- Drag-and-drop task management
-- Create, edit, and delete cards
-- Multiple columns (To Do, In Progress, Review, Done)
-- Full database persistence
-- Real-time updates
-
-### 💬 Team Chat _(Coming Soon)_
-
-- Real-time messaging
+### Team Chat
+- Real-time messaging with Socket.io
 - Channel-based conversations
-- Direct messages
+- Typing indicators
+- Emoji picker
 
-### 📹 Video Calling _(Coming Soon)_
-
-- WebRTC-based video conferencing
+### Video Calling
+- WebRTC peer-to-peer video
+- Multi-user support (mesh topology)
+- Mute/camera toggle
 - Screen sharing
-- Multiple participants
+- Invite link sharing
+
+### Settings
+- Profile management
+- Theme toggle (Light/Dark/System)
+- Notification preferences
+- Sign out
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Category           | Technology                    |
 | ------------------ | ----------------------------- |
-| **Framework**      | Next.js 15 (App Router)       |
-| **Language**       | TypeScript                    |
-| **Styling**        | TailwindCSS + shadcn/ui       |
-| **Database**       | PostgreSQL                    |
-| **ORM**            | Prisma 7                      |
-| **Authentication** | NextAuth.js v5 (Google OAuth) |
-| **Editor**         | TipTap (ProseMirror)          |
-| **Drag & Drop**    | dnd-kit                       |
-| **Animations**     | Framer Motion                 |
+| Framework          | Next.js 15 (App Router)       |
+| Language           | TypeScript                    |
+| Styling            | TailwindCSS v4 + shadcn/ui    |
+| Database           | PostgreSQL                    |
+| ORM                | Prisma 7                      |
+| Authentication     | NextAuth.js v5 (Google OAuth) |
+| Editor             | TipTap (ProseMirror)          |
+| Real-time          | Socket.io                     |
+| Video              | WebRTC (native)               |
+| Drag and Drop      | dnd-kit                       |
+| Animations         | Framer Motion                 |
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
-
 - Node.js 18+
 - PostgreSQL 15+
 - Google OAuth credentials
 
 ### Installation
 
-1. **Clone the repository**
+```bash
+# Clone the repository
+git clone https://github.com/Bhanuteja-c/collabflow.git
+cd collabflow
 
-   ```bash
-   git clone https://github.com/yourusername/collabflow.git
-   cd collabflow
-   ```
+# Install dependencies
+npm install --legacy-peer-deps
 
-2. **Install dependencies**
+# Configure environment
+cp .env.example .env
+# Edit .env with your credentials
 
-   ```bash
-   npm install --legacy-peer-deps
-   ```
+# Set up database
+npx prisma generate
+npx prisma db push
 
-3. **Configure environment variables**
+# Run development server (with Socket.io)
+npm run dev
+```
 
-   Create a `.env` file:
-
-   ```env
-   DATABASE_URL="postgresql://postgres:yourpassword@localhost:5432/collabflow"
-
-   AUTH_SECRET="your-secret-key-here"
-   AUTH_GOOGLE_ID="your-google-client-id"
-   AUTH_GOOGLE_SECRET="your-google-client-secret"
-   ```
-
-4. **Set up the database**
-
-   ```bash
-   npx prisma generate
-   npx prisma db push
-   ```
-
-5. **Run the development server**
-
-   ```bash
-   npm run dev
-   ```
-
-6. **Open in browser**
-   ```
-   http://localhost:3000
-   ```
+Open http://localhost:3000 in your browser.
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 collabflow/
+├── server.ts                 # Custom server with Socket.io
 ├── prisma/
-│   ├── schema.prisma       # Database schema
-│   └── prisma.config.ts    # Prisma 7 config
-├── public/                 # Static assets
+│   └── schema.prisma         # Database schema
 ├── src/
 │   ├── app/
-│   │   ├── (auth)/         # Auth pages
-│   │   ├── (dashboard)/    # Dashboard pages
-│   │   │   ├── dashboard/
-│   │   │   ├── documents/
-│   │   │   ├── editor/[id]/
-│   │   │   ├── kanban/
-│   │   │   ├── chat/
-│   │   │   ├── video/
-│   │   │   └── settings/
-│   │   ├── api/            # API routes
-│   │   │   ├── auth/
-│   │   │   ├── documents/
-│   │   │   ├── boards/
-│   │   │   └── cards/
-│   │   └── page.tsx        # Landing page
+│   │   ├── (dashboard)/      # Dashboard pages
+│   │   │   ├── dashboard/    # Overview
+│   │   │   ├── documents/    # Documents list
+│   │   │   ├── editor/[id]/  # Document editor
+│   │   │   ├── kanban/       # Kanban board
+│   │   │   ├── chat/         # Team chat
+│   │   │   ├── video/        # Video calls
+│   │   │   └── settings/     # User settings
+│   │   ├── api/              # API routes
+│   │   ├── sign-in/          # Auth page
+│   │   └── page.tsx          # Landing page
 │   ├── components/
-│   │   ├── ui/             # shadcn components
-│   │   ├── kanban/         # Kanban components
-│   │   ├── Sidebar.tsx
-│   │   └── ThemeToggle.tsx
+│   │   ├── landing/          # Landing page sections
+│   │   ├── kanban/           # Kanban components
+│   │   └── ui/               # shadcn + custom UI
+│   ├── hooks/
+│   │   ├── useSocket.ts      # Chat socket hook
+│   │   └── useVideoCall.ts   # Video WebRTC hook
 │   └── lib/
-│       ├── auth.ts         # Auth config
-│       ├── prisma.ts       # Prisma client
-│       └── ensureUser.ts   # User utility
+│       ├── auth.ts           # Auth config
+│       ├── prisma.ts         # Prisma client
+│       └── socket.ts         # Socket helpers
 └── package.json
 ```
 
 ---
 
-## 🗄️ Database Models
+## Roadmap
 
-| Model             | Description              |
-| ----------------- | ------------------------ |
-| `User`            | User accounts (NextAuth) |
-| `Document`        | Rich text documents      |
-| `DocumentHistory` | Edit history tracking    |
-| `Board`           | Kanban boards            |
-| `Column`          | Board columns            |
-| `Card`            | Task cards               |
-
----
-
-## 🎨 Screenshots
-
-### Landing Page
-
-Modern, animated landing page with feature highlights.
-
-### Dashboard
-
-Quick overview with recent documents and activity.
-
-### Document Editor
-
-Rich text editor with formatting toolbar and history panel.
-
-### Kanban Board
-
-Drag-and-drop task management with multiple columns.
-
----
-
-## 🔮 Roadmap
-
-- [x] Landing page
+- [x] Landing page (2025 SaaS design)
 - [x] Authentication (Google OAuth)
-- [x] Dashboard
+- [x] Dashboard with stats
 - [x] Document editor with history
-- [x] Kanban board with persistence
-- [ ] Real-time collaboration (Yjs/Hocuspocus)
-- [ ] Team chat
-- [ ] Video conferencing
-- [ ] User roles & permissions
-- [ ] Export documents (PDF, Markdown)
+- [x] Documents page with grid/list view
+- [x] Kanban board with drag-and-drop
+- [x] Team chat (Socket.io)
+- [x] Video calling (WebRTC)
+- [x] Settings page
+- [ ] Real-time collaboration (Yjs)
+- [ ] PDF/Markdown export
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
 ---
 
-## 📄 License
+## License
 
-This project is licensed under the MIT License.
+MIT License - Free forever, open source.
 
 ---
 
-## 👨‍💻 Author
+## Author
 
 **Bhanuteja-c**  
 Final Year Project - 2025

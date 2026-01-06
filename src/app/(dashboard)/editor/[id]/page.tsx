@@ -1,12 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback, use } from "react";
+import { useState, useEffect, useCallback, use, useRef, useMemo } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Collaboration from "@tiptap/extension-collaboration";
-import CollaborationCursor from "@tiptap/extension-collaboration-cursor";
 import * as Y from "yjs";
-import { WebrtcProvider } from "y-webrtc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useSession } from "next-auth/react";
@@ -27,6 +25,7 @@ import {
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { useDocumentSync } from "@/hooks/useDocumentSync";
 
 // --- Types ---
 interface HistoryEntry {
@@ -46,38 +45,22 @@ const getRandomColor = () => {
     return colors[Math.floor(Math.random() * colors.length)];
 };
 
-// --- Child Component: The Actual Editor ---
-// This component only renders when ydoc and provider are ready.
-function TiptapEditor({
-    ydoc,
-    provider,
-    initialContent, // used only if doc is empty
-    title,
-    setTitle,
-    documentId,
-    history,
-    saveCallback,
-    saving,
-    saved,
-    permission,
-    onRefreshShares
-}: {
-    ydoc: Y.Doc;
-    provider: WebrtcProvider;
-    initialContent: string;
-    title: string;
-    setTitle: (t: string) => void;
-    documentId: string;
-    history: HistoryEntry[];
-    saveCallback: (content: string) => void;
-    saving: boolean;
-    saved: boolean;
-    permission: "owner" | "edit" | "view";
-    onRefreshShares?: () => void;
-}) {
+// --- Main Page Component ---
+export default function EditorPage({ params }: { params: Promise<{ id: string }> }) {
+    const { id } = use(params);
     const { data: session } = useSession();
+    const router = useRouter();
+
+    // Data State
+    const [title, setTitle] = useState("Untitled");
+    const [initialContent, setInitialContent] = useState("");
+    const [history, setHistory] = useState<HistoryEntry[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
+    const [saving, setSaving] = useState(false);
+    const [saved, setSaved] = useState(false);
+    const [permission, setPermission] = useState<"owner" | "edit" | "view">("view");
     const [copied, setCopied] = useState(false);
-    const [connectedUsers, setConnectedUsers] = useState<any[]>([]);
 
     // Share Dialog state
     const [shareEmail, setShareEmail] = useState("");
@@ -86,18 +69,148 @@ function TiptapEditor({
     const [loadingShares, setLoadingShares] = useState(false);
     const [sharingInProgress, setSharingInProgress] = useState(false);
     const [shareDialogOpen, setShareDialogOpen] = useState(false);
+    const [userSuggestions, setUserSuggestions] = useState<any[]>([]);
+    const [searchingUsers, setSearchingUsers] = useState(false);
 
-    // Fetch shares when dialog opens (only for owner)
+    // Yjs State
+    const ydoc = useMemo(() => new Y.Doc(), []);
+    const userColor = useMemo(() => getRandomColor(), []);
+    const contentInitialized = useRef(false);
+
+    // Get user info
+    const userId = (session?.user as any)?.id || "";
+    const userName = session?.user?.name || "Anonymous";
+    const userImage = session?.user?.image || "";
+
+    // Use Socket.io document sync
+    const { connected, remoteUsers, sendCursorUpdate } = useDocumentSync({
+        documentId: id,
+        userId,
+        userName,
+        userColor,
+        userImage,
+        ydoc,
+    });
+
+    // 1. Fetch Data
+    useEffect(() => {
+        const fetchDoc = async () => {
+            try {
+                const res = await fetch(`/api/documents/${id}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setTitle(data.title);
+                    setInitialContent(data.content || "");
+                    setPermission(data.permission || "view");
+                } else {
+                    setError("Document not found");
+                }
+
+                const histRes = await fetch(`/api/documents/${id}/history`);
+                if (histRes.ok) setHistory(await histRes.json());
+
+            } catch (e) {
+                console.error(e);
+                setError("Failed to load");
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchDoc();
+    }, [id]);
+
+    // Initialize Yjs document with content (only once)
+    useEffect(() => {
+        if (contentInitialized.current || !initialContent || loading) return;
+
+        const yXmlFragment = ydoc.getXmlFragment("prosemirror");
+        if (yXmlFragment.length === 0) {
+            // Document is empty, we'll let TipTap handle initial content
+            contentInitialized.current = true;
+        }
+    }, [initialContent, loading, ydoc]);
+
+    // Editor setup
+    const editor = useEditor({
+        extensions: [
+            StarterKit.configure({
+                history: false, // Disable history as Yjs handles it
+            }),
+            Collaboration.configure({
+                document: ydoc,
+            }),
+        ],
+        content: initialContent,
+        editorProps: {
+            attributes: {
+                class: "prose prose-lg dark:prose-invert max-w-none focus:outline-none p-8 min-h-[calc(100vh-200px)]",
+            },
+        },
+        immediatelyRender: false,
+        onSelectionUpdate: ({ editor }) => {
+            const { from, to } = editor.state.selection;
+            sendCursorUpdate(from, to);
+        },
+    }, [ydoc, initialContent]);
+
+    // Debounced Save
+    useEffect(() => {
+        if (!editor) return;
+        let timeoutId: NodeJS.Timeout;
+        const handleUpdate = () => {
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => {
+                handleSave(editor.getHTML());
+            }, 2000);
+        };
+        editor.on("update", handleUpdate);
+        return () => {
+            clearTimeout(timeoutId);
+            editor.off("update", handleUpdate);
+        };
+    }, [editor]);
+
+    // Cleanup Ydoc on unmount
+    useEffect(() => {
+        return () => {
+            ydoc.destroy();
+        };
+    }, [ydoc]);
+
+    // Fetch shares when dialog opens
     useEffect(() => {
         if (shareDialogOpen && permission === "owner") {
             fetchShares();
         }
     }, [shareDialogOpen, permission]);
 
+    // Search users for autocomplete
+    useEffect(() => {
+        if (!shareEmail.trim() || shareEmail.length < 2) {
+            setUserSuggestions([]);
+            return;
+        }
+        const searchUsers = async () => {
+            setSearchingUsers(true);
+            try {
+                const res = await fetch(`/api/users/search?q=${encodeURIComponent(shareEmail)}`);
+                if (res.ok) {
+                    setUserSuggestions(await res.json());
+                }
+            } catch (e) {
+                console.error(e);
+            } finally {
+                setSearchingUsers(false);
+            }
+        };
+        const debounce = setTimeout(searchUsers, 300);
+        return () => clearTimeout(debounce);
+    }, [shareEmail]);
+
     const fetchShares = async () => {
         setLoadingShares(true);
         try {
-            const res = await fetch(`/api/documents/${documentId}/share`);
+            const res = await fetch(`/api/documents/${id}/share`);
             if (res.ok) {
                 setShares(await res.json());
             }
@@ -112,13 +225,14 @@ function TiptapEditor({
         if (!shareEmail.trim()) return;
         setSharingInProgress(true);
         try {
-            const res = await fetch(`/api/documents/${documentId}/share`, {
+            const res = await fetch(`/api/documents/${id}/share`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email: shareEmail.trim(), permission: sharePermission })
             });
             if (res.ok) {
                 setShareEmail("");
+                setUserSuggestions([]);
                 fetchShares();
             } else {
                 const err = await res.json();
@@ -133,67 +247,32 @@ function TiptapEditor({
 
     const handleRemoveShare = async (userId: string) => {
         try {
-            await fetch(`/api/documents/${documentId}/share?userId=${userId}`, { method: "DELETE" });
+            await fetch(`/api/documents/${id}/share?userId=${userId}`, { method: "DELETE" });
             fetchShares();
         } catch (e) {
             console.error(e);
         }
     };
 
-    // Track connected users via Awareness
-    useEffect(() => {
-        const updateUsers = () => {
-            const states = Array.from(provider.awareness.getStates().values());
-            setConnectedUsers(states.map((s: any) => s.user).filter(Boolean));
-        };
-
-        provider.awareness.on("change", updateUsers);
-        updateUsers(); // initial
-
-        return () => {
-            provider.awareness.off("change", updateUsers);
-        };
-    }, [provider]);
-
-    const editor = useEditor({
-        extensions: [
-            StarterKit,
-            Collaboration.configure({
-                document: ydoc,
-            }),
-            // CollaborationCursor.configure({
-            //     provider: provider,
-            //     user: {
-            //         name: session?.user?.name || "Anonymous",
-            //         color: getRandomColor(),
-            //     },
-            // }),
-        ],
-        editorProps: {
-            attributes: {
-                class: "prose prose-lg dark:prose-invert max-w-none focus:outline-none p-8 min-h-[calc(100vh-200px)]",
-            },
-        },
-        immediatelyRender: false,
-    }, [ydoc, provider]); // Should be stable
-
-    // Debounced Save
-    useEffect(() => {
-        if (!editor) return;
-        let timeoutId: NodeJS.Timeout;
-        const handleUpdate = () => {
-            clearTimeout(timeoutId);
-            timeoutId = setTimeout(() => {
-                saveCallback(editor.getHTML());
-            }, 2000);
-        };
-        editor.on("update", handleUpdate);
-        return () => {
-            clearTimeout(timeoutId);
-            editor.off("update", handleUpdate);
-        };
-    }, [editor, saveCallback]);
-
+    const handleSave = useCallback(async (content: string) => {
+        setSaving(true);
+        try {
+            await fetch(`/api/documents/${id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ title, content })
+            });
+            setSaved(true);
+            setTimeout(() => setSaved(false), 2000);
+            fetch(`/api/documents/${id}/history`).then(res => {
+                if (res.ok) res.json().then(setHistory);
+            });
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setSaving(false);
+        }
+    }, [id, title]);
 
     const copyShareLink = () => {
         navigator.clipboard.writeText(window.location.href);
@@ -201,22 +280,44 @@ function TiptapEditor({
         setTimeout(() => setCopied(false), 2000);
     };
 
-    const ToolbarButton = ({ onClick, isActive, children, title }: any) => (
+    const formatDate = (dateString: string) => {
+        const date = new Date(dateString);
+        return date.toLocaleDateString() + " " + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    };
+
+    const ToolbarButton = ({ onClick, isActive, children, title: btnTitle }: any) => (
         <Button
             variant="ghost"
             size="sm"
             onClick={onClick}
-            title={title}
+            title={btnTitle}
             className={`h-9 w-9 p-0 ${isActive ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-secondary"}`}
         >
             {children}
         </Button>
     );
 
-    const formatDate = (dateString: string) => {
-        const date = new Date(dateString);
-        return date.toLocaleDateString() + " " + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    };
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-[calc(100vh-3.5rem)] bg-background">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="flex items-center justify-center h-[calc(100vh-3.5rem)] bg-background">
+                <div className="text-center">
+                    <p className="text-destructive mb-4">{error}</p>
+                    <Button onClick={() => router.push("/documents")} variant="outline">
+                        <ArrowLeft className="w-4 h-4 mr-2" />
+                        Back to Documents
+                    </Button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-background">
@@ -238,19 +339,29 @@ function TiptapEditor({
 
                         {/* Connected Users */}
                         <div className="flex items-center -space-x-2 ml-4">
-                            {connectedUsers.map((user, i) => (
-                                <div key={i} title={user.name} className="relative z-0 hover:z-10">
-                                    <Avatar className="h-8 w-8 border-2 border-background">
-                                        <AvatarImage src={user.image} />
-                                        <AvatarFallback style={{ backgroundColor: user.color }} className="text-[10px] text-white">
-                                            {user.name?.[0]}
+                            {/* Current user */}
+                            <div title="You" className="relative z-10">
+                                <Avatar className="h-8 w-8 border-2 border-background ring-2" style={{ borderColor: userColor }}>
+                                    <AvatarImage src={userImage} />
+                                    <AvatarFallback style={{ backgroundColor: userColor }} className="text-[10px] text-white">
+                                        {userName?.[0]}
+                                    </AvatarFallback>
+                                </Avatar>
+                            </div>
+                            {/* Remote users */}
+                            {remoteUsers.map((user) => (
+                                <div key={user.socketId} title={user.user.name} className="relative z-0 hover:z-10">
+                                    <Avatar className="h-8 w-8 border-2" style={{ borderColor: user.user.color }}>
+                                        <AvatarImage src={user.user.image} />
+                                        <AvatarFallback style={{ backgroundColor: user.user.color }} className="text-[10px] text-white">
+                                            {user.user.name?.[0]}
                                         </AvatarFallback>
                                     </Avatar>
                                 </div>
                             ))}
-                            <div className="flex items-center justify-center h-8 w-8 rounded-full bg-muted text-[10px] ml-2 border border-border" title="Connected peers">
-                                <Cloud className="w-3 h-3 mr-1" />
-                                {connectedUsers.length}
+                            <div className="flex items-center justify-center h-8 w-8 rounded-full bg-muted text-[10px] ml-2 border border-border" title="Connected">
+                                <Cloud className={`w-3 h-3 mr-1 ${connected ? "text-emerald-500" : "text-muted-foreground"}`} />
+                                {remoteUsers.length + 1}
                             </div>
                         </div>
                     </div>
@@ -273,25 +384,51 @@ function TiptapEditor({
                                         </DialogDescription>
                                     </DialogHeader>
                                     <div className="space-y-4 py-4">
-                                        <div className="flex gap-2">
-                                            <Input
-                                                placeholder="Enter email address"
-                                                value={shareEmail}
-                                                onChange={(e) => setShareEmail(e.target.value)}
-                                                onKeyDown={(e) => e.key === "Enter" && handleShare()}
-                                            />
-                                            <Select value={sharePermission} onValueChange={(v: "view" | "edit") => setSharePermission(v)}>
-                                                <SelectTrigger className="w-28">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="view">View</SelectItem>
-                                                    <SelectItem value="edit">Edit</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                            <Button onClick={handleShare} disabled={sharingInProgress}>
-                                                {sharingInProgress ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
-                                            </Button>
+                                        <div className="relative">
+                                            <div className="flex gap-2">
+                                                <Input
+                                                    placeholder="Enter email address"
+                                                    value={shareEmail}
+                                                    onChange={(e) => setShareEmail(e.target.value)}
+                                                    onKeyDown={(e) => e.key === "Enter" && handleShare()}
+                                                />
+                                                <Select value={sharePermission} onValueChange={(v: "view" | "edit") => setSharePermission(v)}>
+                                                    <SelectTrigger className="w-28">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="view">View</SelectItem>
+                                                        <SelectItem value="edit">Edit</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                                <Button onClick={handleShare} disabled={sharingInProgress}>
+                                                    {sharingInProgress ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
+                                                </Button>
+                                            </div>
+                                            {/* User Suggestions Dropdown */}
+                                            {userSuggestions.length > 0 && (
+                                                <div className="absolute top-full left-0 right-20 mt-1 bg-popover border rounded-md shadow-lg z-50 max-h-48 overflow-auto">
+                                                    {userSuggestions.map((user) => (
+                                                        <button
+                                                            key={user.id}
+                                                            className="w-full flex items-center gap-2 p-2 hover:bg-muted text-left"
+                                                            onClick={() => {
+                                                                setShareEmail(user.email);
+                                                                setUserSuggestions([]);
+                                                            }}
+                                                        >
+                                                            <Avatar className="h-6 w-6">
+                                                                <AvatarImage src={user.image} />
+                                                                <AvatarFallback>{user.name?.[0]}</AvatarFallback>
+                                                            </Avatar>
+                                                            <div>
+                                                                <p className="text-sm font-medium">{user.name}</p>
+                                                                <p className="text-xs text-muted-foreground">{user.email}</p>
+                                                            </div>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </div>
 
                                         {/* Current Shares */}
@@ -365,9 +502,8 @@ function TiptapEditor({
                             </SheetContent>
                         </Sheet>
 
-
                         <Button
-                            onClick={() => editor && saveCallback(editor.getHTML())}
+                            onClick={() => editor && handleSave(editor.getHTML())}
                             disabled={saving}
                             variant={saved ? "outline" : "default"}
                             className={saved ? "text-emerald-600 border-emerald-600" : "btn-primary"}
@@ -401,10 +537,29 @@ function TiptapEditor({
                 )}
             </div>
 
-            <div className="flex-1 overflow-auto bg-background">
+            <div className="flex-1 overflow-auto bg-background relative">
                 <div className="max-w-4xl mx-auto">
                     <EditorContent editor={editor} />
                 </div>
+
+                {/* Remote Cursor Indicators */}
+                {remoteUsers.map((user) => user.cursor && (
+                    <div
+                        key={user.socketId}
+                        className="absolute pointer-events-none z-50"
+                        style={{
+                            left: 0,
+                            top: 0,
+                        }}
+                    >
+                        <div
+                            className="px-2 py-0.5 rounded text-xs text-white whitespace-nowrap"
+                            style={{ backgroundColor: user.user.color }}
+                        >
+                            {user.user.name}
+                        </div>
+                    </div>
+                ))}
             </div>
 
             <style jsx global>{`
@@ -430,162 +585,5 @@ function TiptapEditor({
                 }
             `}</style>
         </div>
-    );
-}
-
-
-// --- Main Page Component ---
-export default function EditorPage({ params }: { params: Promise<{ id: string }> }) {
-    const { id } = use(params);
-    const { data: session } = useSession();
-    const router = useRouter();
-
-    // Data State
-    const [title, setTitle] = useState("Untitled");
-    const [initialContent, setInitialContent] = useState("");
-    const [history, setHistory] = useState<HistoryEntry[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
-    const [saving, setSaving] = useState(false);
-    const [saved, setSaved] = useState(false);
-    const [permission, setPermission] = useState<"owner" | "edit" | "view">("view");
-
-    // Yjs State
-    const [ydoc] = useState(() => new Y.Doc());
-    const [provider, setProvider] = useState<WebrtcProvider | null>(null);
-
-    // 1. Fetch Data
-    useEffect(() => {
-        const fetchDoc = async () => {
-            try {
-                const res = await fetch(`/api/documents/${id}`);
-                if (res.ok) {
-                    const data = await res.json();
-                    setTitle(data.title);
-                    setInitialContent(data.content || "");
-                    setPermission(data.permission || "view");
-                } else {
-                    setError("Document not found");
-                }
-
-                const histRes = await fetch(`/api/documents/${id}/history`);
-                if (histRes.ok) setHistory(await histRes.json());
-
-            } catch (e) {
-                console.error(e);
-                setError("Failed to load");
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchDoc();
-    }, [id]);
-
-    // 2. Setup Yjs Provider (only after session is ready to prevent anonymous glitches)
-    useEffect(() => {
-        if (!session?.user) return;
-
-        // Ensure we cleanup old provider if id changes
-        const webrtcProvider = new WebrtcProvider(`collabflow-doc-${id}`, ydoc, {
-            signaling: [
-                "wss://signaling.yjs.dev",
-                "wss://y-webrtc-signaling-eu.herokuapp.com",
-                "wss://y-webrtc-signaling-us.herokuapp.com"
-            ]
-        });
-
-        // Setup Awareness
-        const userColor = getRandomColor();
-        webrtcProvider.awareness.setLocalStateField("user", {
-            name: session.user.name || "Anonymous",
-            color: userColor,
-            image: session.user.image
-        });
-
-        setProvider(webrtcProvider);
-
-        return () => {
-            webrtcProvider.destroy();
-        };
-    }, [id, session, ydoc]);
-
-    // Cleanup Ydoc on unmount (page leave)
-    useEffect(() => {
-        return () => {
-            ydoc.destroy();
-        };
-    }, [ydoc]);
-
-
-    const handleSave = useCallback(async (content: string) => {
-        setSaving(true);
-        try {
-            await fetch(`/api/documents/${id}`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ title, content })
-            });
-            setSaved(true);
-            setTimeout(() => setSaved(false), 2000);
-            // Refresh history silently
-            fetch(`/api/documents/${id}/history`).then(res => {
-                if (res.ok) res.json().then(setHistory);
-            });
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setSaving(false);
-        }
-    }, [id, title]);
-
-
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center h-[calc(100vh-3.5rem)] bg-background">
-                <Loader2 className="w-8 h-8 animate-spin text-primary" />
-            </div>
-        );
-    }
-
-    if (error) {
-        return (
-            <div className="flex items-center justify-center h-[calc(100vh-3.5rem)] bg-background">
-                <div className="text-center">
-                    <p className="text-destructive mb-4">{error}</p>
-                    <Button onClick={() => router.push("/documents")} variant="outline">
-                        <ArrowLeft className="w-4 h-4 mr-2" />
-                        Back to Documents
-                    </Button>
-                </div>
-            </div>
-        );
-    }
-
-    // Only render editor when provider is ready
-    if (!provider) {
-        return (
-            <div className="flex items-center justify-center h-[calc(100vh-3.5rem)] bg-background">
-                <div className="flex flex-col items-center">
-                    <Loader2 className="w-8 h-8 animate-spin text-primary mb-2" />
-                    <p className="text-muted-foreground text-sm">Connecting to collaboration server...</p>
-                </div>
-            </div>
-        );
-    }
-
-    return (
-        <TiptapEditor
-            ydoc={ydoc}
-            provider={provider}
-            initialContent={initialContent}
-            title={title}
-            setTitle={setTitle}
-            documentId={id}
-            history={history}
-            saveCallback={handleSave}
-            saving={saving}
-            saved={saved}
-            permission={permission}
-        />
     );
 }

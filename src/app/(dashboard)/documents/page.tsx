@@ -15,6 +15,13 @@ import {
     Trash2,
     Loader2,
     Pencil,
+    Grid3X3,
+    List,
+    Filter,
+    SortAsc,
+    Star,
+    StarOff,
+    Copy,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -22,6 +29,7 @@ import {
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
+    DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { useRouter } from "next/navigation";
 
@@ -32,6 +40,9 @@ interface Document {
     updatedAt: string;
 }
 
+type ViewMode = "grid" | "list";
+type SortMode = "updated" | "created" | "name";
+
 export default function DocumentsPage() {
     const [documents, setDocuments] = useState<Document[]>([]);
     const [loading, setLoading] = useState(true);
@@ -39,6 +50,8 @@ export default function DocumentsPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [showNameInput, setShowNameInput] = useState(false);
     const [newDocName, setNewDocName] = useState("");
+    const [viewMode, setViewMode] = useState<ViewMode>("grid");
+    const [sortMode, setSortMode] = useState<SortMode>("updated");
 
     useEffect(() => {
         fetchDocuments();
@@ -58,7 +71,7 @@ export default function DocumentsPage() {
         }
     };
 
-    const router = useRouter(); // add this hook at top
+    const router = useRouter();
 
     const createDocument = async () => {
         if (!newDocName.trim()) {
@@ -81,11 +94,11 @@ export default function DocumentsPage() {
             } else {
                 const err = await res.json();
                 console.error("Create failed:", err);
-                alert(`Failed to create: ${err.error || "Unknown error"}\nDetails: ${err.details || ""}`);
+                alert(`Failed to create: ${err.error || "Unknown error"}`);
             }
         } catch (error) {
             console.error("Error creating document:", error);
-            alert("Failed to create document. Check console for details.");
+            alert("Failed to create document.");
         } finally {
             setCreating(false);
         }
@@ -117,14 +130,26 @@ export default function DocumentsPage() {
         const mins = Math.floor(diff / (1000 * 60));
 
         if (mins < 1) return "Just now";
-        if (mins < 60) return `${mins} min ago`;
-        if (hours < 24) return `${hours} hours ago`;
+        if (mins < 60) return `${mins}m ago`;
+        if (hours < 24) return `${hours}h ago`;
         if (days === 1) return "Yesterday";
-        if (days < 7) return `${days} days ago`;
+        if (days < 7) return `${days}d ago`;
         return date.toLocaleDateString();
     };
 
-    const filteredDocuments = documents.filter((doc) =>
+    const sortedDocuments = [...documents].sort((a, b) => {
+        switch (sortMode) {
+            case "name":
+                return a.title.localeCompare(b.title);
+            case "created":
+                return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+            case "updated":
+            default:
+                return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+        }
+    });
+
+    const filteredDocuments = sortedDocuments.filter((doc) =>
         doc.title.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
@@ -137,25 +162,25 @@ export default function DocumentsPage() {
                 className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4"
             >
                 <div>
-                    <h1 className="text-2xl lg:text-3xl font-semibold tracking-tight text-foreground">
+                    <h1 className="text-2xl lg:text-3xl font-bold tracking-tight">
                         Documents
                     </h1>
                     <p className="text-muted-foreground mt-1">
-                        Create and manage your documents
+                        {documents.length} document{documents.length !== 1 ? "s" : ""} in your workspace
                     </p>
                 </div>
 
                 {showNameInput ? (
                     <div className="flex gap-2">
                         <Input
-                            placeholder="Enter document name..."
+                            placeholder="Document name..."
                             value={newDocName}
                             onChange={(e) => setNewDocName(e.target.value)}
                             onKeyDown={(e) => e.key === "Enter" && createDocument()}
                             className="w-64"
                             autoFocus
                         />
-                        <Button onClick={createDocument} disabled={creating} className="btn-primary">
+                        <Button onClick={createDocument} disabled={creating} className="btn-glow">
                             {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : "Create"}
                         </Button>
                         <Button variant="outline" onClick={() => { setShowNameInput(false); setNewDocName(""); }}>
@@ -163,20 +188,22 @@ export default function DocumentsPage() {
                         </Button>
                     </div>
                 ) : (
-                    <Button onClick={() => setShowNameInput(true)} className="btn-primary w-fit">
+                    <Button onClick={() => setShowNameInput(true)} className="btn-glow w-fit">
                         <Plus className="w-4 h-4 mr-2" />
                         New Document
                     </Button>
                 )}
             </motion.div>
 
-            {/* Search */}
+            {/* Toolbar */}
             <motion.div
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 }}
+                className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between"
             >
-                <div className="relative max-w-md">
+                {/* Search */}
+                <div className="relative max-w-sm flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
                         placeholder="Search documents..."
@@ -185,21 +212,63 @@ export default function DocumentsPage() {
                         className="pl-10"
                     />
                 </div>
+
+                {/* View Controls */}
+                <div className="flex items-center gap-2">
+                    {/* Sort Dropdown */}
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" className="gap-2">
+                                <SortAsc className="w-4 h-4" />
+                                <span className="hidden sm:inline">Sort</span>
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => setSortMode("updated")} className={sortMode === "updated" ? "bg-accent" : ""}>
+                                Last updated
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setSortMode("created")} className={sortMode === "created" ? "bg-accent" : ""}>
+                                Date created
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setSortMode("name")} className={sortMode === "name" ? "bg-accent" : ""}>
+                                Name
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    {/* View Toggle */}
+                    <div className="flex border border-border rounded-lg overflow-hidden">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className={`h-9 w-9 rounded-none ${viewMode === "grid" ? "bg-accent" : ""}`}
+                            onClick={() => setViewMode("grid")}
+                        >
+                            <Grid3X3 className="w-4 h-4" />
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className={`h-9 w-9 rounded-none ${viewMode === "list" ? "bg-accent" : ""}`}
+                            onClick={() => setViewMode("list")}
+                        >
+                            <List className="w-4 h-4" />
+                        </Button>
+                    </div>
+                </div>
             </motion.div>
 
-            {/* Documents Grid */}
+            {/* Documents */}
             {loading ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className={viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" : "space-y-2"}>
                     {[1, 2, 3, 4, 5, 6].map((i) => (
                         <div key={i} className="animate-pulse">
-                            <div className="rounded-xl border bg-card p-5 space-y-4">
-                                <div className="flex items-start justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-lg bg-muted" />
-                                        <div className="space-y-2">
-                                            <div className="h-4 w-32 bg-muted rounded" />
-                                            <div className="h-3 w-24 bg-muted rounded" />
-                                        </div>
+                            <div className="rounded-xl border bg-card p-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-xl bg-muted" />
+                                    <div className="space-y-2 flex-1">
+                                        <div className="h-4 w-32 bg-muted rounded" />
+                                        <div className="h-3 w-20 bg-muted rounded" />
                                     </div>
                                 </div>
                             </div>
@@ -210,26 +279,28 @@ export default function DocumentsPage() {
                 <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="text-center py-12"
+                    className="text-center py-16"
                 >
-                    <FileText className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-                    <h3 className="font-medium text-lg mb-2">
+                    <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
+                        <FileText className="w-8 h-8 text-muted-foreground" />
+                    </div>
+                    <h3 className="font-semibold text-lg mb-2">
                         {searchQuery ? "No documents found" : "No documents yet"}
                     </h3>
-                    <p className="text-muted-foreground mb-4">
-                        {searchQuery ? "Try a different search" : "Create your first document to get started"}
+                    <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
+                        {searchQuery ? "Try a different search term" : "Create your first document to start collaborating"}
                     </p>
                     {!searchQuery && (
-                        <Button onClick={() => setShowNameInput(true)} className="btn-primary">
+                        <Button onClick={() => setShowNameInput(true)} className="btn-glow">
                             <Plus className="w-4 h-4 mr-2" />
                             Create Document
                         </Button>
                     )}
                 </motion.div>
-            ) : (
+            ) : viewMode === "grid" ? (
                 <motion.div
-                    initial={{ opacity: 0, y: 16 }}
-                    animate={{ opacity: 1, y: 0 }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
                     transition={{ delay: 0.2 }}
                     className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
                 >
@@ -238,14 +309,14 @@ export default function DocumentsPage() {
                             key={doc.id}
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: index * 0.05 }}
+                            transition={{ delay: index * 0.03 }}
                         >
-                            <Card className="group hover:shadow-md hover:border-primary/20 transition-all">
+                            <Card className="group hover:shadow-lg hover:border-accent/50 transition-all hover:scale-[1.02]">
                                 <CardContent className="p-4">
                                     <div className="flex items-start justify-between mb-3">
                                         <Link href={`/editor/${doc.id}`} className="flex-1">
-                                            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                                                <FileText className="w-5 h-5 text-primary" />
+                                            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center shadow-sm">
+                                                <FileText className="w-5 h-5 text-white" />
                                             </div>
                                         </Link>
                                         <DropdownMenu>
@@ -265,6 +336,11 @@ export default function DocumentsPage() {
                                                         Edit
                                                     </Link>
                                                 </DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => navigator.clipboard.writeText(`${window.location.origin}/editor/${doc.id}`)}>
+                                                    <Copy className="w-4 h-4 mr-2" />
+                                                    Copy link
+                                                </DropdownMenuItem>
+                                                <DropdownMenuSeparator />
                                                 <DropdownMenuItem
                                                     className="text-destructive focus:text-destructive"
                                                     onClick={() => deleteDocument(doc.id, doc.title)}
@@ -276,7 +352,7 @@ export default function DocumentsPage() {
                                         </DropdownMenu>
                                     </div>
                                     <Link href={`/editor/${doc.id}`}>
-                                        <h3 className="font-medium text-sm group-hover:text-primary transition-colors line-clamp-2 mb-2">
+                                        <h3 className="font-medium group-hover:text-accent transition-colors line-clamp-2 mb-2">
                                             {doc.title}
                                         </h3>
                                         <p className="text-xs text-muted-foreground flex items-center gap-1">
@@ -293,18 +369,82 @@ export default function DocumentsPage() {
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: filteredDocuments.length * 0.05 }}
+                        transition={{ delay: filteredDocuments.length * 0.03 }}
                     >
                         <Card
-                            className="group hover:shadow-md hover:border-primary/20 transition-all cursor-pointer h-full border-dashed"
+                            className="group hover:shadow-lg hover:border-accent/50 transition-all cursor-pointer h-full border-dashed hover:scale-[1.02]"
                             onClick={() => setShowNameInput(true)}
                         >
-                            <CardContent className="p-4 flex flex-col items-center justify-center h-full min-h-[120px] text-muted-foreground group-hover:text-primary">
-                                <Plus className="w-8 h-8 mb-2" />
+                            <CardContent className="p-4 flex flex-col items-center justify-center h-full min-h-[140px] text-muted-foreground group-hover:text-accent">
+                                <div className="w-12 h-12 rounded-xl border-2 border-dashed border-current flex items-center justify-center mb-2">
+                                    <Plus className="w-6 h-6" />
+                                </div>
                                 <span className="text-sm font-medium">Create New</span>
                             </CardContent>
                         </Card>
                     </motion.div>
+                </motion.div>
+            ) : (
+                /* List View */
+                <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.2 }}
+                    className="space-y-2"
+                >
+                    {filteredDocuments.map((doc, index) => (
+                        <motion.div
+                            key={doc.id}
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: index * 0.03 }}
+                        >
+                            <Card className="group hover:shadow-md hover:border-accent/50 transition-all">
+                                <CardContent className="p-3 flex items-center gap-4">
+                                    <Link href={`/editor/${doc.id}`} className="flex items-center gap-4 flex-1">
+                                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center flex-shrink-0">
+                                            <FileText className="w-5 h-5 text-white" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <h3 className="font-medium group-hover:text-accent transition-colors truncate">
+                                                {doc.title}
+                                            </h3>
+                                            <p className="text-xs text-muted-foreground">
+                                                Updated {formatDate(doc.updatedAt)}
+                                            </p>
+                                        </div>
+                                    </Link>
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0">
+                                                <MoreHorizontal className="w-4 h-4" />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end">
+                                            <DropdownMenuItem asChild>
+                                                <Link href={`/editor/${doc.id}`}>
+                                                    <Pencil className="w-4 h-4 mr-2" />
+                                                    Edit
+                                                </Link>
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => navigator.clipboard.writeText(`${window.location.origin}/editor/${doc.id}`)}>
+                                                <Copy className="w-4 h-4 mr-2" />
+                                                Copy link
+                                            </DropdownMenuItem>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem
+                                                className="text-destructive focus:text-destructive"
+                                                onClick={() => deleteDocument(doc.id, doc.title)}
+                                            >
+                                                <Trash2 className="w-4 h-4 mr-2" />
+                                                Delete
+                                            </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </CardContent>
+                            </Card>
+                        </motion.div>
+                    ))}
                 </motion.div>
             )}
         </div>
