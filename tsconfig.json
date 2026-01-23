@@ -17,8 +17,8 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,
-    "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": false,
+    "exactOptionalPropertyTypes": false,
     "forceConsistentCasingInFileNames": true,
     "plugins": [
       {

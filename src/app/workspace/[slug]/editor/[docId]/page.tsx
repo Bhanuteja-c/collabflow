@@ -35,9 +35,9 @@ interface HistoryEntry {
     user: { name: string | null; image: string | null };
 }
 
-const getRandomColor = () => {
+const getRandomColor = (): string => {
     const colors = ["#958DF1", "#F98181", "#FBBC88", "#FAF594", "#70CFF8", "#94FADB", "#B9F18D"];
-    return colors[Math.floor(Math.random() * colors.length)];
+    return colors[Math.floor(Math.random() * colors.length)] ?? "#958DF1";
 };
 
 export default function WorkspaceEditorPage({ params }: { params: Promise<{ slug: string; docId: string }> }) {
@@ -64,7 +64,8 @@ export default function WorkspaceEditorPage({ params }: { params: Promise<{ slug
     const [userSuggestions, setUserSuggestions] = useState<any[]>([]);
 
     const ydoc = useMemo(() => new Y.Doc(), []);
-    const userColor = useMemo(() => getRandomColor(), []);
+    const colorRef = useRef<string>(getRandomColor());
+    const userColor = colorRef.current;
     const contentInitialized = useRef(false);
 
     const userId = (session?.user as any)?.id || "";
@@ -116,7 +117,7 @@ export default function WorkspaceEditorPage({ params }: { params: Promise<{ slug
 
     const editor = useEditor({
         extensions: [
-            StarterKit.configure({ history: false }),
+            StarterKit,
             Collaboration.configure({ document: ydoc }),
         ],
         content: initialContent,

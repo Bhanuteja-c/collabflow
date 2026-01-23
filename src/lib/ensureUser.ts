@@ -29,9 +29,9 @@ export async function ensureUser(sessionUser: SessionUser): Promise<string> {
     const user = await prisma.user.create({
         data: {
             id: sessionUser.id,
-            email: sessionUser.email,
-            name: sessionUser.name,
-            image: sessionUser.image,
+            email: sessionUser.email ?? null,
+            name: sessionUser.name ?? null,
+            image: sessionUser.image ?? null,
         },
     });
 
