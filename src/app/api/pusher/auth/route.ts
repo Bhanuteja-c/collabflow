@@ -21,6 +21,10 @@ export async function POST(req: NextRequest) {
             .split('&')
             .map(part => part.split('=')[1]);
 
+        if (!socketId || !channelName) {
+            return NextResponse.json({ error: "Missing socket_id or channel_name" }, { status: 400 });
+        }
+
         const presenceData = {
             user_id: userId,
             user_info: {
