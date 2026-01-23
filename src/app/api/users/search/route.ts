@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
                         ],
                     },
                     // Exclude current user
-                    { email: { not: session.user.email } },
+                    ...(session.user.email ? [{ email: { not: session.user.email } }] : []),
                 ],
             },
             select: {
