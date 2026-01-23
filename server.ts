@@ -26,8 +26,9 @@ app.prepare().then(() => {
     const io = new SocketIOServer(httpServer, {
         path: "/api/socketio",
         cors: {
-            origin: "*",
+            origin: process.env.NEXTAUTH_URL || "*",
             methods: ["GET", "POST"],
+            credentials: true,
         },
     });
 

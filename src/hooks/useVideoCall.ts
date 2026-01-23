@@ -35,9 +35,16 @@ interface UseVideoCallOptions {
     localStream: MediaStream | null;
 }
 
-const ICE_SERVERS = [
+const ICE_SERVERS: RTCIceServer[] = [
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
+    // TURN server for users behind strict firewalls/NAT (required for reliable video calls)
+    // Set NEXT_PUBLIC_TURN_URL, NEXT_PUBLIC_TURN_USERNAME, NEXT_PUBLIC_TURN_CREDENTIAL in production
+    ...(process.env.NEXT_PUBLIC_TURN_URL ? [{
+        urls: process.env.NEXT_PUBLIC_TURN_URL,
+        username: process.env.NEXT_PUBLIC_TURN_USERNAME || "",
+        credential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL || "",
+    }] : []),
 ];
 
 export function useVideoCall({ roomId, userId, userName, userImage, localStream }: UseVideoCallOptions) {
