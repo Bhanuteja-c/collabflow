@@ -15,6 +15,30 @@ export const emitToChannel = (channelId: string, event: string, data: any) => {
     }
 };
 
+// Emit to a kanban board room
+export const emitToBoard = (boardId: string, event: string, data: any) => {
+    const io = getIO();
+    if (io) {
+        io.to(`board:${boardId}`).emit(event, data);
+    }
+};
+
+// Emit to a document room
+export const emitToDocument = (documentId: string, event: string, data: any) => {
+    const io = getIO();
+    if (io) {
+        io.to(`doc:${documentId}`).emit(event, data);
+    }
+};
+
+// Emit to a video room
+export const emitToVideoRoom = (roomId: string, event: string, data: any) => {
+    const io = getIO();
+    if (io) {
+        io.to(`video:${roomId}`).emit(event, data);
+    }
+};
+
 // Emit to all connected clients
 export const emitToAll = (event: string, data: any) => {
     const io = getIO();

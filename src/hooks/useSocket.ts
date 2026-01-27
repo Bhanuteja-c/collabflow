@@ -1,5 +1,5 @@
 // src/hooks/useSocket.ts
-// Socket.io client hook for real-time chat
+// Socket.io client hook for real-time chat with reconnection handling
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
@@ -29,20 +29,33 @@ interface UseSocketReturn {
     typingUsers: TypingUser[];
     sendTyping: (userId: string, name: string) => void;
     addMessage: (message: Message) => void;
+    connectionState: 'connecting' | 'connected' | 'disconnected' | 'reconnecting';
 }
 
 export function useSocket(channelId: string | null): UseSocketReturn {
     const [connected, setConnected] = useState(false);
+    const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'disconnected' | 'reconnecting'>('connecting');
     const [messages, setMessages] = useState<Message[]>([]);
     const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
     const socketRef = useRef<Socket | null>(null);
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const reconnectAttemptRef = useRef(0);
 
     useEffect(() => {
-        // Initialize socket connection
+        // Initialize socket connection with production settings
         const socket = io({
             path: "/api/socketio",
             transports: ["websocket", "polling"],
+            // Reconnection settings for stability
+            reconnection: true,
+            reconnectionAttempts: 10,
+            reconnectionDelay: 1000,
+            reconnectionDelayMax: 5000,
+            randomizationFactor: 0.5,
+            timeout: 20000,
+            // Lower latency settings
+            forceNew: false,
+            multiplex: true,
         });
 
         socketRef.current = socket;
@@ -50,20 +63,45 @@ export function useSocket(channelId: string | null): UseSocketReturn {
         socket.on("connect", () => {
             console.log("[Socket.io] Connected:", socket.id);
             setConnected(true);
+            setConnectionState('connected');
+            reconnectAttemptRef.current = 0;
+
+            // Rejoin channel if we had one
+            if (channelId) {
+                socket.emit("join-channel", channelId);
+            }
         });
 
-        socket.on("disconnect", () => {
-            console.log("[Socket.io] Disconnected");
+        socket.on("disconnect", (reason) => {
+            console.log("[Socket.io] Disconnected:", reason);
             setConnected(false);
+            setConnectionState('disconnected');
+        });
+
+        socket.on("reconnect_attempt", (attemptNumber) => {
+            console.log("[Socket.io] Reconnect attempt:", attemptNumber);
+            setConnectionState('reconnecting');
+            reconnectAttemptRef.current = attemptNumber;
+        });
+
+        socket.on("reconnect", (attemptNumber) => {
+            console.log("[Socket.io] Reconnected after", attemptNumber, "attempts");
+            setConnected(true);
+            setConnectionState('connected');
         });
 
         socket.on("connect_error", (err) => {
             console.error("[Socket.io] Connection error:", err.message);
+            setConnectionState('disconnected');
         });
 
         // Listen for new messages
         socket.on("new-message", (message: Message) => {
-            setMessages((prev) => [...prev, message]);
+            setMessages((prev) => {
+                // Prevent duplicates
+                if (prev.some(m => m.id === message.id)) return prev;
+                return [...prev, message];
+            });
         });
 
         // Listen for typing indicators
@@ -107,7 +145,7 @@ export function useSocket(channelId: string | null): UseSocketReturn {
             socket.disconnect();
             socketRef.current = null;
         };
-    }, []);
+    }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
     // Join/leave channel when channelId changes
     useEffect(() => {
@@ -124,7 +162,7 @@ export function useSocket(channelId: string | null): UseSocketReturn {
         };
     }, [channelId]);
 
-    // Send typing indicator (throttled)
+    // Send typing indicator (debounced)
     const sendTyping = useCallback(
         (userId: string, name: string) => {
             if (!socketRef.current || !channelId || typingTimeoutRef.current) return;
@@ -140,11 +178,16 @@ export function useSocket(channelId: string | null): UseSocketReturn {
 
     // Add a message locally (for optimistic updates)
     const addMessage = useCallback((message: Message) => {
-        setMessages((prev) => [...prev, message]);
+        setMessages((prev) => {
+            // Prevent duplicates
+            if (prev.some(m => m.id === message.id)) return prev;
+            return [...prev, message];
+        });
     }, []);
 
     return {
         connected,
+        connectionState,
         messages,
         typingUsers,
         sendTyping,

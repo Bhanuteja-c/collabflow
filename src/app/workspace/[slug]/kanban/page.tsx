@@ -1,7 +1,7 @@
 // src/app/workspace/[slug]/kanban/page.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
     DndContext,
@@ -19,7 +19,9 @@ import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { Button } from "@/components/ui/button";
 import KanbanColumn from "@/components/kanban/KanbanColumn";
 import KanbanCard from "@/components/kanban/KanbanCard";
-import { Plus, Loader2, LayoutGrid } from "lucide-react";
+import { Plus, Loader2, LayoutGrid, Wifi, WifiOff } from "lucide-react";
+import { TouchSensor } from "@dnd-kit/core";
+import { useKanbanSync } from "@/hooks/useKanbanSync";
 
 interface Card {
     id: string;
@@ -48,9 +50,93 @@ export default function WorkspaceKanbanPage() {
     const [activeCard, setActiveCard] = useState<Card | null>(null);
 
     const sensors = useSensors(
-        useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+        useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+        useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
         useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
     );
+
+    // Real-time sync callbacks
+    const handleRemoteCardMoved = useCallback((data: { cardId: string; fromColumnId: string; toColumnId: string; newOrder: number }) => {
+        setBoard((prev) => {
+            if (!prev) return prev;
+            let movedCard: Card | undefined;
+
+            // Find and remove card from source column
+            const columnsWithoutCard = prev.columns.map((col) => {
+                if (col.id === data.fromColumnId) {
+                    movedCard = col.cards.find((c) => c.id === data.cardId);
+                    return { ...col, cards: col.cards.filter((c) => c.id !== data.cardId) };
+                }
+                return col;
+            });
+
+            if (!movedCard) return prev;
+
+            // Add card to target column
+            return {
+                ...prev,
+                columns: columnsWithoutCard.map((col) => {
+                    if (col.id === data.toColumnId) {
+                        const newCards = [...col.cards];
+                        newCards.splice(data.newOrder, 0, { ...movedCard!, order: data.newOrder });
+                        return { ...col, cards: newCards };
+                    }
+                    return col;
+                }),
+            };
+        });
+    }, []);
+
+    const handleRemoteCardCreated = useCallback((data: { columnId: string; card: Card }) => {
+        setBoard((prev) => {
+            if (!prev) return prev;
+            return {
+                ...prev,
+                columns: prev.columns.map((col) =>
+                    col.id === data.columnId
+                        ? { ...col, cards: [...col.cards.filter(c => c.id !== data.card.id), data.card] }
+                        : col
+                ),
+            };
+        });
+    }, []);
+
+    const handleRemoteCardUpdated = useCallback((data: { cardId: string; updates: Partial<Card> }) => {
+        setBoard((prev) => {
+            if (!prev) return prev;
+            return {
+                ...prev,
+                columns: prev.columns.map((col) => ({
+                    ...col,
+                    cards: col.cards.map((c) =>
+                        c.id === data.cardId ? { ...c, ...data.updates } : c
+                    ),
+                })),
+            };
+        });
+    }, []);
+
+    const handleRemoteCardDeleted = useCallback((data: { cardId: string }) => {
+        setBoard((prev) => {
+            if (!prev) return prev;
+            return {
+                ...prev,
+                columns: prev.columns.map((col) => ({
+                    ...col,
+                    cards: col.cards.filter((c) => c.id !== data.cardId),
+                })),
+            };
+        });
+    }, []);
+
+    // Real-time sync hook
+    const { connected: syncConnected, emitCardMoved, emitCardCreated, emitCardDeleted } = useKanbanSync({
+        boardId: board?.id || null,
+        onCardMoved: handleRemoteCardMoved,
+        onCardCreated: handleRemoteCardCreated,
+        onCardUpdated: handleRemoteCardUpdated,
+        onCardDeleted: handleRemoteCardDeleted,
+    });
 
     useEffect(() => {
         fetchBoard();
@@ -111,6 +197,8 @@ export default function WorkspaceKanbanPage() {
                             : col
                     ),
                 });
+                // Emit to other users
+                emitCardCreated(columnId, newCard);
             }
         } catch (error) {
             console.error("Error creating card:", error);
@@ -157,6 +245,8 @@ export default function WorkspaceKanbanPage() {
                     cards: col.cards.filter((c) => c.id !== cardId),
                 })),
             });
+            // Emit to other users
+            emitCardDeleted(cardId);
         } catch (error) {
             console.error("Error deleting card:", error);
         }
@@ -249,6 +339,9 @@ export default function WorkspaceKanbanPage() {
                     ),
                 });
 
+                // Emit to other users
+                emitCardMoved(active.id as string, activeColumn.id, activeColumn.id, newIndex);
+
                 try {
                     await fetch("/api/cards", {
                         method: "PUT",
@@ -264,10 +357,14 @@ export default function WorkspaceKanbanPage() {
                 }
             }
         } else {
-            try {
-                const newColumn = board.columns.find((c) => c.id === overColumn.id);
-                const cardIndex = newColumn?.cards.findIndex((c) => c.id === active.id) ?? 0;
+            // Card moved to different column
+            const newColumn = board.columns.find((c) => c.id === overColumn.id);
+            const cardIndex = newColumn?.cards.findIndex((c) => c.id === active.id) ?? 0;
 
+            // Emit to other users
+            emitCardMoved(active.id as string, activeColumn.id, overColumn.id, cardIndex);
+
+            try {
                 await fetch("/api/cards", {
                     method: "PUT",
                     headers: { "Content-Type": "application/json" },
@@ -317,27 +414,36 @@ export default function WorkspaceKanbanPage() {
     return (
         <div className="h-[calc(100vh-3.5rem)] flex flex-col bg-background">
             {/* Header */}
-            <div className="p-4 lg:p-6 border-b">
+            <div className="p-3 sm:p-4 lg:p-6 border-b">
                 <motion.div
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="flex items-center justify-between"
+                    className="flex items-center justify-between gap-2"
                 >
-                    <div>
-                        <h1 className="text-2xl font-bold tracking-tight">{board.title}</h1>
-                        <p className="text-sm text-muted-foreground mt-1">
+                    <div className="min-w-0 flex items-center gap-2">
+                        <h1 className="text-xl sm:text-2xl font-bold tracking-tight truncate">{board.title}</h1>
+                        {syncConnected ? (
+                            <span className="flex items-center gap-1 text-xs text-emerald-500" title="Real-time sync active">
+                                <Wifi className="w-3 h-3" />
+                            </span>
+                        ) : (
+                            <span className="flex items-center gap-1 text-xs text-amber-500" title="Connecting...">
+                                <WifiOff className="w-3 h-3" />
+                            </span>
+                        )}
+                        <p className="text-xs sm:text-sm text-muted-foreground mt-1 hidden sm:block">
                             Drag cards to organize your tasks
                         </p>
                     </div>
-                    <Button onClick={createBoard} className="btn-glow" disabled={creating}>
-                        <Plus className="w-4 h-4 mr-2" />
-                        Add Column
+                    <Button onClick={createBoard} className="btn-glow flex-shrink-0" disabled={creating} size="sm">
+                        <Plus className="w-4 h-4 sm:mr-2" />
+                        <span className="hidden sm:inline">Add Column</span>
                     </Button>
                 </motion.div>
             </div>
 
             {/* Kanban Board */}
-            <div className="flex-1 overflow-x-auto p-4">
+            <div className="flex-1 overflow-x-auto p-3 sm:p-4 pb-4">
                 <DndContext
                     sensors={sensors}
                     collisionDetection={closestCorners}
@@ -345,7 +451,7 @@ export default function WorkspaceKanbanPage() {
                     onDragOver={handleDragOver}
                     onDragEnd={handleDragEnd}
                 >
-                    <div className="flex gap-4 h-full">
+                    <div className="flex gap-3 sm:gap-4 h-full min-w-max">
                         {board.columns.map((column, index) => (
                             <motion.div
                                 key={column.id}

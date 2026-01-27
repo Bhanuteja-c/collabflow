@@ -249,11 +249,11 @@ export default function WorkspaceVideoRoomPage({ params }: VideoRoomPageProps) {
             </AnimatePresence>
 
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-3 bg-neutral-800/50 backdrop-blur-sm border-b border-neutral-700">
+            <div className="flex items-center justify-between px-3 sm:px-6 py-2 sm:py-3 bg-neutral-800/50 backdrop-blur-sm border-b border-neutral-700">
                 <div className="flex items-center gap-3">
-                    <Video className="w-5 h-5 text-primary" />
-                    <span className="font-medium text-white">Meeting</span>
-                    <span className="text-neutral-400 text-sm font-mono">{roomId.slice(0, 8)}...</span>
+                    <Video className="w-5 h-5 text-primary hidden sm:block" />
+                    <span className="font-medium text-white text-sm sm:text-base">Meeting</span>
+                    <span className="text-neutral-400 text-xs sm:text-sm font-mono hidden sm:inline">{roomId.slice(0, 8)}...</span>
                     <span className={`text-xs px-2 py-0.5 rounded-full ${connected ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>
                         {connected ? '● Connected' : '● Connecting...'}
                     </span>
@@ -272,10 +272,13 @@ export default function WorkspaceVideoRoomPage({ params }: VideoRoomPageProps) {
                         variant="outline"
                         size="sm"
                         onClick={copyInviteLink}
-                        className="gap-2"
+                        className="gap-2 hidden sm:flex"
                     >
                         {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                         Invite
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={copyInviteLink} className="sm:hidden">
+                        {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                     </Button>
                     <Button variant="ghost" size="icon" onClick={toggleFullscreen}>
                         {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
@@ -286,11 +289,11 @@ export default function WorkspaceVideoRoomPage({ params }: VideoRoomPageProps) {
             {/* Main Content */}
             <div className="flex-1 flex relative">
                 {/* Video Grid */}
-                <div className={`flex-1 p-4 ${showChat || showParticipants ? 'mr-80' : ''}`}>
-                    <div className={`grid gap-4 h-full ${peers.length === 0 ? 'grid-cols-1' :
-                            peers.length === 1 ? 'grid-cols-2' :
-                                peers.length <= 3 ? 'grid-cols-2' :
-                                    'grid-cols-3'
+                <div className={`flex-1 p-2 sm:p-4 transition-all ${showChat || showParticipants ? 'lg:mr-80' : ''}`}>
+                    <div className={`grid gap-2 sm:gap-4 h-full ${peers.length === 0 ? 'grid-cols-1' :
+                        peers.length === 1 ? 'grid-cols-1 sm:grid-cols-2' :
+                            peers.length <= 3 ? 'grid-cols-1 sm:grid-cols-2' :
+                                'grid-cols-2 lg:grid-cols-3'
                         }`}>
                         {/* Local Video */}
                         <motion.div
@@ -306,7 +309,7 @@ export default function WorkspaceVideoRoomPage({ params }: VideoRoomPageProps) {
                             />
                             {isVideoOff && (
                                 <div className="absolute inset-0 flex items-center justify-center bg-neutral-800">
-                                    <Avatar className="h-24 w-24">
+                                    <Avatar className="h-16 w-16 sm:h-24 sm:w-24">
                                         <AvatarImage src={userImage} />
                                         <AvatarFallback className="text-3xl bg-primary/20 text-primary">
                                             {userName?.[0]?.toUpperCase()}
@@ -314,8 +317,8 @@ export default function WorkspaceVideoRoomPage({ params }: VideoRoomPageProps) {
                                     </Avatar>
                                 </div>
                             )}
-                            <div className="absolute bottom-3 left-3 flex items-center gap-2">
-                                <span className="px-2 py-1 bg-black/60 rounded text-sm text-white">
+                            <div className="absolute bottom-2 left-2 sm:bottom-3 sm:left-3 flex items-center gap-2">
+                                <span className="px-1.5 py-0.5 sm:px-2 sm:py-1 bg-black/60 rounded text-xs sm:text-sm text-white truncate max-w-[100px] sm:max-w-none">
                                     {userName} {isHandRaised && '✋'}
                                 </span>
                                 {isMuted && <MicOff className="w-4 h-4 text-red-500" />}
@@ -342,7 +345,7 @@ export default function WorkspaceVideoRoomPage({ params }: VideoRoomPageProps) {
                                     />
                                 ) : (
                                     <div className="absolute inset-0 flex items-center justify-center bg-neutral-800">
-                                        <Avatar className="h-24 w-24">
+                                        <Avatar className="h-16 w-16 sm:h-24 sm:w-24">
                                             <AvatarImage src={peer.userData.image} />
                                             <AvatarFallback className="text-3xl bg-primary/20 text-primary">
                                                 {peer.userData.name?.[0]?.toUpperCase()}
@@ -350,8 +353,8 @@ export default function WorkspaceVideoRoomPage({ params }: VideoRoomPageProps) {
                                         </Avatar>
                                     </div>
                                 )}
-                                <div className="absolute bottom-3 left-3">
-                                    <span className="px-2 py-1 bg-black/60 rounded text-sm text-white">
+                                <div className="absolute bottom-2 left-2 sm:bottom-3 sm:left-3">
+                                    <span className="px-1.5 py-0.5 sm:px-2 sm:py-1 bg-black/60 rounded text-xs sm:text-sm text-white truncate max-w-[100px] sm:max-w-none">
                                         {peer.userData.name}
                                     </span>
                                 </div>
@@ -390,42 +393,43 @@ export default function WorkspaceVideoRoomPage({ params }: VideoRoomPageProps) {
             </div>
 
             {/* Controls */}
-            <div className="flex items-center justify-center gap-3 p-4 bg-neutral-800/80 backdrop-blur-sm border-t border-neutral-700">
+            <div className="flex items-center justify-center gap-2 sm:gap-3 p-3 sm:p-4 bg-neutral-800/80 backdrop-blur-sm border-t border-neutral-700">
                 <Button
                     variant={isMuted ? "destructive" : "secondary"}
                     size="icon"
-                    className="h-12 w-12 rounded-full"
+                    className="h-10 w-10 sm:h-12 sm:w-12 rounded-full"
                     onClick={toggleMute}
                 >
-                    {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                    {isMuted ? <MicOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Mic className="w-4 h-4 sm:w-5 sm:h-5" />}
                 </Button>
 
                 <Button
                     variant={isVideoOff ? "destructive" : "secondary"}
                     size="icon"
-                    className="h-12 w-12 rounded-full"
+                    className="h-10 w-10 sm:h-12 sm:w-12 rounded-full"
                     onClick={toggleVideo}
                 >
-                    {isVideoOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5" />}
+                    {isVideoOff ? <VideoOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Video className="w-4 h-4 sm:w-5 sm:h-5" />}
                 </Button>
 
+                {/* Screen share - hidden on mobile */}
                 <Button
                     variant={isScreenSharing ? "default" : "secondary"}
                     size="icon"
-                    className="h-12 w-12 rounded-full"
+                    className="hidden sm:flex h-10 w-10 sm:h-12 sm:w-12 rounded-full"
                     onClick={toggleScreenShare}
                 >
-                    {isScreenSharing ? <MonitorOff className="w-5 h-5" /> : <MonitorUp className="w-5 h-5" />}
+                    {isScreenSharing ? <MonitorOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <MonitorUp className="w-4 h-4 sm:w-5 sm:h-5" />}
                 </Button>
 
                 <div className="relative">
                     <Button
                         variant="secondary"
                         size="icon"
-                        className="h-12 w-12 rounded-full"
+                        className="h-10 w-10 sm:h-12 sm:w-12 rounded-full"
                         onClick={() => setShowReactions(!showReactions)}
                     >
-                        <Smile className="w-5 h-5" />
+                        <Smile className="w-4 h-4 sm:w-5 sm:h-5" />
                     </Button>
                     <AnimatePresence>
                         {showReactions && (
@@ -449,31 +453,32 @@ export default function WorkspaceVideoRoomPage({ params }: VideoRoomPageProps) {
                     </AnimatePresence>
                 </div>
 
+                {/* Hand raise - hidden on small mobile */}
                 <Button
                     variant={isHandRaised ? "default" : "secondary"}
                     size="icon"
-                    className="h-12 w-12 rounded-full"
+                    className="hidden xs:flex h-10 w-10 sm:h-12 sm:w-12 rounded-full"
                     onClick={toggleHandRaise}
                 >
-                    <Hand className="w-5 h-5" />
+                    <Hand className="w-4 h-4 sm:w-5 sm:h-5" />
                 </Button>
 
                 <Button
                     variant={showChat ? "default" : "secondary"}
                     size="icon"
-                    className="h-12 w-12 rounded-full"
+                    className="hidden sm:flex h-10 w-10 sm:h-12 sm:w-12 rounded-full"
                     onClick={() => { setShowChat(!showChat); setShowParticipants(false); }}
                 >
-                    <MessageSquare className="w-5 h-5" />
+                    <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5" />
                 </Button>
 
                 <Button
                     variant="destructive"
                     size="icon"
-                    className="h-12 w-12 rounded-full"
+                    className="h-10 w-10 sm:h-12 sm:w-12 rounded-full"
                     onClick={leaveCall}
                 >
-                    <PhoneOff className="w-5 h-5" />
+                    <PhoneOff className="w-4 h-4 sm:w-5 sm:h-5" />
                 </Button>
             </div>
         </div>

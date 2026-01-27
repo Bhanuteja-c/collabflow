@@ -70,9 +70,9 @@ export default function WorkspaceDashboard({ params }: WorkspaceDashboardProps) 
 
     if (loading) {
         return (
-            <div className="p-8 animate-pulse space-y-4">
+            <div className="p-4 sm:p-6 lg:p-8 animate-pulse space-y-4">
                 <div className="h-8 w-48 bg-muted rounded" />
-                <div className="grid grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     {[...Array(4)].map((_, i) => (
                         <div key={i} className="h-24 bg-muted rounded-lg" />
                     ))}
@@ -82,10 +82,10 @@ export default function WorkspaceDashboard({ params }: WorkspaceDashboardProps) 
     }
 
     return (
-        <div className="p-8 space-y-8">
+        <div className="p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8">
             {/* Greeting */}
             <div>
-                <h1 className="text-3xl font-bold">
+                <h1 className="text-2xl sm:text-3xl font-bold">
                     {getGreeting()}, {session?.user?.name?.split(" ")[0] || "there"}!
                 </h1>
                 <p className="text-muted-foreground mt-1">
@@ -147,7 +147,7 @@ export default function WorkspaceDashboard({ params }: WorkspaceDashboardProps) 
             {/* Quick Actions */}
             <div>
                 <h2 className="text-lg font-semibold mb-4">Quick Actions</h2>
-                <div className="flex flex-wrap gap-3">
+                <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:gap-3">
                     <Button asChild>
                         <Link href={`/workspace/${slug}/documents?new=true`}>
                             <Plus className="w-4 h-4 mr-2" />

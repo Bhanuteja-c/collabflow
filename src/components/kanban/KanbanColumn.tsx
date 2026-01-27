@@ -69,11 +69,11 @@ export default function KanbanColumn({ column, onAddCard, onUpdateCard, onDelete
     };
 
     return (
-        <div className="w-80 flex-shrink-0">
+        <div className="w-72 sm:w-80 flex-shrink-0">
             <Card
                 ref={setNodeRef}
                 className={`
-                    bg-muted/30 border shadow-sm h-[calc(100vh-12rem)] flex flex-col
+                    bg-muted/30 border shadow-sm h-[calc(100vh-11rem)] sm:h-[calc(100vh-12rem)] flex flex-col
                     transition-all duration-200
                     ${isOver ? "ring-2 ring-accent bg-accent/5" : ""}
                 `}

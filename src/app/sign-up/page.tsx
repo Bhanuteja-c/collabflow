@@ -1,11 +1,11 @@
-// src/app/sign-in/page.tsx
+// src/app/sign-up/page.tsx
 "use client";
 
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowLeft, Shield, Zap, Users, Loader2, Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { ArrowLeft, Shield, Zap, Users, Loader2, Mail, Lock, Eye, EyeOff, User } from "lucide-react";
 import Logo from "@/components/ui/Logo";
 
 const features = [
@@ -14,48 +14,83 @@ const features = [
     { icon: Shield, text: "Enterprise security" },
 ];
 
-export default function SignInPage() {
+export default function SignUpPage() {
     const [isLoading, setIsLoading] = useState(false);
-    const [isCredentialsLoading, setIsCredentialsLoading] = useState(false);
+    const [isGoogleLoading, setIsGoogleLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState("");
+    const [success, setSuccess] = useState("");
     const [formData, setFormData] = useState({
+        name: "",
         email: "",
         password: "",
+        confirmPassword: "",
     });
 
-    const handleGoogleSignIn = async () => {
-        setIsLoading(true);
+    const handleGoogleSignUp = async () => {
+        setIsGoogleLoading(true);
         setError("");
         try {
             await signIn("google", { callbackUrl: "/dashboard" });
         } catch {
-            setError("Failed to sign in with Google");
-            setIsLoading(false);
+            setError("Failed to sign up with Google");
+            setIsGoogleLoading(false);
         }
     };
 
-    const handleCredentialsSignIn = async (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        setIsCredentialsLoading(true);
+        setIsLoading(true);
         setError("");
+        setSuccess("");
+
+        // Validate passwords match
+        if (formData.password !== formData.confirmPassword) {
+            setError("Passwords do not match");
+            setIsLoading(false);
+            return;
+        }
+
+        if (formData.password.length < 6) {
+            setError("Password must be at least 6 characters");
+            setIsLoading(false);
+            return;
+        }
 
         try {
-            const result = await signIn("credentials", {
-                email: formData.email,
-                password: formData.password,
-                redirect: false,
+            const res = await fetch("/api/register", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    name: formData.name,
+                    email: formData.email,
+                    password: formData.password,
+                }),
             });
 
-            if (result?.error) {
-                setError("Invalid email or password");
+            const data = await res.json();
+
+            if (!res.ok) {
+                setError(data.error || "Failed to create account");
             } else {
-                window.location.href = "/dashboard";
+                setSuccess("Account created! Signing you in...");
+                // Auto sign in after registration
+                const result = await signIn("credentials", {
+                    email: formData.email,
+                    password: formData.password,
+                    redirect: false,
+                });
+
+                if (result?.error) {
+                    setError("Account created but failed to sign in. Please sign in manually.");
+                } else {
+                    window.location.href = "/dashboard";
+                }
             }
         } catch {
-            setError("Failed to sign in");
+            setError("Failed to create account");
         } finally {
-            setIsCredentialsLoading(false);
+            setIsLoading(false);
         }
     };
 
@@ -93,10 +128,10 @@ export default function SignInPage() {
                     <div className="space-y-8">
                         <div>
                             <h1 className="text-4xl font-bold mb-4">
-                                Start collaborating<br />in seconds
+                                Join CollabFlow<br />today
                             </h1>
                             <p className="text-lg text-white/70 max-w-md">
-                                Join thousands of teams using CollabFlow to build, ship, and collaborate faster.
+                                Create your free account and start collaborating with your team in minutes.
                             </p>
                         </div>
 
@@ -122,8 +157,8 @@ export default function SignInPage() {
                 <div className="absolute -top-12 -right-12 w-48 h-48 rounded-full bg-white/5" />
             </div>
 
-            {/* Right Panel - Sign In Form */}
-            <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-background">
+            {/* Right Panel - Sign Up Form */}
+            <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-background overflow-y-auto">
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -139,15 +174,15 @@ export default function SignInPage() {
                     </Link>
 
                     {/* Logo */}
-                    <div className="mb-8">
+                    <div className="mb-6">
                         <Logo size="lg" />
                     </div>
 
                     {/* Heading */}
                     <div className="mb-6">
-                        <h2 className="text-2xl font-bold mb-2">Welcome back</h2>
+                        <h2 className="text-2xl font-bold mb-2">Create your account</h2>
                         <p className="text-muted-foreground">
-                            Sign in to continue to your workspace
+                            Get started with CollabFlow for free
                         </p>
                     </div>
 
@@ -158,8 +193,32 @@ export default function SignInPage() {
                         </div>
                     )}
 
-                    {/* Credentials Form */}
-                    <form onSubmit={handleCredentialsSignIn} className="space-y-4">
+                    {/* Success Message */}
+                    {success && (
+                        <div className="mb-4 p-3 rounded-lg bg-emerald-500/10 text-emerald-600 text-sm">
+                            {success}
+                        </div>
+                    )}
+
+                    {/* Registration Form */}
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                        <div>
+                            <label htmlFor="name" className="block text-sm font-medium mb-2">
+                                Name
+                            </label>
+                            <div className="relative">
+                                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                                <input
+                                    id="name"
+                                    type="text"
+                                    value={formData.name}
+                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                    placeholder="Your name"
+                                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-border bg-card focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+                                />
+                            </div>
+                        </div>
+
                         <div>
                             <label htmlFor="email" className="block text-sm font-medium mb-2">
                                 Email
@@ -192,6 +251,7 @@ export default function SignInPage() {
                                     placeholder="••••••••"
                                     className="w-full pl-10 pr-12 py-3 rounded-xl border border-border bg-card focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
                                     required
+                                    minLength={6}
                                 />
                                 <button
                                     type="button"
@@ -201,17 +261,36 @@ export default function SignInPage() {
                                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                                 </button>
                             </div>
+                            <p className="text-xs text-muted-foreground mt-1">Minimum 6 characters</p>
+                        </div>
+
+                        <div>
+                            <label htmlFor="confirmPassword" className="block text-sm font-medium mb-2">
+                                Confirm Password
+                            </label>
+                            <div className="relative">
+                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                                <input
+                                    id="confirmPassword"
+                                    type={showPassword ? "text" : "password"}
+                                    value={formData.confirmPassword}
+                                    onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                                    placeholder="••••••••"
+                                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-border bg-card focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+                                    required
+                                />
+                            </div>
                         </div>
 
                         <button
                             type="submit"
-                            disabled={isCredentialsLoading}
+                            disabled={isLoading}
                             className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-opacity font-medium disabled:opacity-50"
                         >
-                            {isCredentialsLoading ? (
+                            {isLoading ? (
                                 <Loader2 className="w-5 h-5 animate-spin" />
                             ) : (
-                                "Sign in"
+                                "Create account"
                             )}
                         </button>
                     </form>
@@ -225,11 +304,11 @@ export default function SignInPage() {
 
                     {/* Google Button */}
                     <button
-                        onClick={handleGoogleSignIn}
-                        disabled={isLoading}
+                        onClick={handleGoogleSignUp}
+                        disabled={isGoogleLoading}
                         className="w-full flex items-center justify-center gap-3 px-6 py-3 rounded-xl border border-border bg-card hover:bg-surface transition-colors font-medium disabled:opacity-50"
                     >
-                        {isLoading ? (
+                        {isGoogleLoading ? (
                             <Loader2 className="w-5 h-5 animate-spin" />
                         ) : (
                             <>
@@ -268,11 +347,11 @@ export default function SignInPage() {
                         </Link>
                     </p>
 
-                    {/* Sign Up Link */}
+                    {/* Sign In Link */}
                     <p className="text-center text-sm text-muted-foreground mt-6">
-                        New to CollabFlow?{" "}
-                        <Link href="/sign-up" className="font-medium text-accent hover:underline">
-                            Create an account
+                        Already have an account?{" "}
+                        <Link href="/sign-in" className="font-medium text-accent hover:underline">
+                            Sign in
                         </Link>
                     </p>
                 </motion.div>

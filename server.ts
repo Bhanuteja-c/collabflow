@@ -1,4 +1,4 @@
-// server.ts - Custom server with Socket.io for real-time chat
+// server.ts - Custom server with Socket.io for real-time collaboration
 import { createServer } from "http";
 import { parse } from "url";
 import next from "next";
@@ -22,7 +22,7 @@ app.prepare().then(() => {
         handle(req, res, parsedUrl);
     });
 
-    // Initialize Socket.io
+    // Initialize Socket.io with production-optimized settings
     const io = new SocketIOServer(httpServer, {
         path: "/api/socketio",
         cors: {
@@ -30,6 +30,14 @@ app.prepare().then(() => {
             methods: ["GET", "POST"],
             credentials: true,
         },
+        // Production optimizations for lower latency
+        pingTimeout: 60000,        // How long to wait for pong
+        pingInterval: 25000,       // How often to ping
+        transports: ["websocket", "polling"],
+        allowUpgrades: true,
+        perMessageDeflate: false,  // Disable compression for lower latency
+        httpCompression: false,    // Faster transmission
+        maxHttpBufferSize: 1e6,    // 1MB max message size
     });
 
     // Store globally for API routes
@@ -38,10 +46,15 @@ app.prepare().then(() => {
     io.on("connection", (socket) => {
         console.log(`[Socket.io] Client connected: ${socket.id}`);
 
+        // ==================== CHAT CHANNEL EVENTS ====================
+
         // Join a channel room
         socket.on("join-channel", (channelId: string) => {
             socket.join(`channel:${channelId}`);
             console.log(`[Socket.io] ${socket.id} joined channel:${channelId}`);
+
+            // Store channel ID on socket for cleanup
+            (socket as any).currentChannelId = channelId;
 
             // Notify others
             socket.to(`channel:${channelId}`).emit("user-joined", socket.id);
@@ -51,6 +64,7 @@ app.prepare().then(() => {
         socket.on("leave-channel", (channelId: string) => {
             socket.leave(`channel:${channelId}`);
             socket.to(`channel:${channelId}`).emit("user-left", socket.id);
+            (socket as any).currentChannelId = null;
         });
 
         // Typing indicator
@@ -118,7 +132,7 @@ app.prepare().then(() => {
             });
         });
 
-        // Document content update (Yjs sync)
+        // Document content update (Yjs sync) - using binary for efficiency
         socket.on("doc-update", (data: { documentId: string; update: ArrayBuffer }) => {
             socket.to(`doc:${data.documentId}`).emit("doc-update", {
                 update: data.update,
@@ -131,6 +145,41 @@ app.prepare().then(() => {
                 socketId: socket.id,
                 awareness: data.awareness,
             });
+        });
+
+        // ==================== KANBAN BOARD EVENTS ====================
+
+        // Join kanban board room
+        socket.on("join-board", (boardId: string) => {
+            socket.join(`board:${boardId}`);
+            (socket as any).currentBoardId = boardId;
+            console.log(`[Socket.io] ${socket.id} joined board:${boardId}`);
+        });
+
+        // Leave kanban board
+        socket.on("leave-board", (boardId: string) => {
+            socket.leave(`board:${boardId}`);
+            (socket as any).currentBoardId = null;
+        });
+
+        // Card moved between columns
+        socket.on("card-moved", (data: { boardId: string; cardId: string; fromColumnId: string; toColumnId: string; newOrder: number }) => {
+            socket.to(`board:${data.boardId}`).emit("card-moved", data);
+        });
+
+        // Card created
+        socket.on("card-created", (data: { boardId: string; columnId: string; card: any }) => {
+            socket.to(`board:${data.boardId}`).emit("card-created", data);
+        });
+
+        // Card updated
+        socket.on("card-updated", (data: { boardId: string; cardId: string; updates: any }) => {
+            socket.to(`board:${data.boardId}`).emit("card-updated", data);
+        });
+
+        // Card deleted
+        socket.on("card-deleted", (data: { boardId: string; cardId: string }) => {
+            socket.to(`board:${data.boardId}`).emit("card-deleted", data);
         });
 
         // ==================== VIDEO ROOM EVENTS ====================
@@ -206,15 +255,22 @@ app.prepare().then(() => {
             });
         });
 
+        // WebRTC: ICE restart request
+        socket.on("ice-restart", (data: { targetSocketId: string }) => {
+            io.to(data.targetSocketId).emit("ice-restart-request", {
+                fromSocketId: socket.id,
+            });
+        });
+
         // Video room chat message
         socket.on("video-chat-message", (data: { roomId: string; message: any }) => {
-            // Broadcast to all others in the room except sender
             socket.to(`video:${data.roomId}`).emit("video-chat-message", {
                 message: data.message,
             });
         });
 
-        // Handle disconnect - notify video and document rooms
+        // ==================== DISCONNECT HANDLING ====================
+
         socket.on("disconnect", () => {
             console.log(`[Socket.io] Client disconnected: ${socket.id}`);
 
@@ -230,6 +286,14 @@ app.prepare().then(() => {
             const docId = (socket as any).currentDocId;
             if (docId) {
                 socket.to(`doc:${docId}`).emit("user-left-doc", {
+                    socketId: socket.id,
+                });
+            }
+
+            // Notify kanban board room
+            const boardId = (socket as any).currentBoardId;
+            if (boardId) {
+                socket.to(`board:${boardId}`).emit("user-left-board", {
                     socketId: socket.id,
                 });
             }

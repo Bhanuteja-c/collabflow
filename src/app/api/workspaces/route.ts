@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { ensureUser } from "@/lib/ensureUser";
 
 // GET /api/workspaces - List workspaces for current user
 export async function GET() {
@@ -11,7 +12,8 @@ export async function GET() {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const userId = (session.user as any).id;
+        // Ensure user exists in database
+        const userId = await ensureUser(session.user as any);
 
         // Get workspaces where user is owner or member
         const workspaces = await prisma.workspace.findMany({
@@ -47,7 +49,8 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const userId = (session.user as any).id;
+        // Ensure user exists in database before creating workspace
+        const userId = await ensureUser(session.user as any);
         const body = await request.json();
         const { name, description } = body;
 

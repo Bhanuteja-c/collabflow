@@ -5,15 +5,31 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useSession } from "next-auth/react";
-import { Search, Bell, Command } from "lucide-react";
+import { Search, Command, Menu } from "lucide-react";
+import { NotificationsDropdown } from "./NotificationsDropdown";
 
-export function WorkspaceHeader() {
+interface WorkspaceHeaderProps {
+    onMenuClick?: () => void;
+}
+
+export function WorkspaceHeader({ onMenuClick }: WorkspaceHeaderProps) {
     const { data: session } = useSession();
     const user = session?.user;
     const [searchFocused, setSearchFocused] = useState(false);
 
     return (
-        <header className="sticky top-0 z-10 flex h-14 items-center gap-4 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4">
+        <header className="sticky top-0 z-10 flex h-14 items-center gap-2 sm:gap-4 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-3 sm:px-4">
+            {/* Mobile Menu Button */}
+            <Button
+                variant="ghost"
+                size="icon"
+                className="lg:hidden h-9 w-9 flex-shrink-0"
+                onClick={onMenuClick}
+                aria-label="Open menu"
+            >
+                <Menu className="h-5 w-5" />
+            </Button>
+
             {/* Search Bar */}
             <div className="flex-1 flex items-center max-w-md">
                 <div
@@ -24,11 +40,12 @@ export function WorkspaceHeader() {
                     <input
                         type="text"
                         placeholder="Search..."
-                        className="w-full h-9 pl-9 pr-12 text-sm rounded-lg border border-border bg-muted/50 focus:outline-none focus:bg-background transition-colors"
+                        className="w-full h-9 pl-9 pr-4 sm:pr-12 text-sm rounded-lg border border-border bg-muted/50 focus:outline-none focus:bg-background transition-colors"
                         onFocus={() => setSearchFocused(true)}
                         onBlur={() => setSearchFocused(false)}
                     />
-                    <div className="absolute right-2 flex items-center gap-0.5 text-xs text-muted-foreground bg-background border border-border rounded px-1.5 py-0.5">
+                    {/* Keyboard shortcut - hidden on mobile */}
+                    <div className="hidden sm:flex absolute right-2 items-center gap-0.5 text-xs text-muted-foreground bg-background border border-border rounded px-1.5 py-0.5">
                         <Command className="h-3 w-3" />
                         <span>K</span>
                     </div>
@@ -36,12 +53,9 @@ export function WorkspaceHeader() {
             </div>
 
             {/* Right Actions */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2">
                 {/* Notifications */}
-                <Button variant="ghost" size="icon" className="relative h-9 w-9">
-                    <Bell className="h-4 w-4" />
-                    <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-accent rounded-full" />
-                </Button>
+                <NotificationsDropdown />
 
                 {/* User Avatar */}
                 <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full p-0">

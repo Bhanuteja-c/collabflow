@@ -1,5 +1,5 @@
 // src/hooks/useVideoCall.ts
-// WebRTC video call hook using Socket.io for signaling
+// WebRTC video call hook with production-ready features
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
@@ -16,6 +16,7 @@ interface Peer {
     userData: UserData;
     connection: RTCPeerConnection;
     stream: MediaStream | null;
+    connectionQuality: 'excellent' | 'good' | 'fair' | 'poor' | 'unknown';
 }
 
 export interface ChatMessage {
@@ -35,11 +36,13 @@ interface UseVideoCallOptions {
     localStream: MediaStream | null;
 }
 
+// ICE servers for WebRTC connectivity
 const ICE_SERVERS: RTCIceServer[] = [
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
-    // TURN server for users behind strict firewalls/NAT (required for reliable video calls)
-    // Set NEXT_PUBLIC_TURN_URL, NEXT_PUBLIC_TURN_USERNAME, NEXT_PUBLIC_TURN_CREDENTIAL in production
+    { urls: "stun:stun2.l.google.com:19302" },
+    { urls: "stun:stun3.l.google.com:19302" },
+    // TURN server for NAT traversal (required for ~30% of users)
     ...(process.env.NEXT_PUBLIC_TURN_URL ? [{
         urls: process.env.NEXT_PUBLIC_TURN_URL,
         username: process.env.NEXT_PUBLIC_TURN_USERNAME || "",
@@ -54,6 +57,7 @@ export function useVideoCall({ roomId, userId, userName, userImage, localStream 
     const socketRef = useRef<Socket | null>(null);
     const peersRef = useRef<Map<string, Peer>>(new Map());
     const localStreamRef = useRef<MediaStream | null>(localStream);
+    const iceRestartTimeoutRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
     // Keep localStreamRef updated
     useEffect(() => {
@@ -89,12 +93,9 @@ export function useVideoCall({ roomId, userId, userName, userImage, localStream 
 
         peersRef.current.forEach((peer, socketId) => {
             const senders = peer.connection.getSenders();
-            console.log(`[WebRTC] Peer ${socketId} has ${senders.length} senders`);
 
-            // Try to find video sender - check both track kind and transceiver mid
             let videoSender = senders.find(s => s.track?.kind === 'video');
 
-            // If no video track sender found, look for any sender that could handle video
             if (!videoSender) {
                 videoSender = senders.find(s => {
                     const transceiver = peer.connection.getTransceivers().find(t => t.sender === s);
@@ -104,35 +105,80 @@ export function useVideoCall({ roomId, userId, userName, userImage, localStream 
             }
 
             if (videoSender) {
-                console.log(`[WebRTC] Replacing track for peer ${socketId}`);
                 videoSender.replaceTrack(newTrack)
-                    .then(() => console.log(`[WebRTC] Track replaced successfully for ${socketId}`))
-                    .catch(err => console.error(`[WebRTC] Failed to replace track for ${socketId}:`, err));
+                    .then(() => console.log(`[WebRTC] Track replaced for ${socketId}`))
+                    .catch(err => console.error(`[WebRTC] Failed to replace track:`, err));
             } else {
-                console.warn(`[WebRTC] No video sender found for peer ${socketId}, trying addTrack`);
-                // If no video sender exists, try adding the track
                 try {
                     const stream = new MediaStream([newTrack]);
                     peer.connection.addTrack(newTrack, stream);
-                    console.log(`[WebRTC] Added new video track for ${socketId}`);
                 } catch (err) {
-                    console.error(`[WebRTC] Failed to add track for ${socketId}:`, err);
+                    console.error(`[WebRTC] Failed to add track:`, err);
                 }
             }
         });
     }, []);
 
-    // Create peer connection
+    // ICE restart for failed connections
+    const performIceRestart = useCallback((socketId: string) => {
+        const peer = peersRef.current.get(socketId);
+        if (!peer || !socketRef.current) return;
+
+        console.log(`[WebRTC] Performing ICE restart for ${socketId}`);
+
+        peer.connection.createOffer({ iceRestart: true })
+            .then(offer => peer.connection.setLocalDescription(offer))
+            .then(() => {
+                if (socketRef.current && peer.connection.localDescription) {
+                    socketRef.current.emit("offer", {
+                        targetSocketId: socketId,
+                        offer: peer.connection.localDescription,
+                    });
+                }
+            })
+            .catch(err => console.error("[WebRTC] ICE restart failed:", err));
+    }, []);
+
+    // Monitor connection quality
+    const getConnectionQuality = useCallback((pc: RTCPeerConnection): Peer['connectionQuality'] => {
+        const state = pc.iceConnectionState;
+        switch (state) {
+            case 'connected':
+            case 'completed':
+                return 'excellent';
+            case 'checking':
+                return 'good';
+            case 'disconnected':
+                return 'fair';
+            case 'failed':
+                return 'poor';
+            default:
+                return 'unknown';
+        }
+    }, []);
+
+    // Update peer connection quality
+    const updatePeerQuality = useCallback((socketId: string, quality: Peer['connectionQuality']) => {
+        const peer = peersRef.current.get(socketId);
+        if (peer) {
+            peer.connectionQuality = quality;
+            peersRef.current.set(socketId, peer);
+            setPeers(Array.from(peersRef.current.values()));
+        }
+    }, []);
+
+    // Create peer connection with production-ready settings
     const createPeerConnection = useCallback((targetSocketId: string, userData: UserData, isInitiator: boolean) => {
-        // Check if we already have a connection to this peer
         if (peersRef.current.has(targetSocketId)) {
-            console.log(`[WebRTC] Already have connection to ${targetSocketId}, skipping`);
             return peersRef.current.get(targetSocketId)!.connection;
         }
 
-        const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+        const pc = new RTCPeerConnection({
+            iceServers: ICE_SERVERS,
+            iceCandidatePoolSize: 10,
+        });
 
-        // Add local tracks if we have them
+        // Add local tracks
         if (localStreamRef.current) {
             localStreamRef.current.getTracks().forEach((track) => {
                 pc.addTrack(track, localStreamRef.current!);
@@ -161,20 +207,43 @@ export function useVideoCall({ roomId, userId, userName, userImage, localStream 
             }
         };
 
-        // Handle connection state
-        pc.onconnectionstatechange = () => {
-            console.log(`[WebRTC] Connection state with ${targetSocketId}: ${pc.connectionState}`);
-            if (pc.connectionState === "disconnected" || pc.connectionState === "failed") {
-                removePeer(targetSocketId);
+        // Handle ICE connection state changes
+        pc.oniceconnectionstatechange = () => {
+            console.log(`[WebRTC] ICE state ${targetSocketId}: ${pc.iceConnectionState}`);
+            updatePeerQuality(targetSocketId, getConnectionQuality(pc));
+
+            // Auto ICE restart on disconnected/failed
+            if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
+                // Clear existing timeout
+                const existingTimeout = iceRestartTimeoutRef.current.get(targetSocketId);
+                if (existingTimeout) clearTimeout(existingTimeout);
+
+                // Schedule ICE restart after 2 seconds
+                const timeout = setTimeout(() => {
+                    if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
+                        performIceRestart(targetSocketId);
+                    }
+                }, 2000);
+                iceRestartTimeoutRef.current.set(targetSocketId, timeout);
             }
         };
 
-        // Store peer BEFORE creating offer
+        // Handle connection state
+        pc.onconnectionstatechange = () => {
+            console.log(`[WebRTC] Connection state ${targetSocketId}: ${pc.connectionState}`);
+            if (pc.connectionState === "failed") {
+                // Try ICE restart first
+                performIceRestart(targetSocketId);
+            }
+        };
+
+        // Store peer
         const peer: Peer = {
             socketId: targetSocketId,
             userData,
             connection: pc,
             stream: null,
+            connectionQuality: 'unknown',
         };
         peersRef.current.set(targetSocketId, peer);
         setPeers(Array.from(peersRef.current.values()));
@@ -185,11 +254,9 @@ export function useVideoCall({ roomId, userId, userName, userImage, localStream 
                 .then((offer) => pc.setLocalDescription(offer))
                 .then(() => {
                     if (socketRef.current && pc.localDescription) {
-                        console.log(`[WebRTC] Sending offer to ${targetSocketId}`);
                         socketRef.current.emit("offer", {
                             targetSocketId,
                             offer: pc.localDescription,
-                            userData: { id: userId, name: userName, image: userImage },
                         });
                     }
                 })
@@ -197,7 +264,7 @@ export function useVideoCall({ roomId, userId, userName, userImage, localStream 
         }
 
         return pc;
-    }, [userId, userName, userImage]);
+    }, [userId, userName, userImage, performIceRestart, updatePeerQuality, getConnectionQuality]);
 
     // Remove peer
     const removePeer = useCallback((socketId: string) => {
@@ -207,18 +274,27 @@ export function useVideoCall({ roomId, userId, userName, userImage, localStream 
             peersRef.current.delete(socketId);
             setPeers(Array.from(peersRef.current.values()));
         }
+        // Clear ICE restart timeout
+        const timeout = iceRestartTimeoutRef.current.get(socketId);
+        if (timeout) {
+            clearTimeout(timeout);
+            iceRestartTimeoutRef.current.delete(socketId);
+        }
     }, []);
 
     useEffect(() => {
-        // Only require roomId to connect (not localStream)
         if (!roomId) return;
 
         console.log(`[Socket.io] Connecting to room: ${roomId}`);
 
-        // Initialize socket
+        // Initialize socket with production settings
         const socket = io({
             path: "/api/socketio",
             transports: ["websocket", "polling"],
+            reconnection: true,
+            reconnectionAttempts: 10,
+            reconnectionDelay: 1000,
+            timeout: 20000,
         });
         socketRef.current = socket;
 
@@ -226,7 +302,6 @@ export function useVideoCall({ roomId, userId, userName, userImage, localStream 
             console.log("[Socket.io] Video connected:", socket.id);
             setConnected(true);
 
-            // Join the room
             socket.emit("join-room", {
                 roomId,
                 userId,
@@ -240,34 +315,35 @@ export function useVideoCall({ roomId, userId, userName, userImage, localStream 
             setConnected(false);
         });
 
-        // Handle existing users in room
+        socket.on("reconnect", () => {
+            console.log("[Socket.io] Video reconnected");
+            socket.emit("join-room", { roomId, userId, userName, userImage });
+        });
+
+        // Handle existing users
         socket.on("existing-users", (users: Array<{ socketId: string; id: string; name: string; image: string }>) => {
             console.log("[Socket.io] Existing users:", users);
             users.forEach((user) => {
                 createPeerConnection(
                     user.socketId,
                     { id: user.id, name: user.name, image: user.image },
-                    true // I am initiator since I'm the new joiner
+                    true
                 );
             });
         });
 
-        // Handle new user joining - EXISTING users should create offer to NEW user
+        // Handle new user joining
         socket.on("user-joined-room", (data: { socketId: string; userId: string; userName: string; userImage: string }) => {
-            console.log("[Socket.io] User joined room:", data);
-            // Create peer connection and send offer (we are the existing user, we initiate)
+            console.log("[Socket.io] User joined:", data);
             createPeerConnection(
                 data.socketId,
                 { id: data.userId, name: data.userName, image: data.userImage },
-                true // WE initiate since we were here first
+                true
             );
         });
 
         // Handle offer
         socket.on("offer", async (data: { offer: RTCSessionDescriptionInit; fromSocketId: string; userData: UserData }) => {
-            console.log("[WebRTC] Received offer from:", data.fromSocketId);
-
-            // Check for existing connection
             let pc = peersRef.current.get(data.fromSocketId)?.connection;
 
             if (!pc) {
@@ -278,7 +354,6 @@ export function useVideoCall({ roomId, userId, userName, userImage, localStream 
                 await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
                 const answer = await pc.createAnswer();
                 await pc.setLocalDescription(answer);
-                console.log(`[WebRTC] Sending answer to ${data.fromSocketId}`);
                 socket.emit("answer", {
                     targetSocketId: data.fromSocketId,
                     answer: pc.localDescription,
@@ -290,13 +365,12 @@ export function useVideoCall({ roomId, userId, userName, userImage, localStream 
 
         // Handle answer
         socket.on("answer", async (data: { answer: RTCSessionDescriptionInit; fromSocketId: string }) => {
-            console.log("[WebRTC] Received answer from:", data.fromSocketId);
             const peer = peersRef.current.get(data.fromSocketId);
             if (peer) {
                 try {
                     await peer.connection.setRemoteDescription(new RTCSessionDescription(data.answer));
                 } catch (err) {
-                    console.error("[WebRTC] Error setting remote description:", err);
+                    console.error("[WebRTC] Error setting answer:", err);
                 }
             }
         });
@@ -313,15 +387,20 @@ export function useVideoCall({ roomId, userId, userName, userImage, localStream 
             }
         });
 
+        // Handle ICE restart request
+        socket.on("ice-restart-request", async (data: { fromSocketId: string }) => {
+            console.log("[WebRTC] Received ICE restart request from:", data.fromSocketId);
+            performIceRestart(data.fromSocketId);
+        });
+
         // Handle user leaving
         socket.on("user-left-room", (data: { socketId: string }) => {
-            console.log("[Socket.io] User left room:", data.socketId);
+            console.log("[Socket.io] User left:", data.socketId);
             removePeer(data.socketId);
         });
 
-        // Handle chat messages from other users
+        // Handle chat messages
         socket.on("video-chat-message", (data: { message: ChatMessage }) => {
-            console.log("[Socket.io] Received chat message:", data.message);
             setChatMessages(prev => [...prev, {
                 ...data.message,
                 timestamp: new Date(data.message.timestamp),
@@ -329,14 +408,15 @@ export function useVideoCall({ roomId, userId, userName, userImage, localStream 
         });
 
         return () => {
-            // Leave room and cleanup
             socket.emit("leave-room", roomId);
             peersRef.current.forEach((peer) => peer.connection.close());
             peersRef.current.clear();
+            iceRestartTimeoutRef.current.forEach(timeout => clearTimeout(timeout));
+            iceRestartTimeoutRef.current.clear();
             socket.disconnect();
             socketRef.current = null;
         };
-    }, [roomId, userId, userName, userImage, createPeerConnection, removePeer]);
+    }, [roomId, userId, userName, userImage, createPeerConnection, removePeer, performIceRestart]);
 
     return {
         connected,

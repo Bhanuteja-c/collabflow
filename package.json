@@ -6,8 +6,9 @@
     "dev": "tsx server.ts",
     "dev:next": "next dev",
     "build": "next build",
-    "start": "NODE_ENV=production tsx server.ts",
+    "start": "node --import tsx server.ts",
     "start:next": "next start",
+    "postinstall": "prisma generate",
     "lint": "eslint"
   },
   "dependencies": {
@@ -67,6 +68,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
