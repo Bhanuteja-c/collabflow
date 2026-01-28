@@ -6,7 +6,7 @@
     "dev": "tsx server.ts",
     "dev:next": "next dev",
     "build": "next build",
-    "start": "node --import tsx server.ts",
+    "start": "node server.js",
     "start:next": "next start",
     "postinstall": "prisma generate",
     "lint": "eslint"
