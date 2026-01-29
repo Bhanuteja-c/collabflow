@@ -35,18 +35,31 @@ jobs:
 
       - name: Prepare deployment package
         run: |
+          # The standalone folder already contains server.js and node_modules
+          # We need to copy .next/standalone as the base
           mkdir -p deploy
-          # Copy standalone build
+          
+          # Copy the entire standalone directory contents
           cp -r .next/standalone/* deploy/
-          # Copy static files
+          
+          # The static files need to be at deploy/.next/static
           mkdir -p deploy/.next/static
           cp -r .next/static/* deploy/.next/static/
+          
           # Copy public folder
-          cp -r public deploy/
+          mkdir -p deploy/public
+          cp -r public/* deploy/public/
+          
           # Copy prisma
           cp -r prisma deploy/
-          # Create startup command
-          echo 'node server.js' > deploy/startup.txt
+          
+          # List what we're deploying for debugging
+          echo "=== Deploy folder structure ==="
+          ls -la deploy/
+          echo "=== .next folder ==="
+          ls -la deploy/.next/ || echo "No .next folder"
+          echo "=== Package.json scripts ==="
+          cat deploy/package.json || echo "No package.json"
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
