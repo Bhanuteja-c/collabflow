@@ -1,17 +1,54 @@
 // server.js - Production server with Socket.io for real-time collaboration
+// Works with Next.js standalone build
+
 const { createServer } = require("http");
 const { parse } = require("url");
-const next = require("next");
+const path = require("path");
+
+// In standalone mode, Next.js is in .next/standalone
+let nextApp;
+try {
+    // Try standalone first (production)
+    nextApp = require("./.next/standalone/server");
+} catch {
+    // Fall back to regular next (development)
+    const next = require("next");
+    const dev = process.env.NODE_ENV !== "production";
+    const hostname = process.env.HOSTNAME || "0.0.0.0";
+    const port = parseInt(process.env.PORT || "3000", 10);
+    nextApp = next({ dev, hostname, port });
+}
+
 const { Server: SocketIOServer } = require("socket.io");
 
-const dev = process.env.NODE_ENV !== "production";
 const hostname = process.env.HOSTNAME || "0.0.0.0";
 const port = parseInt(process.env.PORT || "3000", 10);
 
-const app = next({ dev, hostname, port });
-const handle = app.getRequestHandler();
+// For standalone mode, we need different initialization
+const isStandalone = process.env.NODE_ENV === "production";
 
-app.prepare().then(() => {
+async function startServer() {
+    let handle;
+
+    if (isStandalone) {
+        // Standalone mode - server.js from .next/standalone handles requests
+        const next = require("next");
+        const app = next({
+            dev: false,
+            hostname,
+            port,
+            dir: path.join(__dirname)
+        });
+        await app.prepare();
+        handle = app.getRequestHandler();
+    } else {
+        // Development mode
+        const next = require("next");
+        const app = next({ dev: true, hostname, port });
+        await app.prepare();
+        handle = app.getRequestHandler();
+    }
+
     const httpServer = createServer((req, res) => {
         const parsedUrl = parse(req.url, true);
         handle(req, res, parsedUrl);
@@ -238,5 +275,11 @@ app.prepare().then(() => {
     httpServer.listen(port, hostname, () => {
         console.log(`> Ready on http://${hostname}:${port}`);
         console.log(`> Socket.io server running on /api/socketio`);
+        console.log(`> Environment: ${process.env.NODE_ENV || 'development'}`);
     });
+}
+
+startServer().catch((err) => {
+    console.error("Failed to start server:", err);
+    process.exit(1);
 });
