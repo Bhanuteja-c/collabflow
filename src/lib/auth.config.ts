@@ -6,6 +6,8 @@ import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 
 export const authConfig = {
+    // Trust the host in production (required for Auth.js v5)
+    trustHost: true,
     session: {
         strategy: "jwt",
     },
