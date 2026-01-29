@@ -6,8 +6,8 @@
     "dev": "tsx server.ts",
     "dev:next": "next dev",
     "build": "next build",
-    "start": "node server.js",
-    "start:next": "next start",
+    "start": "next start -p $PORT",
+    "start:custom": "node server.js",
     "postinstall": "prisma generate",
     "lint": "eslint"
   },
