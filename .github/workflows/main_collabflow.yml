@@ -37,31 +37,34 @@ jobs:
           # Create deployment folder
           mkdir -p deploy
           
-          # Copy standalone output
-          cp -r .next/standalone/* deploy/
+          # Copy standalone output (use -a to preserve hidden folders like .next)
+          cp -a .next/standalone/. deploy/
           
           # Copy static files to the correct locations
           mkdir -p deploy/public
-          cp -r public/* deploy/public/ || true
+          cp -r public/. deploy/public/ || true
           
           mkdir -p deploy/.next/static
-          cp -r .next/static/* deploy/.next/static/
+          cp -r .next/static/. deploy/.next/static/
           
           # Copy prisma schema
           mkdir -p deploy/prisma
           cp prisma/schema.prisma deploy/prisma/
           
-          # List contents for debugging
+          # Debug: List contents
           echo "=== Deploy folder contents ==="
           ls -la deploy/
           echo "=== .next folder contents ==="
           ls -la deploy/.next/ || echo "No .next folder"
+          echo "=== All hidden files ==="
+          find deploy -name ".*" -type f | head -20
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
           name: node-app
           path: deploy
+          include-hidden-files: true
 
   deploy:
     runs-on: ubuntu-latest
