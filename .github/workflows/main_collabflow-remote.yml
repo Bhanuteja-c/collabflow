@@ -33,19 +33,20 @@ jobs:
           AUTH_SECRET: "build-time-secret-not-used-in-production"
           NEXT_TELEMETRY_DISABLED: 1
 
-      - name: Prepare standalone for deployment
+      - name: Prepare deployment package
         run: |
+          mkdir -p deploy
           # Copy standalone build
-          cp -r .next/standalone ./deploy
-          # Copy static assets
-          cp -r .next/static ./deploy/.next/static
-          cp -r public ./deploy/public
-          # Copy server.js for Socket.io
-          cp server.js ./deploy/
-          # Copy prisma schema
-          cp -r prisma ./deploy/
-          # Create package.json for startup
-          echo '{"scripts":{"start":"node server.js"}}' > ./deploy/package.json
+          cp -r .next/standalone/* deploy/
+          # Copy static files
+          mkdir -p deploy/.next/static
+          cp -r .next/static/* deploy/.next/static/
+          # Copy public folder
+          cp -r public deploy/
+          # Copy prisma
+          cp -r prisma deploy/
+          # Create startup command
+          echo 'node server.js' > deploy/startup.txt
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
