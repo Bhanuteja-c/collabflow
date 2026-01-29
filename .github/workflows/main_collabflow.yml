@@ -1,5 +1,4 @@
-# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
-# More GitHub Actions for Azure: https://github.com/Azure/actions
+# Deploy Next.js standalone build to Azure Web App
 
 name: Build and deploy Node.js app to Azure Web App - collabflow
 
@@ -33,21 +32,21 @@ jobs:
           AUTH_SECRET: "build-time-secret-not-used-in-production"
           NEXT_TELEMETRY_DISABLED: 1
 
-      - name: Remove dev dependencies
-        run: npm prune --production
+      - name: Prepare standalone deployment
+        run: |
+          # Copy static files to standalone
+          cp -r public .next/standalone/public
+          cp -r .next/static .next/standalone/.next/static
+          
+          # Copy prisma schema for runtime
+          mkdir -p .next/standalone/prisma
+          cp prisma/schema.prisma .next/standalone/prisma/
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
           name: node-app
-          path: |
-            .next
-            public
-            package.json
-            package-lock.json
-            next.config.ts
-            prisma
-            node_modules
+          path: .next/standalone
 
   deploy:
     runs-on: ubuntu-latest
