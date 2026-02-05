@@ -10,14 +10,25 @@ import { Input } from "@/components/ui/input";
 import { Plus, MoreHorizontal, X } from "lucide-react";
 import KanbanCard from "./KanbanCard";
 
+interface User {
+    id: string;
+    name: string | null;
+    image: string | null;
+}
+
 interface CardType {
     id: string;
     title: string;
     description?: string;
     priority?: "low" | "medium" | "high";
     dueDate?: string;
-    comments?: number;
+    assignee?: User;
+    assigneeId?: string;
+    commentsCount?: number;
+    checklistCompleted?: number;
+    checklistTotal?: number;
     labels?: string[];
+    order?: number;
 }
 
 interface ColumnProps {
@@ -27,8 +38,9 @@ interface ColumnProps {
         cards: CardType[];
     };
     onAddCard: (columnId: string, title: string) => void;
-    onUpdateCard?: ((cardId: string, title: string) => void) | undefined;
-    onDeleteCard?: ((cardId: string) => void) | undefined;
+    onUpdateCard?: (cardId: string, title: string) => void;
+    onDeleteCard?: (cardId: string) => void;
+    onOpenDetail?: (card: CardType) => void;
 }
 
 // Color coding for columns
@@ -41,7 +53,7 @@ const columnColors: Record<string, { bg: string; text: string; dot: string }> = 
 
 const defaultColors = { bg: "bg-violet-500/10", text: "text-violet-600 dark:text-violet-400", dot: "bg-violet-500" };
 
-export default function KanbanColumn({ column, onAddCard, onUpdateCard, onDeleteCard }: ColumnProps) {
+export default function KanbanColumn({ column, onAddCard, onUpdateCard, onDeleteCard, onOpenDetail }: ColumnProps) {
     const [isAdding, setIsAdding] = useState(false);
     const [newCardTitle, setNewCardTitle] = useState("");
 
@@ -111,6 +123,7 @@ export default function KanbanColumn({ column, onAddCard, onUpdateCard, onDelete
                                     card={card}
                                     onUpdate={onUpdateCard}
                                     onDelete={onDeleteCard}
+                                    onOpenDetail={onOpenDetail}
                                 />
                             ))
                         )}

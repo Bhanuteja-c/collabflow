@@ -1,8 +1,10 @@
 // src/app/workspace/[slug]/kanban/page.tsx
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { motion } from "framer-motion";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { useSession } from "next-auth/react";
+import { useParams } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
 import {
     DndContext,
     DragOverlay,
@@ -17,17 +19,39 @@ import {
 } from "@dnd-kit/core";
 import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import KanbanColumn from "@/components/kanban/KanbanColumn";
 import KanbanCard from "@/components/kanban/KanbanCard";
-import { Plus, Loader2, LayoutGrid, Wifi, WifiOff } from "lucide-react";
+import CardDetailModal from "@/components/kanban/CardDetailModal";
+import { Plus, Loader2, LayoutGrid, Wifi, WifiOff, Filter, Users, X } from "lucide-react";
 import { TouchSensor } from "@dnd-kit/core";
 import { useKanbanSync } from "@/hooks/useKanbanSync";
+
+interface User {
+    id: string;
+    name: string | null;
+    image: string | null;
+}
 
 interface Card {
     id: string;
     title: string;
     description?: string;
-    order: number;
+    priority?: "low" | "medium" | "high";
+    dueDate?: string;
+    assigneeId?: string;
+    assignee?: User;
+    commentsCount?: number;
+    checklistCompleted?: number;
+    checklistTotal?: number;
+    order?: number;
 }
 
 interface Column {
@@ -44,10 +68,30 @@ interface Board {
 }
 
 export default function WorkspaceKanbanPage() {
+    const { data: session } = useSession();
+    const params = useParams();
     const [board, setBoard] = useState<Board | null>(null);
     const [loading, setLoading] = useState(true);
     const [creating, setCreating] = useState(false);
     const [activeCard, setActiveCard] = useState<Card | null>(null);
+    const [selectedCard, setSelectedCard] = useState<Card | null>(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [workspaceMembers, setWorkspaceMembers] = useState<User[]>([]);
+
+    // Filters
+    const [filterPriority, setFilterPriority] = useState<string | null>(null);
+    const [filterAssignee, setFilterAssignee] = useState<string | null>(null);
+    const [filterOverdue, setFilterOverdue] = useState(false);
+
+    // Current user for presence
+    const currentUser = useMemo(() => {
+        if (!session?.user?.id) return undefined;
+        return {
+            id: session.user.id,
+            name: session.user.name || "Anonymous",
+            image: session.user.image || undefined,
+        };
+    }, [session?.user]);
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -130,17 +174,65 @@ export default function WorkspaceKanbanPage() {
     }, []);
 
     // Real-time sync hook
-    const { connected: syncConnected, emitCardMoved, emitCardCreated, emitCardDeleted } = useKanbanSync({
+    const { connected: syncConnected, viewers, emitCardMoved, emitCardCreated, emitCardDeleted } = useKanbanSync({
         boardId: board?.id || null,
+        currentUser,
         onCardMoved: handleRemoteCardMoved,
         onCardCreated: handleRemoteCardCreated,
         onCardUpdated: handleRemoteCardUpdated,
         onCardDeleted: handleRemoteCardDeleted,
     });
 
+    // Check if a card is overdue
+    const isCardOverdue = (card: Card) => {
+        if (!card.dueDate) return false;
+        return new Date(card.dueDate) < new Date();
+    };
+
+    // Filter cards in columns
+    const filteredBoard = useMemo(() => {
+        if (!board) return null;
+        if (!filterPriority && !filterAssignee && !filterOverdue) return board;
+
+        return {
+            ...board,
+            columns: board.columns.map(col => ({
+                ...col,
+                cards: col.cards.filter(card => {
+                    if (filterPriority && card.priority !== filterPriority) return false;
+                    if (filterAssignee && card.assigneeId !== filterAssignee) return false;
+                    if (filterOverdue && !isCardOverdue(card)) return false;
+                    return true;
+                }),
+            })),
+        };
+    }, [board, filterPriority, filterAssignee, filterOverdue]);
+
+    const hasActiveFilters = filterPriority || filterAssignee || filterOverdue;
+
+    const clearFilters = () => {
+        setFilterPriority(null);
+        setFilterAssignee(null);
+        setFilterOverdue(false);
+    };
+
     useEffect(() => {
         fetchBoard();
+        fetchWorkspaceMembers();
     }, []);
+
+    const fetchWorkspaceMembers = async () => {
+        if (!params?.slug) return;
+        try {
+            const res = await fetch(`/api/workspaces/${params.slug}/members`);
+            if (res.ok) {
+                const members = await res.json();
+                setWorkspaceMembers(members.map((m: any) => m.user || m));
+            }
+        } catch (error) {
+            console.error("Error fetching members:", error);
+        }
+    };
 
     const fetchBoard = async () => {
         try {
@@ -249,6 +341,35 @@ export default function WorkspaceKanbanPage() {
             emitCardDeleted(cardId);
         } catch (error) {
             console.error("Error deleting card:", error);
+        }
+    };
+
+    const handleOpenDetail = (card: Card) => {
+        setSelectedCard(card);
+        setIsModalOpen(true);
+    };
+
+    const handleCloseModal = () => {
+        setIsModalOpen(false);
+        setSelectedCard(null);
+    };
+
+    const handleUpdateCardFromModal = (cardId: string, updates: Partial<Card>) => {
+        if (!board) return;
+
+        setBoard({
+            ...board,
+            columns: board.columns.map((col) => ({
+                ...col,
+                cards: col.cards.map((c) =>
+                    c.id === cardId ? { ...c, ...updates } : c
+                ),
+            })),
+        });
+
+        // Update selected card if it's the one being edited
+        if (selectedCard?.id === cardId) {
+            setSelectedCard({ ...selectedCard, ...updates });
         }
     };
 
@@ -418,8 +539,9 @@ export default function WorkspaceKanbanPage() {
                 <motion.div
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="flex items-center justify-between gap-2"
+                    className="flex items-center justify-between gap-3"
                 >
+                    {/* Left side - Title and status */}
                     <div className="min-w-0 flex items-center gap-2">
                         <h1 className="text-xl sm:text-2xl font-bold tracking-tight truncate">{board.title}</h1>
                         {syncConnected ? (
@@ -431,14 +553,104 @@ export default function WorkspaceKanbanPage() {
                                 <WifiOff className="w-3 h-3" />
                             </span>
                         )}
-                        <p className="text-xs sm:text-sm text-muted-foreground mt-1 hidden sm:block">
-                            Drag cards to organize your tasks
-                        </p>
                     </div>
-                    <Button onClick={createBoard} className="btn-glow flex-shrink-0" disabled={creating} size="sm">
-                        <Plus className="w-4 h-4 sm:mr-2" />
-                        <span className="hidden sm:inline">Add Column</span>
-                    </Button>
+
+                    {/* Center - Viewers (presence) */}
+                    {viewers.length > 0 && (
+                        <div className="hidden sm:flex items-center gap-1">
+                            <Users className="w-4 h-4 text-muted-foreground mr-1" />
+                            <div className="flex -space-x-2">
+                                {viewers.slice(0, 5).map((viewer) => (
+                                    <Avatar
+                                        key={viewer.socketId}
+                                        className="w-7 h-7 border-2 border-background"
+                                        title={viewer.user.name}
+                                    >
+                                        <AvatarImage src={viewer.user.image} />
+                                        <AvatarFallback className="text-[10px]">
+                                            {viewer.user.name?.[0] || "?"}
+                                        </AvatarFallback>
+                                    </Avatar>
+                                ))}
+                                {viewers.length > 5 && (
+                                    <div className="w-7 h-7 rounded-full bg-muted border-2 border-background flex items-center justify-center text-[10px] font-medium">
+                                        +{viewers.length - 5}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Right side - Filters and actions */}
+                    <div className="flex items-center gap-2">
+                        {/* Filter dropdown */}
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant={hasActiveFilters ? "secondary" : "outline"} size="sm" className="gap-2">
+                                    <Filter className="w-4 h-4" />
+                                    <span className="hidden sm:inline">Filter</span>
+                                    {hasActiveFilters && (
+                                        <span className="w-2 h-2 rounded-full bg-primary" />
+                                    )}
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48">
+                                <DropdownMenuItem
+                                    onClick={() => setFilterPriority(filterPriority === "high" ? null : "high")}
+                                    className="gap-2"
+                                >
+                                    <span className="w-2 h-2 rounded-full bg-red-500" />
+                                    High Priority
+                                    {filterPriority === "high" && <span className="ml-auto">✓</span>}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    onClick={() => setFilterPriority(filterPriority === "medium" ? null : "medium")}
+                                    className="gap-2"
+                                >
+                                    <span className="w-2 h-2 rounded-full bg-amber-500" />
+                                    Medium Priority
+                                    {filterPriority === "medium" && <span className="ml-auto">✓</span>}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    onClick={() => setFilterPriority(filterPriority === "low" ? null : "low")}
+                                    className="gap-2"
+                                >
+                                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                                    Low Priority
+                                    {filterPriority === "low" && <span className="ml-auto">✓</span>}
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                    onClick={() => setFilterOverdue(!filterOverdue)}
+                                    className="gap-2"
+                                >
+                                    ⚠️ Overdue Only
+                                    {filterOverdue && <span className="ml-auto">✓</span>}
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                    onClick={() => setFilterAssignee(filterAssignee === session?.user?.id ? null : session?.user?.id || null)}
+                                    className="gap-2"
+                                >
+                                    👤 Assigned to Me
+                                    {filterAssignee === session?.user?.id && <span className="ml-auto">✓</span>}
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+
+                        {/* Clear filters button */}
+                        {hasActiveFilters && (
+                            <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1 text-muted-foreground">
+                                <X className="w-4 h-4" />
+                                <span className="hidden sm:inline">Clear</span>
+                            </Button>
+                        )}
+
+                        <Button onClick={createBoard} className="btn-glow flex-shrink-0" disabled={creating} size="sm">
+                            <Plus className="w-4 h-4 sm:mr-2" />
+                            <span className="hidden sm:inline">Add Column</span>
+                        </Button>
+                    </div>
                 </motion.div>
             </div>
 
@@ -452,7 +664,7 @@ export default function WorkspaceKanbanPage() {
                     onDragEnd={handleDragEnd}
                 >
                     <div className="flex gap-3 sm:gap-4 h-full min-w-max">
-                        {board.columns.map((column, index) => (
+                        {(filteredBoard || board).columns.map((column, index) => (
                             <motion.div
                                 key={column.id}
                                 initial={{ opacity: 0, x: 20 }}
@@ -464,6 +676,7 @@ export default function WorkspaceKanbanPage() {
                                     onAddCard={addCard}
                                     onUpdateCard={updateCard}
                                     onDeleteCard={deleteCard}
+                                    onOpenDetail={handleOpenDetail}
                                 />
                             </motion.div>
                         ))}
@@ -479,6 +692,16 @@ export default function WorkspaceKanbanPage() {
                     </DragOverlay>
                 </DndContext>
             </div>
+
+            {/* Card Detail Modal */}
+            <CardDetailModal
+                card={selectedCard}
+                isOpen={isModalOpen}
+                onClose={handleCloseModal}
+                onUpdate={handleUpdateCardFromModal}
+                workspaceMembers={workspaceMembers}
+                currentUserId={session?.user?.id || ""}
+            />
         </div>
     );
 }

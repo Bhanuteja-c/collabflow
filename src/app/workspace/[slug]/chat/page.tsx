@@ -1,14 +1,16 @@
 // src/app/(dashboard)/chat/page.tsx
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSession } from "next-auth/react";
+import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useSocket } from "@/hooks/useSocket";
+import { MessageContent } from "@/components/chat/MessageContent";
 import {
     Plus,
     Send,
@@ -19,7 +21,12 @@ import {
     Smile,
     X,
     Menu,
+    Pencil,
+    Trash2,
+    Check,
+    Paperclip,
 } from "lucide-react";
+import { AttachmentPreview } from "@/components/chat/AttachmentPreview";
 
 interface User {
     id: string;
@@ -34,6 +41,10 @@ interface Message {
     author: User;
     reactions?: any[];
     attachments?: any;
+    isEdited?: boolean;
+    editedAt?: string;
+    isDeleted?: boolean;
+    status?: 'pending' | 'sent' | 'failed';
 }
 
 interface ChannelMember {
@@ -62,14 +73,34 @@ export default function ChatPage() {
     const [newChannelName, setNewChannelName] = useState("");
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [workspaceMembers, setWorkspaceMembers] = useState<{ id: string; name: string; image?: string }[]>([]);
+    const [pendingAttachment, setPendingAttachment] = useState<{ type: string; url: string; name: string; size: number } | null>(null);
+    const [uploading, setUploading] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const params = useParams();
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
-    // Socket.io hook
-    const { connected, messages: socketMessages, typingUsers, sendTyping } = useSocket(
-        selectedChannel?.id || null
-    );
+    // Edit state
+    const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+    const [editContent, setEditContent] = useState("");
+
+    // Current user for presence
+    const currentUser = useMemo(() => {
+        if (!session?.user?.id) return undefined;
+        return {
+            id: (session.user as any).id,
+            name: session.user.name || "Anonymous",
+            image: session.user.image || undefined,
+        };
+    }, [session?.user]);
+
+    // Socket.io hook with presence
+    const { connected, messages: socketMessages, typingUsers, onlineUsers, sendTyping, updateMessage } = useSocket({
+        channelId: selectedChannel?.id || null,
+        currentUser,
+    });
 
     // Combine fetched messages with socket messages
     const allMessages = [...fetchedMessages, ...socketMessages];
@@ -151,12 +182,14 @@ export default function ChatPage() {
                 body: JSON.stringify({
                     channelId: selectedChannel.id,
                     content: newMessage.trim(),
+                    attachments: pendingAttachment ? [pendingAttachment] : undefined,
                 }),
             });
 
             if (res.ok) {
                 setNewMessage("");
                 setShowEmojiPicker(false);
+                setPendingAttachment(null);
             }
         } catch (error) {
             console.error("Error sending message:", error);
@@ -190,6 +223,106 @@ export default function ChatPage() {
         setNewMessage((prev) => prev + emoji);
         setShowEmojiPicker(false);
         inputRef.current?.focus();
+    };
+
+    // Handle file upload
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setUploading(true);
+        try {
+            const formData = new FormData();
+            formData.append("file", file);
+
+            const res = await fetch("/api/upload", {
+                method: "POST",
+                body: formData,
+            });
+
+            if (res.ok) {
+                const attachment = await res.json();
+                setPendingAttachment(attachment);
+            } else {
+                const error = await res.json();
+                alert(error.error || "Upload failed");
+            }
+        } catch (error) {
+            console.error("Upload error:", error);
+            alert("Upload failed");
+        } finally {
+            setUploading(false);
+            // Reset input
+            if (fileInputRef.current) {
+                fileInputRef.current.value = "";
+            }
+        }
+    };
+
+    // Edit message
+    const startEditing = (message: Message) => {
+        setEditingMessageId(message.id);
+        setEditContent(message.content);
+    };
+
+    const cancelEditing = () => {
+        setEditingMessageId(null);
+        setEditContent("");
+    };
+
+    const saveEdit = async () => {
+        if (!editingMessageId || !editContent.trim()) return;
+
+        try {
+            const res = await fetch(`/api/messages/${editingMessageId}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ content: editContent.trim() }),
+            });
+
+            if (res.ok) {
+                // Update local state
+                updateMessage(editingMessageId, {
+                    content: editContent.trim(),
+                    isEdited: true,
+                    editedAt: new Date().toISOString(),
+                });
+                setFetchedMessages(prev => prev.map(m =>
+                    m.id === editingMessageId
+                        ? { ...m, content: editContent.trim(), isEdited: true }
+                        : m
+                ));
+                cancelEditing();
+            }
+        } catch (error) {
+            console.error("Error editing message:", error);
+        }
+    };
+
+    // Delete message (soft delete)
+    const deleteMessage = async (messageId: string) => {
+        if (!confirm("Delete this message?")) return;
+
+        try {
+            const res = await fetch(`/api/messages/${messageId}`, {
+                method: "DELETE",
+            });
+
+            if (res.ok) {
+                // Update local state with deleted placeholder
+                updateMessage(messageId, {
+                    content: "[This message was deleted]",
+                    isDeleted: true,
+                });
+                setFetchedMessages(prev => prev.map(m =>
+                    m.id === messageId
+                        ? { ...m, content: "[This message was deleted]", isDeleted: true }
+                        : m
+                ));
+            }
+        } catch (error) {
+            console.error("Error deleting message:", error);
+        }
     };
 
     if (loading) {
@@ -289,8 +422,8 @@ export default function ChatPage() {
                                         setSidebarOpen(false);
                                     }}
                                     className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-2 transition-all ${selectedChannel?.id === channel.id
-                                            ? "bg-primary text-primary-foreground shadow-sm"
-                                            : "hover:bg-muted text-muted-foreground hover:text-foreground"
+                                        ? "bg-primary text-primary-foreground shadow-sm"
+                                        : "hover:bg-muted text-muted-foreground hover:text-foreground"
                                         }`}
                                 >
                                     <Hash className="w-4 h-4 flex-shrink-0" />
@@ -324,12 +457,40 @@ export default function ChatPage() {
                                     <h1 className="font-semibold">{selectedChannel.name}</h1>
                                     <p className="text-xs text-muted-foreground">
                                         {selectedChannel.members?.length || 0} members
+                                        {onlineUsers.length > 0 && (
+                                            <span className="ml-2 text-emerald-500">• {onlineUsers.length + 1} online</span>
+                                        )}
                                     </p>
                                 </div>
                             </div>
-                            <Button variant="ghost" size="icon" className="h-9 w-9">
-                                <Users className="w-4 h-4" />
-                            </Button>
+
+                            {/* Online users avatars */}
+                            {onlineUsers.length > 0 && (
+                                <div className="hidden sm:flex items-center gap-2">
+                                    <div className="flex -space-x-2">
+                                        {onlineUsers.slice(0, 4).map((viewer) => (
+                                            <Avatar
+                                                key={viewer.socketId}
+                                                className="w-7 h-7 border-2 border-background ring-2 ring-emerald-500/30"
+                                                title={viewer.user.name}
+                                            >
+                                                <AvatarImage src={viewer.user.image} />
+                                                <AvatarFallback className="text-[10px]">
+                                                    {viewer.user.name?.[0] || "?"}
+                                                </AvatarFallback>
+                                            </Avatar>
+                                        ))}
+                                        {onlineUsers.length > 4 && (
+                                            <div className="w-7 h-7 rounded-full bg-muted border-2 border-background flex items-center justify-center text-[10px] font-medium">
+                                                +{onlineUsers.length - 4}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <Button variant="ghost" size="icon" className="h-9 w-9">
+                                        <Users className="w-4 h-4" />
+                                    </Button>
+                                </div>
+                            )}
                         </div>
 
                         {/* Messages */}
@@ -352,14 +513,15 @@ export default function ChatPage() {
                                         const prevMessage = allMessages[i - 1];
                                         const showAvatar =
                                             i === 0 || prevMessage?.author.id !== message.author.id;
+                                        const isOwnMessage = message.author.id === (session?.user as any)?.id;
+                                        const isEditing = editingMessageId === message.id;
 
                                         return (
                                             <motion.div
                                                 key={message.id}
                                                 initial={{ opacity: 0, y: 5 }}
                                                 animate={{ opacity: 1, y: 0 }}
-                                                className={`flex gap-3 group hover:bg-muted/50 rounded-lg px-2 py-1 -mx-2 ${showAvatar ? "mt-4" : ""
-                                                    }`}
+                                                className={`flex gap-3 group hover:bg-muted/50 rounded-lg px-2 py-1 -mx-2 ${showAvatar ? "mt-4" : ""} ${message.status === 'pending' ? 'opacity-60' : ''} ${message.status === 'failed' ? 'border-l-2 border-red-500' : ''}`}
                                             >
                                                 {showAvatar ? (
                                                     <Avatar className="h-9 w-9 mt-0.5">
@@ -380,11 +542,74 @@ export default function ChatPage() {
                                                             <span className="text-xs text-muted-foreground">
                                                                 {formatTime(message.createdAt)}
                                                             </span>
+                                                            {message.isEdited && (
+                                                                <span className="text-xs text-muted-foreground">(edited)</span>
+                                                            )}
                                                         </div>
                                                     )}
-                                                    <p className="text-sm leading-relaxed break-words">
-                                                        {message.content}
-                                                    </p>
+
+                                                    {isEditing ? (
+                                                        <div className="flex items-center gap-2">
+                                                            <Input
+                                                                value={editContent}
+                                                                onChange={(e) => setEditContent(e.target.value)}
+                                                                onKeyDown={(e) => {
+                                                                    if (e.key === "Enter") saveEdit();
+                                                                    if (e.key === "Escape") cancelEditing();
+                                                                }}
+                                                                className="flex-1 h-8 text-sm"
+                                                                autoFocus
+                                                            />
+                                                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={saveEdit}>
+                                                                <Check className="w-4 h-4 text-emerald-500" />
+                                                            </Button>
+                                                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={cancelEditing}>
+                                                                <X className="w-4 h-4 text-muted-foreground" />
+                                                            </Button>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex-1">
+                                                            <div className="flex items-start gap-2">
+                                                                <p className={`text-sm leading-relaxed break-words flex-1 ${message.isDeleted ? 'italic text-muted-foreground' : ''}`}>
+                                                                    {message.isDeleted ? (
+                                                                        message.content
+                                                                    ) : (
+                                                                        <MessageContent
+                                                                            content={message.content}
+                                                                            workspaceMembers={workspaceMembers}
+                                                                        />
+                                                                    )}
+                                                                </p>
+                                                            </div>
+
+                                                            {/* Attachments */}
+                                                            {message.attachments && (
+                                                                <AttachmentPreview attachments={message.attachments as any} />
+                                                            )}
+
+                                                            {/* Edit/Delete buttons - only for own messages */}
+                                                            {isOwnMessage && !message.isDeleted && (
+                                                                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 flex-shrink-0">
+                                                                    <Button
+                                                                        size="icon"
+                                                                        variant="ghost"
+                                                                        className="h-6 w-6"
+                                                                        onClick={() => startEditing(message)}
+                                                                    >
+                                                                        <Pencil className="w-3 h-3" />
+                                                                    </Button>
+                                                                    <Button
+                                                                        size="icon"
+                                                                        variant="ghost"
+                                                                        className="h-6 w-6 text-destructive hover:text-destructive"
+                                                                        onClick={() => deleteMessage(message.id)}
+                                                                    >
+                                                                        <Trash2 className="w-3 h-3" />
+                                                                    </Button>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </motion.div>
                                         );
@@ -419,6 +644,30 @@ export default function ChatPage() {
                         {/* Message Input */}
                         <div className="p-4 border-t">
                             <div className="flex items-center gap-2 relative">
+                                {/* Hidden file input */}
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept="image/*,application/pdf"
+                                    onChange={handleFileUpload}
+                                    className="hidden"
+                                />
+
+                                {/* File picker button */}
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-9 w-9"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    disabled={uploading}
+                                >
+                                    {uploading ? (
+                                        <Loader2 className="w-5 h-5 animate-spin" />
+                                    ) : (
+                                        <Paperclip className="w-5 h-5" />
+                                    )}
+                                </Button>
+
                                 {/* Emoji picker */}
                                 <div className="relative">
                                     <Button
@@ -443,6 +692,16 @@ export default function ChatPage() {
                                         </div>
                                     )}
                                 </div>
+
+                                {/* Pending attachment preview */}
+                                {pendingAttachment && (
+                                    <div className="flex items-center gap-2 px-2 py-1 bg-muted rounded text-sm">
+                                        <span className="truncate max-w-24">{pendingAttachment.name}</span>
+                                        <button onClick={() => setPendingAttachment(null)} className="text-muted-foreground hover:text-foreground">
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                )}
 
                                 <Input
                                     ref={inputRef}
@@ -483,6 +742,6 @@ export default function ChatPage() {
                     </div>
                 )}
             </div>
-        </div>
+        </div >
     );
 }

@@ -17,7 +17,7 @@ export async function PUT(
         }
 
         const body = await req.json();
-        const { title, description, columnId, order } = body;
+        const { title, description, columnId, order, priority, dueDate, assigneeId } = body;
 
         const card = await prisma.card.update({
             where: { id },
@@ -26,6 +26,9 @@ export async function PUT(
                 ...(description !== undefined && { description }),
                 ...(columnId !== undefined && { columnId }),
                 ...(order !== undefined && { order }),
+                ...(priority !== undefined && { priority }),
+                ...(dueDate !== undefined && { dueDate: dueDate ? new Date(dueDate) : null }),
+                ...(assigneeId !== undefined && { assigneeId: assigneeId || null }),
             },
         });
 

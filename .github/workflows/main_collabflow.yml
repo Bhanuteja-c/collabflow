@@ -93,3 +93,4 @@ jobs:
           app-name: 'collabflow'
           slot-name: 'Production'
           package: .
+          startup-command: 'node server.js'

@@ -48,23 +48,54 @@ app.prepare().then(() => {
 
         // ==================== CHAT CHANNEL EVENTS ====================
 
-        // Join a channel room
-        socket.on("join-channel", (channelId: string) => {
+        // Join a channel room with presence tracking
+        socket.on("join-channel", (data: string | { channelId: string; user?: { id: string; name: string; image?: string } }) => {
+            // Support both old format (just channelId) and new format (object with user)
+            const channelId = typeof data === "string" ? data : data.channelId;
+            const user = typeof data === "object" ? data.user : undefined;
+
             socket.join(`channel:${channelId}`);
-            console.log(`[Socket.io] ${socket.id} joined channel:${channelId}`);
+            console.log(`[Socket.io] ${user?.name || socket.id} joined channel:${channelId}`);
 
-            // Store channel ID on socket for cleanup
+            // Store channel ID and user info on socket for cleanup
             (socket as any).currentChannelId = channelId;
+            (socket as any).channelUser = user;
 
-            // Notify others
-            socket.to(`channel:${channelId}`).emit("user-joined", socket.id);
+            // If user info provided, notify others and send existing online users
+            if (user) {
+                // Notify others of new user
+                socket.to(`channel:${channelId}`).emit("channel-user-joined", {
+                    socketId: socket.id,
+                    user,
+                });
+
+                // Send existing online users to new joiner
+                const room = io.sockets.adapter.rooms.get(`channel:${channelId}`);
+                if (room) {
+                    const onlineUsers: any[] = [];
+                    room.forEach((socketId) => {
+                        const s = io.sockets.sockets.get(socketId);
+                        if (s && socketId !== socket.id && (s as any).channelUser) {
+                            onlineUsers.push({
+                                socketId,
+                                user: (s as any).channelUser,
+                            });
+                        }
+                    });
+                    socket.emit("channel-presence", { users: onlineUsers });
+                }
+            }
         });
 
         // Leave a channel room
         socket.on("leave-channel", (channelId: string) => {
             socket.leave(`channel:${channelId}`);
-            socket.to(`channel:${channelId}`).emit("user-left", socket.id);
+            // Notify others this user left
+            socket.to(`channel:${channelId}`).emit("channel-user-left", {
+                socketId: socket.id,
+            });
             (socket as any).currentChannelId = null;
+            (socket as any).channelUser = null;
         });
 
         // Typing indicator
@@ -149,17 +180,52 @@ app.prepare().then(() => {
 
         // ==================== KANBAN BOARD EVENTS ====================
 
-        // Join kanban board room
-        socket.on("join-board", (boardId: string) => {
+        // Join kanban board room with user presence
+        socket.on("join-board", (data: string | { boardId: string; user?: { id: string; name: string; image?: string } }) => {
+            // Support both old format (just boardId string) and new format (object with user)
+            const boardId = typeof data === "string" ? data : data.boardId;
+            const user = typeof data === "object" ? data.user : undefined;
+
             socket.join(`board:${boardId}`);
             (socket as any).currentBoardId = boardId;
-            console.log(`[Socket.io] ${socket.id} joined board:${boardId}`);
+            (socket as any).boardUser = user;
+            console.log(`[Socket.io] ${user?.name || socket.id} joined board:${boardId}`);
+
+            // If user info provided, notify others and send existing viewers
+            if (user) {
+                // Notify others of new viewer
+                socket.to(`board:${boardId}`).emit("board-viewer-joined", {
+                    socketId: socket.id,
+                    user,
+                });
+
+                // Send existing viewers to new joiner
+                const room = io.sockets.adapter.rooms.get(`board:${boardId}`);
+                if (room) {
+                    const existingViewers: any[] = [];
+                    room.forEach((socketId) => {
+                        const s = io.sockets.sockets.get(socketId);
+                        if (s && socketId !== socket.id && (s as any).boardUser) {
+                            existingViewers.push({
+                                socketId,
+                                user: (s as any).boardUser,
+                            });
+                        }
+                    });
+                    socket.emit("board-viewers", existingViewers);
+                }
+            }
         });
 
         // Leave kanban board
         socket.on("leave-board", (boardId: string) => {
             socket.leave(`board:${boardId}`);
+            // Notify others this viewer left
+            socket.to(`board:${boardId}`).emit("board-viewer-left", {
+                socketId: socket.id,
+            });
             (socket as any).currentBoardId = null;
+            (socket as any).boardUser = null;
         });
 
         // Card moved between columns
@@ -180,6 +246,21 @@ app.prepare().then(() => {
         // Card deleted
         socket.on("card-deleted", (data: { boardId: string; cardId: string }) => {
             socket.to(`board:${data.boardId}`).emit("card-deleted", data);
+        });
+
+        // Card comment added (real-time)
+        socket.on("card-comment-added", (data: { boardId: string; cardId: string; comment: any }) => {
+            socket.to(`board:${data.boardId}`).emit("card-comment-added", data);
+        });
+
+        // Card comment deleted
+        socket.on("card-comment-deleted", (data: { boardId: string; cardId: string; commentId: string }) => {
+            socket.to(`board:${data.boardId}`).emit("card-comment-deleted", data);
+        });
+
+        // Checklist item toggled
+        socket.on("checklist-item-toggled", (data: { boardId: string; cardId: string; itemId: string; completed: boolean }) => {
+            socket.to(`board:${data.boardId}`).emit("checklist-item-toggled", data);
         });
 
         // ==================== VIDEO ROOM EVENTS ====================

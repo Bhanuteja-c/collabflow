@@ -40,6 +40,10 @@ model User {
   // Notifications
   notifications      Notification[]
   
+  // Kanban card relations
+  assignedCards      Card[]         @relation("AssignedCards")
+  cardComments       CardComment[]  @relation("CardCommentAuthor")
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -246,6 +250,18 @@ model Card {
   description String? @db.Text
   order       Int     @default(0)
   
+  // Enhanced fields for Kanban improvements
+  priority    String  @default("medium") // "low" | "medium" | "high"
+  dueDate     DateTime?
+  
+  // Assignee (single user for simplicity)
+  assigneeId  String?
+  assignee    User?   @relation("AssignedCards", fields: [assigneeId], references: [id], onDelete: SetNull)
+  
+  // Relations for collaboration
+  comments    CardComment[]
+  checklist   ChecklistItem[]
+  
   columnId    String
   column      Column  @relation(fields: [columnId], references: [id], onDelete: Cascade)
   
@@ -253,6 +269,39 @@ model Card {
   updatedAt DateTime @updatedAt
   
   @@index([columnId])
+  @@index([assigneeId])
+}
+
+// Card comments for collaboration
+model CardComment {
+  id        String   @id @default(cuid())
+  content   String   @db.Text
+  
+  cardId    String
+  card      Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  
+  authorId  String
+  author    User     @relation("CardCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  
+  @@index([cardId])
+  @@index([authorId])
+}
+
+// Checklist items within a card
+model ChecklistItem {
+  id        String  @id @default(cuid())
+  content   String
+  completed Boolean @default(false)
+  order     Int     @default(0)
+  
+  cardId    String
+  card      Card    @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  
+  @@index([cardId])
 }
 
 // Chat models
@@ -297,6 +346,12 @@ model Message {
   id        String   @id @default(cuid())
   content   String   @db.Text
   attachments Json? // Array of { type: 'image', url: '...' }
+  
+  // Edit/Delete tracking
+  isEdited    Boolean  @default(false)
+  editedAt    DateTime?
+  isDeleted   Boolean  @default(false)
+  deletedAt   DateTime?
   
   channelId String
   channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)

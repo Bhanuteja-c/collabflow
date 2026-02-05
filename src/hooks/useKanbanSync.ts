@@ -5,6 +5,25 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { io, Socket } from "socket.io-client";
 
+interface User {
+    id: string;
+    name: string;
+    image?: string;
+}
+
+interface BoardViewer {
+    socketId: string;
+    user: User;
+}
+
+interface Comment {
+    id: string;
+    content: string;
+    authorId: string;
+    author: User;
+    createdAt: string;
+}
+
 interface Card {
     id: string;
     title: string;
@@ -12,43 +31,43 @@ interface Card {
     order: number;
 }
 
-interface Column {
-    id: string;
-    title: string;
-    order: number;
-    cards: Card[];
-}
-
-interface Board {
-    id: string;
-    title: string;
-    columns: Column[];
-}
-
 interface UseKanbanSyncOptions {
     boardId: string | null;
+    currentUser?: User;
     onCardMoved?: (data: { cardId: string; fromColumnId: string; toColumnId: string; newOrder: number }) => void;
     onCardCreated?: (data: { columnId: string; card: Card }) => void;
     onCardUpdated?: (data: { cardId: string; updates: Partial<Card> }) => void;
     onCardDeleted?: (data: { cardId: string }) => void;
+    onCommentAdded?: (data: { cardId: string; comment: Comment }) => void;
+    onCommentDeleted?: (data: { cardId: string; commentId: string }) => void;
+    onChecklistToggled?: (data: { cardId: string; itemId: string; completed: boolean }) => void;
 }
 
 interface UseKanbanSyncReturn {
     connected: boolean;
+    viewers: BoardViewer[];
     emitCardMoved: (cardId: string, fromColumnId: string, toColumnId: string, newOrder: number) => void;
     emitCardCreated: (columnId: string, card: Card) => void;
     emitCardUpdated: (cardId: string, updates: Partial<Card>) => void;
     emitCardDeleted: (cardId: string) => void;
+    emitCommentAdded: (cardId: string, comment: Comment) => void;
+    emitCommentDeleted: (cardId: string, commentId: string) => void;
+    emitChecklistToggled: (cardId: string, itemId: string, completed: boolean) => void;
 }
 
 export function useKanbanSync({
     boardId,
+    currentUser,
     onCardMoved,
     onCardCreated,
     onCardUpdated,
     onCardDeleted,
+    onCommentAdded,
+    onCommentDeleted,
+    onChecklistToggled,
 }: UseKanbanSyncOptions): UseKanbanSyncReturn {
     const [connected, setConnected] = useState(false);
+    const [viewers, setViewers] = useState<BoardViewer[]>([]);
     const socketRef = useRef<Socket | null>(null);
 
     useEffect(() => {
@@ -68,20 +87,47 @@ export function useKanbanSync({
         socket.on("connect", () => {
             console.log("[KanbanSync] Connected:", socket.id);
             setConnected(true);
-            socket.emit("join-board", boardId);
+
+            // Join with user info for presence
+            if (currentUser) {
+                socket.emit("join-board", { boardId, user: currentUser });
+            } else {
+                socket.emit("join-board", boardId);
+            }
         });
 
         socket.on("disconnect", () => {
             console.log("[KanbanSync] Disconnected");
             setConnected(false);
+            setViewers([]);
         });
 
         socket.on("reconnect", () => {
             console.log("[KanbanSync] Reconnected");
-            socket.emit("join-board", boardId);
+            if (currentUser) {
+                socket.emit("join-board", { boardId, user: currentUser });
+            } else {
+                socket.emit("join-board", boardId);
+            }
         });
 
-        // Listen for real-time updates from other users
+        // Presence events
+        socket.on("board-viewers", (existingViewers: BoardViewer[]) => {
+            console.log("[KanbanSync] Existing viewers:", existingViewers);
+            setViewers(existingViewers);
+        });
+
+        socket.on("board-viewer-joined", (data: BoardViewer) => {
+            console.log("[KanbanSync] Viewer joined:", data.user.name);
+            setViewers(prev => [...prev.filter(v => v.socketId !== data.socketId), data]);
+        });
+
+        socket.on("board-viewer-left", (data: { socketId: string }) => {
+            console.log("[KanbanSync] Viewer left:", data.socketId);
+            setViewers(prev => prev.filter(v => v.socketId !== data.socketId));
+        });
+
+        // Card events
         socket.on("card-moved", (data: { cardId: string; fromColumnId: string; toColumnId: string; newOrder: number }) => {
             console.log("[KanbanSync] Card moved:", data);
             onCardMoved?.(data);
@@ -102,12 +148,29 @@ export function useKanbanSync({
             onCardDeleted?.(data);
         });
 
+        // Comment events
+        socket.on("card-comment-added", (data: { cardId: string; comment: Comment }) => {
+            console.log("[KanbanSync] Comment added:", data);
+            onCommentAdded?.(data);
+        });
+
+        socket.on("card-comment-deleted", (data: { cardId: string; commentId: string }) => {
+            console.log("[KanbanSync] Comment deleted:", data);
+            onCommentDeleted?.(data);
+        });
+
+        // Checklist events
+        socket.on("checklist-item-toggled", (data: { cardId: string; itemId: string; completed: boolean }) => {
+            console.log("[KanbanSync] Checklist toggled:", data);
+            onChecklistToggled?.(data);
+        });
+
         return () => {
             socket.emit("leave-board", boardId);
             socket.disconnect();
             socketRef.current = null;
         };
-    }, [boardId, onCardMoved, onCardCreated, onCardUpdated, onCardDeleted]);
+    }, [boardId, currentUser, onCardMoved, onCardCreated, onCardUpdated, onCardDeleted, onCommentAdded, onCommentDeleted, onChecklistToggled]);
 
     // Emit card moved event
     const emitCardMoved = useCallback((cardId: string, fromColumnId: string, toColumnId: string, newOrder: number) => {
@@ -154,11 +217,49 @@ export function useKanbanSync({
         }
     }, [boardId]);
 
+    // Emit comment added event
+    const emitCommentAdded = useCallback((cardId: string, comment: Comment) => {
+        if (socketRef.current?.connected && boardId) {
+            socketRef.current.emit("card-comment-added", {
+                boardId,
+                cardId,
+                comment,
+            });
+        }
+    }, [boardId]);
+
+    // Emit comment deleted event
+    const emitCommentDeleted = useCallback((cardId: string, commentId: string) => {
+        if (socketRef.current?.connected && boardId) {
+            socketRef.current.emit("card-comment-deleted", {
+                boardId,
+                cardId,
+                commentId,
+            });
+        }
+    }, [boardId]);
+
+    // Emit checklist item toggled event
+    const emitChecklistToggled = useCallback((cardId: string, itemId: string, completed: boolean) => {
+        if (socketRef.current?.connected && boardId) {
+            socketRef.current.emit("checklist-item-toggled", {
+                boardId,
+                cardId,
+                itemId,
+                completed,
+            });
+        }
+    }, [boardId]);
+
     return {
         connected,
+        viewers,
         emitCardMoved,
         emitCardCreated,
         emitCardUpdated,
         emitCardDeleted,
+        emitCommentAdded,
+        emitCommentDeleted,
+        emitChecklistToggled,
     };
 }
