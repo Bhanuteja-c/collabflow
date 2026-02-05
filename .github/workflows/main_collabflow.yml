@@ -51,31 +51,19 @@ jobs:
           mkdir -p deploy/prisma
           cp prisma/schema.prisma deploy/prisma/
           
-          # Copy socket.io and dependencies (not traced by Next.js standalone)
-          mkdir -p deploy/node_modules
-          cp -r node_modules/socket.io deploy/node_modules/
-          cp -r node_modules/socket.io-adapter deploy/node_modules/
-          cp -r node_modules/socket.io-parser deploy/node_modules/
-          cp -r node_modules/engine.io deploy/node_modules/
-          cp -r node_modules/engine.io-parser deploy/node_modules/
-          cp -r node_modules/ws deploy/node_modules/ || true
-          cp -r node_modules/@socket.io deploy/node_modules/ || true
-          cp -r node_modules/cors deploy/node_modules/ || true
-          cp -r node_modules/debug deploy/node_modules/ || true
-          cp -r node_modules/ms deploy/node_modules/ || true
-          cp -r node_modules/base64id deploy/node_modules/ || true
-          cp -r node_modules/accepts deploy/node_modules/ || true
-          cp -r node_modules/mime-types deploy/node_modules/ || true
-          cp -r node_modules/mime-db deploy/node_modules/ || true
-          cp -r node_modules/negotiator deploy/node_modules/ || true
-          cp -r node_modules/vary deploy/node_modules/ || true
-          cp -r node_modules/object-assign deploy/node_modules/ || true
+          # Merge full node_modules to include socket.io deps
+          # Standalone already has traced modules, merge additional ones
+          cp -rn node_modules/. deploy/node_modules/ 2>/dev/null || true
+          
+          # CRITICAL: Remove tar.gz so Azure doesn't override our node_modules
+          rm -f deploy/node_modules.tar.gz
           
           # Debug: List contents
           echo "=== Deploy folder contents ==="
           ls -la deploy/
-          echo "=== node_modules contents ==="
-          ls -la deploy/node_modules/ | head -20
+          echo "=== node_modules socket.io check ==="
+          ls deploy/node_modules/socket.io 2>/dev/null && echo "socket.io found" || echo "socket.io NOT found"
+          ls deploy/node_modules/cookie 2>/dev/null && echo "cookie found" || echo "cookie NOT found"
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
