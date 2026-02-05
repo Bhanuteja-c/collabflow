@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "tsx server.ts",
     "dev:next": "next dev",
-    "build": "next build && npx tsc server.ts --outDir .next/standalone --esModuleInterop --module commonjs --skipLibCheck",
+    "build": "next build && npx esbuild server.ts --bundle --platform=node --target=node20 --outfile=.next/standalone/server.js --external:next --external:react --external:react-dom",
     "start": "node .next/standalone/server.js",
     "start:next": "next start",
     "postinstall": "prisma generate",
@@ -75,6 +75,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/simple-peer": "^9.11.9",
+    "esbuild": "^0.27.2",
     "eslint": "^9",
     "eslint-config-next": "16.0.7",
     "prisma": "^7.3.0",
