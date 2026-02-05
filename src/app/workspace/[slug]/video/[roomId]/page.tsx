@@ -16,6 +16,7 @@ import {
     MonitorUp, MonitorOff, Copy, Check, Users, MessageSquare,
     Maximize, Minimize, Hand, Smile
 } from "lucide-react";
+import { ConnectionQualityIndicator } from "@/components/video/ConnectionQualityIndicator";
 
 // Reaction type
 interface Reaction {
@@ -353,10 +354,11 @@ export default function WorkspaceVideoRoomPage({ params }: VideoRoomPageProps) {
                                         </Avatar>
                                     </div>
                                 )}
-                                <div className="absolute bottom-2 left-2 sm:bottom-3 sm:left-3">
+                                <div className="absolute bottom-2 left-2 sm:bottom-3 sm:left-3 flex items-center gap-2">
                                     <span className="px-1.5 py-0.5 sm:px-2 sm:py-1 bg-black/60 rounded text-xs sm:text-sm text-white truncate max-w-[100px] sm:max-w-none">
                                         {peer.userData.name}
                                     </span>
+                                    <ConnectionQualityIndicator quality={peer.connectionQuality} />
                                 </div>
                             </motion.div>
                         ))}

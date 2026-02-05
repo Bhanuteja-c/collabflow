@@ -26,6 +26,7 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { useDocumentSync } from "@/hooks/useDocumentSync";
+import { RemoteCursors } from "@/components/editor/RemoteCursors";
 
 interface HistoryEntry {
     id: string;
@@ -235,7 +236,10 @@ export default function WorkspaceEditorPage({ params }: { params: Promise<{ slug
                 )}
             </div>
             <div className="flex-1 overflow-auto bg-background">
-                <div className="max-w-4xl mx-auto"><EditorContent editor={editor} /></div>
+                <div className="max-w-4xl mx-auto relative">
+                    <EditorContent editor={editor} />
+                    <RemoteCursors editor={editor} remoteUsers={remoteUsers} />
+                </div>
             </div>
         </div>
     );
