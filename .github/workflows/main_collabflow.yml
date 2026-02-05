@@ -51,13 +51,31 @@ jobs:
           mkdir -p deploy/prisma
           cp prisma/schema.prisma deploy/prisma/
           
+          # Copy socket.io and dependencies (not traced by Next.js standalone)
+          mkdir -p deploy/node_modules
+          cp -r node_modules/socket.io deploy/node_modules/
+          cp -r node_modules/socket.io-adapter deploy/node_modules/
+          cp -r node_modules/socket.io-parser deploy/node_modules/
+          cp -r node_modules/engine.io deploy/node_modules/
+          cp -r node_modules/engine.io-parser deploy/node_modules/
+          cp -r node_modules/ws deploy/node_modules/ || true
+          cp -r node_modules/@socket.io deploy/node_modules/ || true
+          cp -r node_modules/cors deploy/node_modules/ || true
+          cp -r node_modules/debug deploy/node_modules/ || true
+          cp -r node_modules/ms deploy/node_modules/ || true
+          cp -r node_modules/base64id deploy/node_modules/ || true
+          cp -r node_modules/accepts deploy/node_modules/ || true
+          cp -r node_modules/mime-types deploy/node_modules/ || true
+          cp -r node_modules/mime-db deploy/node_modules/ || true
+          cp -r node_modules/negotiator deploy/node_modules/ || true
+          cp -r node_modules/vary deploy/node_modules/ || true
+          cp -r node_modules/object-assign deploy/node_modules/ || true
+          
           # Debug: List contents
           echo "=== Deploy folder contents ==="
           ls -la deploy/
-          echo "=== .next folder contents ==="
-          ls -la deploy/.next/ || echo "No .next folder"
-          echo "=== All hidden files ==="
-          find deploy -name ".*" -type f | head -20
+          echo "=== node_modules contents ==="
+          ls -la deploy/node_modules/ | head -20
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
