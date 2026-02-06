@@ -260,7 +260,7 @@ export default function WorkspaceVideoRoomPage({ params }: VideoRoomPageProps) {
     return (
         <div
             ref={containerRef}
-            className="flex flex-col h-[calc(100vh-3.5rem)] bg-neutral-900 relative overflow-hidden"
+            className="flex flex-col h-[100dvh] md:h-[calc(100vh-3.5rem)] bg-neutral-900 relative overflow-hidden"
         >
             {/* Flying Reactions */}
             <AnimatePresence>
@@ -340,9 +340,9 @@ export default function WorkspaceVideoRoomPage({ params }: VideoRoomPageProps) {
             </div>
 
             {/* Main Content */}
-            <div className="flex-1 flex relative">
+            <div className="flex-1 flex relative min-h-0 overflow-hidden">
                 {/* Video Area */}
-                <div className={`flex-1 p-2 sm:p-4 transition-all ${showChat || showParticipants ? 'lg:mr-80' : ''}`}>
+                <div className={`flex-1 p-2 sm:p-4 transition-all overflow-hidden ${showChat || showParticipants ? 'lg:mr-80' : ''}`}>
 
                     {/* Speaker View Mode */}
                     {viewMode === 'speaker' && peers.length > 0 ? (
@@ -445,11 +445,11 @@ export default function WorkspaceVideoRoomPage({ params }: VideoRoomPageProps) {
                         </div>
                     ) : (
                         /* Grid View Mode - Original Layout */
-                        <div className={`grid gap-2 sm:gap-4 h-full ${peers.length === 0 ? 'grid-cols-1' :
+                        <div className={`grid gap-2 sm:gap-3 h-full auto-rows-fr ${peers.length === 0 ? 'grid-cols-1' :
                             peers.length === 1 ? 'grid-cols-1 sm:grid-cols-2' :
-                                peers.length <= 3 ? 'grid-cols-1 sm:grid-cols-2' :
+                                peers.length <= 3 ? 'grid-cols-2' :
                                     'grid-cols-2 lg:grid-cols-3'
-                            }`}>
+                            }`} style={{ maxHeight: '100%' }}>
                             {/* Local Video */}
                             <motion.div
                                 layout
@@ -549,8 +549,8 @@ export default function WorkspaceVideoRoomPage({ params }: VideoRoomPageProps) {
                 />
             </div>
 
-            {/* Controls */}
-            <div className="flex items-center justify-center gap-2 sm:gap-3 p-3 sm:p-4 bg-neutral-800/80 backdrop-blur-sm border-t border-neutral-700">
+            {/* Controls - Fixed at bottom */}
+            <div className="flex-shrink-0 flex items-center justify-center gap-1.5 xs:gap-2 sm:gap-3 p-2 sm:p-3 md:p-4 bg-neutral-800/90 backdrop-blur-sm border-t border-neutral-700 safe-area-pb">
                 <Button
                     variant={isMuted ? "destructive" : "secondary"}
                     size="icon"
