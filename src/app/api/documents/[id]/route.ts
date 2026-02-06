@@ -22,13 +22,21 @@ export async function GET(
         // Ensure user exists in database and get their database ID
         const userId = await ensureUser(session.user as any);
 
-        // First, try to find the document
+        // First, try to find the document with workspace info
         const document = await prisma.document.findUnique({
             where: { id },
             include: {
                 shares: {
                     where: { userId },
                     select: { permission: true }
+                },
+                workspace: {
+                    include: {
+                        members: {
+                            where: { userId },
+                            select: { id: true, role: true }
+                        }
+                    }
                 }
             }
         });
@@ -37,13 +45,14 @@ export async function GET(
             return NextResponse.json({ error: "Document not found" }, { status: 404 });
         }
 
-        // Check access: author, public, or shared
+        // Check access: author, public, shared, OR workspace member
         const isAuthor = document.authorId === userId;
         const isPublic = document.isPublic;
         const share = document.shares[0];
         const hasShareAccess = !!share;
+        const isWorkspaceMember = document.workspace?.members && document.workspace.members.length > 0;
 
-        if (!isAuthor && !isPublic && !hasShareAccess) {
+        if (!isAuthor && !isPublic && !hasShareAccess && !isWorkspaceMember) {
             return NextResponse.json({ error: "Document not found" }, { status: 404 });
         }
 
@@ -53,11 +62,15 @@ export async function GET(
             permission = "owner";
         } else if (share?.permission === "edit") {
             permission = "edit";
+        } else if (isWorkspaceMember) {
+            // Workspace members can edit by default
+            permission = "edit";
         }
 
         return NextResponse.json({
             ...document,
             shares: undefined, // Don't expose shares array
+            workspace: undefined, // Don't expose full workspace
             permission
         });
     } catch (error) {
@@ -90,12 +103,20 @@ export async function PUT(
         const body = await req.json();
         const { title, content, isPublic } = body;
 
-        // Check ownership OR edit permission
+        // Check ownership OR edit permission OR workspace membership
         const existing = await prisma.document.findUnique({
             where: { id },
             include: {
                 shares: {
                     where: { userId, permission: "edit" }
+                },
+                workspace: {
+                    include: {
+                        members: {
+                            where: { userId },
+                            select: { id: true }
+                        }
+                    }
                 }
             }
         });
@@ -106,8 +127,9 @@ export async function PUT(
 
         const isAuthor = existing.authorId === userId;
         const hasEditPermission = existing.shares.length > 0;
+        const isWorkspaceMember = existing.workspace?.members && existing.workspace.members.length > 0;
 
-        if (!isAuthor && !hasEditPermission) {
+        if (!isAuthor && !hasEditPermission && !isWorkspaceMember) {
             return NextResponse.json({ error: "You don't have permission to edit this document" }, { status: 403 });
         }
 
