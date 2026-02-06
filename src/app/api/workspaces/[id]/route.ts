@@ -13,7 +13,7 @@ async function checkWorkspaceAccess(workspaceId: string, userId: string) {
     return membership;
 }
 
-// GET /api/workspaces/[id] - Get workspace details
+// GET /api/workspaces/[id] - Get workspace details (supports both id and slug)
 export async function GET(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
@@ -27,14 +27,12 @@ export async function GET(
         const { id } = await params;
         const userId = (session.user as any).id;
 
-        // Check access
-        const membership = await checkWorkspaceAccess(id, userId);
-        if (!membership) {
-            return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
-        }
+        // Support both id (cuid) and slug lookup
+        // CUIDs are typically 25 characters, slugs are usually shorter and may have different characters
+        const isCuid = id.length === 25 && /^[a-z0-9]+$/.test(id);
 
-        const workspace = await prisma.workspace.findUnique({
-            where: { id },
+        const workspace = await prisma.workspace.findFirst({
+            where: isCuid ? { id } : { slug: id },
             include: {
                 owner: {
                     select: { id: true, name: true, image: true, email: true },
@@ -52,6 +50,16 @@ export async function GET(
                 },
             },
         });
+
+        if (!workspace) {
+            return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
+        }
+
+        // Check access
+        const membership = await checkWorkspaceAccess(workspace.id, userId);
+        if (!membership) {
+            return NextResponse.json({ error: "Access denied" }, { status: 403 });
+        }
 
         return NextResponse.json({ ...workspace, userRole: membership.role });
     } catch (error) {

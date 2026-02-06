@@ -14,7 +14,7 @@ import { ParticipantList } from "@/components/video/ParticipantList";
 import {
     Mic, MicOff, Video, VideoOff, PhoneOff,
     MonitorUp, MonitorOff, Copy, Check, Users, MessageSquare,
-    Maximize, Minimize, Hand, Smile
+    Maximize, Minimize, Hand, Smile, LayoutGrid, Focus, PictureInPicture2
 } from "lucide-react";
 import { ConnectionQualityIndicator } from "@/components/video/ConnectionQualityIndicator";
 
@@ -62,6 +62,13 @@ export default function WorkspaceVideoRoomPage({ params }: VideoRoomPageProps) {
     const userVideoRef = useRef<HTMLVideoElement>(null);
     const screenStreamRef = useRef<MediaStream | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
+    const audioContextRef = useRef<AudioContext | null>(null);
+    const analyserRef = useRef<AnalyserNode | null>(null);
+
+    // View modes and active speaker
+    const [viewMode, setViewMode] = useState<'grid' | 'speaker'>('grid');
+    const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null);
+    const [isPiPActive, setIsPiPActive] = useState(false);
 
     // Get userId from session
     const userId = (session?.user as any)?.id || "";
@@ -203,6 +210,29 @@ export default function WorkspaceVideoRoomPage({ params }: VideoRoomPageProps) {
         setIsHandRaised(!isHandRaised);
     };
 
+    // Toggle Picture-in-Picture
+    const togglePiP = async () => {
+        try {
+            if (document.pictureInPictureElement) {
+                await document.exitPictureInPicture();
+                setIsPiPActive(false);
+            } else if (userVideoRef.current && !isVideoOff) {
+                await userVideoRef.current.requestPictureInPicture();
+                setIsPiPActive(true);
+            }
+        } catch (err) {
+            console.error("PiP error:", err);
+        }
+    };
+
+    // Toggle view mode
+    const toggleViewMode = () => {
+        setViewMode(prev => prev === 'grid' ? 'speaker' : 'grid');
+    };
+
+    // Get dominant speaker (first peer with stream, or first peer)
+    const dominantSpeaker = peers.find(p => p.stream) || peers[0];
+
     // Prepare participants list
     const participants = [
         { id: userId, name: userName, image: userImage, isMuted, isVideoOff, isHost: true },
@@ -260,6 +290,17 @@ export default function WorkspaceVideoRoomPage({ params }: VideoRoomPageProps) {
                     </span>
                 </div>
                 <div className="flex items-center gap-2">
+                    {/* View mode toggle */}
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={toggleViewMode}
+                        className="text-neutral-300 hover:text-white hidden sm:flex gap-1"
+                        title={viewMode === 'grid' ? 'Switch to speaker view' : 'Switch to grid view'}
+                    >
+                        {viewMode === 'grid' ? <Focus className="w-4 h-4" /> : <LayoutGrid className="w-4 h-4" />}
+                        <span className="hidden md:inline">{viewMode === 'grid' ? 'Speaker' : 'Grid'}</span>
+                    </Button>
                     <Button
                         variant="ghost"
                         size="sm"
@@ -281,6 +322,17 @@ export default function WorkspaceVideoRoomPage({ params }: VideoRoomPageProps) {
                     <Button variant="ghost" size="icon" onClick={copyInviteLink} className="sm:hidden">
                         {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                     </Button>
+                    {/* PiP button */}
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={togglePiP}
+                        className="hidden sm:flex"
+                        title="Picture-in-Picture"
+                        disabled={isVideoOff}
+                    >
+                        <PictureInPicture2 className={`w-4 h-4 ${isPiPActive ? 'text-primary' : ''}`} />
+                    </Button>
                     <Button variant="ghost" size="icon" onClick={toggleFullscreen}>
                         {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
                     </Button>
@@ -289,93 +341,196 @@ export default function WorkspaceVideoRoomPage({ params }: VideoRoomPageProps) {
 
             {/* Main Content */}
             <div className="flex-1 flex relative">
-                {/* Video Grid */}
+                {/* Video Area */}
                 <div className={`flex-1 p-2 sm:p-4 transition-all ${showChat || showParticipants ? 'lg:mr-80' : ''}`}>
-                    <div className={`grid gap-2 sm:gap-4 h-full ${peers.length === 0 ? 'grid-cols-1' :
-                        peers.length === 1 ? 'grid-cols-1 sm:grid-cols-2' :
-                            peers.length <= 3 ? 'grid-cols-1 sm:grid-cols-2' :
-                                'grid-cols-2 lg:grid-cols-3'
-                        }`}>
-                        {/* Local Video */}
-                        <motion.div
-                            layout
-                            className="relative bg-neutral-800 rounded-xl overflow-hidden aspect-video"
-                        >
-                            <video
-                                ref={userVideoRef}
-                                autoPlay
-                                playsInline
-                                muted
-                                className={`w-full h-full object-cover ${isVideoOff ? 'hidden' : ''}`}
-                            />
-                            {isVideoOff && (
-                                <div className="absolute inset-0 flex items-center justify-center bg-neutral-800">
-                                    <Avatar className="h-16 w-16 sm:h-24 sm:w-24">
-                                        <AvatarImage src={userImage} />
-                                        <AvatarFallback className="text-3xl bg-primary/20 text-primary">
-                                            {userName?.[0]?.toUpperCase()}
-                                        </AvatarFallback>
-                                    </Avatar>
-                                </div>
-                            )}
-                            <div className="absolute bottom-2 left-2 sm:bottom-3 sm:left-3 flex items-center gap-2">
-                                <span className="px-1.5 py-0.5 sm:px-2 sm:py-1 bg-black/60 rounded text-xs sm:text-sm text-white truncate max-w-[100px] sm:max-w-none">
-                                    {userName} {isHandRaised && '✋'}
-                                </span>
-                                {isMuted && <MicOff className="w-4 h-4 text-red-500" />}
-                            </div>
-                        </motion.div>
 
-                        {/* Remote Videos */}
-                        {peers.map((peer) => (
+                    {/* Speaker View Mode */}
+                    {viewMode === 'speaker' && peers.length > 0 ? (
+                        <div className="relative h-full">
+                            {/* Dominant Speaker - Large */}
                             <motion.div
-                                key={peer.socketId}
                                 layout
-                                initial={{ opacity: 0, scale: 0.8 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                className="relative bg-neutral-800 rounded-xl overflow-hidden aspect-video"
+                                className="w-full h-full bg-neutral-800 rounded-xl overflow-hidden"
                             >
-                                {peer.stream ? (
+                                {dominantSpeaker?.stream ? (
                                     <video
                                         autoPlay
                                         playsInline
                                         ref={(el) => {
-                                            if (el && peer.stream) el.srcObject = peer.stream;
+                                            if (el && dominantSpeaker.stream) el.srcObject = dominantSpeaker.stream;
                                         }}
                                         className="w-full h-full object-cover"
                                     />
                                 ) : (
                                     <div className="absolute inset-0 flex items-center justify-center bg-neutral-800">
+                                        <Avatar className="h-32 w-32">
+                                            <AvatarImage src={dominantSpeaker?.userData.image} />
+                                            <AvatarFallback className="text-5xl bg-primary/20 text-primary">
+                                                {dominantSpeaker?.userData.name?.[0]?.toUpperCase()}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                    </div>
+                                )}
+                                <div className="absolute bottom-4 left-4 flex items-center gap-2">
+                                    <span className="px-3 py-1.5 bg-black/60 rounded-lg text-sm text-white">
+                                        {dominantSpeaker?.userData.name}
+                                    </span>
+                                    {dominantSpeaker && <ConnectionQualityIndicator quality={dominantSpeaker.connectionQuality} />}
+                                </div>
+                            </motion.div>
+
+                            {/* Floating Self-View - Google Meet Style */}
+                            <motion.div
+                                layout
+                                drag
+                                dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
+                                className="absolute bottom-4 right-4 w-40 h-28 sm:w-56 sm:h-40 bg-neutral-800 rounded-xl overflow-hidden shadow-xl border-2 border-neutral-700 hover:border-primary/50 transition-colors cursor-move z-10"
+                            >
+                                <video
+                                    ref={userVideoRef}
+                                    autoPlay
+                                    playsInline
+                                    muted
+                                    className={`w-full h-full object-cover ${isVideoOff ? 'hidden' : ''}`}
+                                />
+                                {isVideoOff && (
+                                    <div className="absolute inset-0 flex items-center justify-center bg-neutral-800">
+                                        <Avatar className="h-12 w-12">
+                                            <AvatarImage src={userImage} />
+                                            <AvatarFallback className="text-xl bg-primary/20 text-primary">
+                                                {userName?.[0]?.toUpperCase()}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                    </div>
+                                )}
+                                <div className="absolute bottom-1 left-1 flex items-center gap-1">
+                                    <span className="px-1.5 py-0.5 bg-black/60 rounded text-xs text-white">
+                                        You {isHandRaised && '✋'}
+                                    </span>
+                                    {isMuted && <MicOff className="w-3 h-3 text-red-500" />}
+                                </div>
+                            </motion.div>
+
+                            {/* Other Participants Thumbnails */}
+                            {peers.length > 1 && (
+                                <div className="absolute top-4 right-4 flex flex-col gap-2 z-10">
+                                    {peers.filter(p => p.socketId !== dominantSpeaker?.socketId).slice(0, 3).map((peer) => (
+                                        <motion.div
+                                            key={peer.socketId}
+                                            layout
+                                            className="w-24 h-16 sm:w-32 sm:h-20 bg-neutral-800 rounded-lg overflow-hidden shadow-lg border border-neutral-700 cursor-pointer hover:border-primary/50 transition-colors"
+                                            onClick={() => {/* Could switch dominant speaker */ }}
+                                        >
+                                            {peer.stream ? (
+                                                <video
+                                                    autoPlay
+                                                    playsInline
+                                                    ref={(el) => { if (el && peer.stream) el.srcObject = peer.stream; }}
+                                                    className="w-full h-full object-cover"
+                                                />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center">
+                                                    <Avatar className="h-8 w-8">
+                                                        <AvatarImage src={peer.userData.image} />
+                                                        <AvatarFallback className="text-sm bg-primary/20 text-primary">
+                                                            {peer.userData.name?.[0]?.toUpperCase()}
+                                                        </AvatarFallback>
+                                                    </Avatar>
+                                                </div>
+                                            )}
+                                        </motion.div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        /* Grid View Mode - Original Layout */
+                        <div className={`grid gap-2 sm:gap-4 h-full ${peers.length === 0 ? 'grid-cols-1' :
+                            peers.length === 1 ? 'grid-cols-1 sm:grid-cols-2' :
+                                peers.length <= 3 ? 'grid-cols-1 sm:grid-cols-2' :
+                                    'grid-cols-2 lg:grid-cols-3'
+                            }`}>
+                            {/* Local Video */}
+                            <motion.div
+                                layout
+                                className="relative bg-neutral-800 rounded-xl overflow-hidden aspect-video ring-2 ring-transparent hover:ring-primary/30 transition-all"
+                            >
+                                <video
+                                    ref={userVideoRef}
+                                    autoPlay
+                                    playsInline
+                                    muted
+                                    className={`w-full h-full object-cover ${isVideoOff ? 'hidden' : ''}`}
+                                />
+                                {isVideoOff && (
+                                    <div className="absolute inset-0 flex items-center justify-center bg-neutral-800">
                                         <Avatar className="h-16 w-16 sm:h-24 sm:w-24">
-                                            <AvatarImage src={peer.userData.image} />
+                                            <AvatarImage src={userImage} />
                                             <AvatarFallback className="text-3xl bg-primary/20 text-primary">
-                                                {peer.userData.name?.[0]?.toUpperCase()}
+                                                {userName?.[0]?.toUpperCase()}
                                             </AvatarFallback>
                                         </Avatar>
                                     </div>
                                 )}
                                 <div className="absolute bottom-2 left-2 sm:bottom-3 sm:left-3 flex items-center gap-2">
                                     <span className="px-1.5 py-0.5 sm:px-2 sm:py-1 bg-black/60 rounded text-xs sm:text-sm text-white truncate max-w-[100px] sm:max-w-none">
-                                        {peer.userData.name}
+                                        {userName} (You) {isHandRaised && '✋'}
                                     </span>
-                                    <ConnectionQualityIndicator quality={peer.connectionQuality} />
+                                    {isMuted && <MicOff className="w-4 h-4 text-red-500" />}
                                 </div>
                             </motion.div>
-                        ))}
 
-                        {/* Empty state */}
-                        {peers.length === 0 && (
-                            <div className="flex items-center justify-center text-neutral-500">
-                                <div className="text-center">
-                                    <div className="animate-spin-slow mb-4">
-                                        <Users className="w-12 h-12 mx-auto opacity-50" />
+                            {/* Remote Videos */}
+                            {peers.map((peer) => (
+                                <motion.div
+                                    key={peer.socketId}
+                                    layout
+                                    initial={{ opacity: 0, scale: 0.8 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    className="relative bg-neutral-800 rounded-xl overflow-hidden aspect-video ring-2 ring-transparent hover:ring-primary/30 transition-all"
+                                >
+                                    {peer.stream ? (
+                                        <video
+                                            autoPlay
+                                            playsInline
+                                            ref={(el) => {
+                                                if (el && peer.stream) el.srcObject = peer.stream;
+                                            }}
+                                            className="w-full h-full object-cover"
+                                        />
+                                    ) : (
+                                        <div className="absolute inset-0 flex items-center justify-center bg-neutral-800">
+                                            <Avatar className="h-16 w-16 sm:h-24 sm:w-24">
+                                                <AvatarImage src={peer.userData.image} />
+                                                <AvatarFallback className="text-3xl bg-primary/20 text-primary">
+                                                    {peer.userData.name?.[0]?.toUpperCase()}
+                                                </AvatarFallback>
+                                            </Avatar>
+                                        </div>
+                                    )}
+                                    <div className="absolute bottom-2 left-2 sm:bottom-3 sm:left-3 flex items-center gap-2">
+                                        <span className="px-1.5 py-0.5 sm:px-2 sm:py-1 bg-black/60 rounded text-xs sm:text-sm text-white truncate max-w-[100px] sm:max-w-none">
+                                            {peer.userData.name}
+                                        </span>
+                                        <ConnectionQualityIndicator quality={peer.connectionQuality} />
                                     </div>
-                                    <p>Waiting for others</p>
-                                    <p className="text-sm mt-1">Share the invite link to bring others in</p>
+                                </motion.div>
+                            ))}
+
+                            {/* Empty state */}
+                            {peers.length === 0 && (
+                                <div className="flex items-center justify-center text-neutral-500">
+                                    <div className="text-center">
+                                        <div className="animate-pulse mb-4">
+                                            <Users className="w-12 h-12 mx-auto opacity-50" />
+                                        </div>
+                                        <p>Waiting for others to join</p>
+                                        <p className="text-sm mt-1 text-neutral-600">Share the invite link to bring others in</p>
+                                    </div>
                                 </div>
-                            </div>
-                        )}
-                    </div>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* Side Panels */}

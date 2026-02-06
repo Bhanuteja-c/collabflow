@@ -74,6 +74,7 @@ export default function ChatPage() {
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [workspaceMembers, setWorkspaceMembers] = useState<{ id: string; name: string; image?: string }[]>([]);
+    const [workspace, setWorkspace] = useState<{ id: string; slug: string } | null>(null);
     const [pendingAttachment, setPendingAttachment] = useState<{ type: string; url: string; name: string; size: number } | null>(null);
     const [uploading, setUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -105,11 +106,23 @@ export default function ChatPage() {
     // Combine fetched messages with socket messages
     const allMessages = [...fetchedMessages, ...socketMessages];
 
-    // Fetch channels
+    // Fetch workspace first, then channels
     useEffect(() => {
-        const fetchChannels = async () => {
+        const fetchWorkspaceAndChannels = async () => {
             try {
-                const res = await fetch("/api/channels");
+                // First get the workspace by slug
+                const slug = params.slug as string;
+                const wsRes = await fetch(`/api/workspaces/${slug}`);
+                if (!wsRes.ok) {
+                    console.error("Failed to fetch workspace");
+                    setLoading(false);
+                    return;
+                }
+                const wsData = await wsRes.json();
+                setWorkspace({ id: wsData.id, slug: wsData.slug });
+
+                // Then fetch channels for this workspace
+                const res = await fetch(`/api/channels?workspaceId=${wsData.id}`);
                 if (res.ok) {
                     const data = await res.json();
                     setChannels(data);
@@ -123,8 +136,8 @@ export default function ChatPage() {
                 setLoading(false);
             }
         };
-        fetchChannels();
-    }, []);
+        fetchWorkspaceAndChannels();
+    }, [params.slug]);
 
     // Fetch messages when channel changes
     useEffect(() => {
@@ -150,13 +163,16 @@ export default function ChatPage() {
     }, [allMessages, typingUsers]);
 
     const createChannel = async () => {
-        if (!newChannelName.trim()) return;
+        if (!newChannelName.trim() || !workspace) return;
 
         try {
             const res = await fetch("/api/channels", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name: newChannelName.trim() }),
+                body: JSON.stringify({
+                    name: newChannelName.trim(),
+                    workspaceId: workspace.id
+                }),
             });
 
             if (res.ok) {
