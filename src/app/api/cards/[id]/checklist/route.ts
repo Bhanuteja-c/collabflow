@@ -1,8 +1,10 @@
 // src/app/api/cards/[id]/checklist/route.ts
-// CRUD for card checklist items
+// CRUD for card checklist items - with workspace access control
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { ensureUser } from "@/lib/ensureUser";
+import { checkCardWorkspaceAccess } from "@/lib/workspaceAccess";
 
 // GET - Fetch checklist items for a card
 export async function GET(
@@ -15,6 +17,14 @@ export async function GET(
 
         if (!session?.user?.id) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
+        const userId = await ensureUser(session.user as any);
+
+        // Check workspace access
+        const card = await checkCardWorkspaceAccess(id, userId);
+        if (!card) {
+            return NextResponse.json({ error: "Card not found" }, { status: 404 });
         }
 
         const items = await prisma.checklistItem.findMany({
@@ -40,6 +50,14 @@ export async function POST(
 
         if (!session?.user?.id) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
+        const userId = await ensureUser(session.user as any);
+
+        // Check workspace access
+        const card = await checkCardWorkspaceAccess(id, userId);
+        if (!card) {
+            return NextResponse.json({ error: "Card not found" }, { status: 404 });
         }
 
         const body = await req.json();

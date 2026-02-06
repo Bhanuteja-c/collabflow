@@ -1,8 +1,10 @@
 // src/app/api/cards/[id]/checklist/[itemId]/route.ts
-// Update and delete checklist items
+// Update and delete checklist items - with workspace access control
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { ensureUser } from "@/lib/ensureUser";
+import { checkCardWorkspaceAccess } from "@/lib/workspaceAccess";
 
 // PUT - Update a checklist item (toggle completed, edit content)
 export async function PUT(
@@ -11,10 +13,18 @@ export async function PUT(
 ) {
     try {
         const session = await auth();
-        const { itemId } = await params;
+        const { id, itemId } = await params;
 
         if (!session?.user?.id) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
+        const userId = await ensureUser(session.user as any);
+
+        // Check workspace access via card
+        const card = await checkCardWorkspaceAccess(id, userId);
+        if (!card) {
+            return NextResponse.json({ error: "Card not found" }, { status: 404 });
         }
 
         const body = await req.json();
@@ -42,10 +52,18 @@ export async function DELETE(
 ) {
     try {
         const session = await auth();
-        const { itemId } = await params;
+        const { id, itemId } = await params;
 
         if (!session?.user?.id) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
+        const userId = await ensureUser(session.user as any);
+
+        // Check workspace access via card
+        const card = await checkCardWorkspaceAccess(id, userId);
+        if (!card) {
+            return NextResponse.json({ error: "Card not found" }, { status: 404 });
         }
 
         await prisma.checklistItem.delete({
