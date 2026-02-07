@@ -5,6 +5,7 @@
 import React, { useMemo } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { CardLinkPreview } from "./CardLinkPreview";
 
 interface MessageContentProps {
     content: string;
@@ -116,14 +117,7 @@ export function MessageContent({ content, workspaceMembers, onMentionClick }: Me
 
                     case 'card':
                         return (
-                            <Link
-                                key={i}
-                                href={`/workspace/${workspaceSlug}/kanban?card=${part.id}`}
-                                className="inline-flex items-center gap-1 text-amber-600 hover:underline bg-amber-500/10 rounded px-1 -mx-0.5 font-medium"
-                            >
-                                <span className="text-[10px]">📋</span>
-                                <span>Card</span>
-                            </Link>
+                            <CardLinkPreview key={i} cardId={part.id || ''} />
                         );
 
                     case 'doc':

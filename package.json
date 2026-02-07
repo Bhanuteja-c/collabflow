@@ -53,6 +53,7 @@
     "pg": "^8.16.3",
     "pusher": "^5.2.0",
     "pusher-js": "^8.4.0",
+    "radix-ui": "^1.4.3",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "react-files-hooks": "^2.0.0",
