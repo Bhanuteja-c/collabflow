@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ensureUser } from "@/lib/ensureUser";
+import { Activity } from "@/lib/activity";
 
 // GET /api/boards - List all boards for the current user
 export async function GET() {
@@ -54,12 +55,13 @@ export async function POST(req: NextRequest) {
         const userId = await ensureUser(session.user as any);
 
         const body = await req.json();
-        const { title } = body;
+        const { title, workspaceId } = body;
 
         const board = await prisma.board.create({
             data: {
                 title: title || "Untitled Board",
                 authorId: userId,
+                workspaceId: workspaceId || null,
                 columns: {
                     create: [
                         { title: "To Do", order: 0 },
@@ -76,6 +78,11 @@ export async function POST(req: NextRequest) {
                 },
             },
         });
+
+        // Log activity
+        if (workspaceId) {
+            Activity.boardCreated(userId, workspaceId, board.id, board.title);
+        }
 
         return NextResponse.json(board);
     } catch (error) {

@@ -64,13 +64,45 @@ export async function PUT(req: NextRequest) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
+        const userId = await ensureUser(session.user as any);
         const body = await req.json();
         const { cardId, columnId, order } = body;
+
+        // Get current card state before update
+        const oldCard = await prisma.card.findUnique({
+            where: { id: cardId },
+            include: {
+                column: {
+                    include: {
+                        board: { select: { workspaceId: true } }
+                    }
+                }
+            }
+        });
 
         const card = await prisma.card.update({
             where: { id: cardId },
             data: { columnId, order },
+            include: {
+                column: { select: { title: true } }
+            }
         });
+
+        // Log activity if column changed (card was moved)
+        if (oldCard && oldCard.columnId !== columnId && oldCard.column?.board?.workspaceId) {
+            const newColumn = await prisma.column.findUnique({
+                where: { id: columnId },
+                select: { title: true }
+            });
+            Activity.cardMoved(
+                userId,
+                oldCard.column.board.workspaceId,
+                cardId,
+                card.title,
+                oldCard.column.title,
+                newColumn?.title || "Unknown"
+            );
+        }
 
         return NextResponse.json(card);
     } catch (error) {

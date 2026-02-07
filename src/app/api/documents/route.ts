@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ensureUser } from "@/lib/ensureUser";
+import { Activity } from "@/lib/activity";
 
 // GET /api/documents - List documents (optionally filtered by workspace)
 export async function GET(request: NextRequest) {
@@ -109,6 +110,11 @@ export async function POST(req: NextRequest) {
                 details: null,
             },
         });
+
+        // Log activity
+        if (workspaceId) {
+            Activity.documentCreated(userId, workspaceId, document.id, document.title);
+        }
 
         return NextResponse.json(document);
     } catch (error) {
