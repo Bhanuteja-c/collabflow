@@ -16,7 +16,7 @@ interface MessageContentProps {
 }
 
 interface ContentPart {
-    type: 'text' | 'mention' | 'card' | 'doc' | 'code';
+    type: 'text' | 'mention' | 'card' | 'doc' | 'code' | 'inline_code';
     content: string;
     id?: string;
     language?: string;
@@ -56,13 +56,13 @@ function parseContent(content: string): ContentPart[] {
     return parts;
 }
 
-// Parse inline elements (@mentions, #card:, #doc:)
+// Parse inline elements (@mentions, #card:, #doc:, `inline code`)
 function parseInlineElements(content: string): ContentPart[] {
     const parts: ContentPart[] = [];
     let lastIndex = 0;
 
-    // Combined regex to match all inline patterns
-    const combinedRegex = /(@\w+|#card:\w+|#doc:\w+)/g;
+    // Combined regex to match all inline patterns including `code`
+    const combinedRegex = /(@\w+|#card:\w+|#doc:\w+|`[^`]+`)/g;
     let match;
 
     while ((match = combinedRegex.exec(content)) !== null) {
@@ -93,6 +93,11 @@ function parseInlineElements(content: string): ContentPart[] {
                 type: 'doc',
                 content: matched,
                 id: matched.slice(5),
+            });
+        } else if (matched.startsWith('`') && matched.endsWith('`')) {
+            parts.push({
+                type: 'inline_code',
+                content: matched.slice(1, -1), // Remove backticks
             });
         }
 
@@ -165,6 +170,16 @@ export function MessageContent({ content, workspaceMembers, onMentionClick }: Me
                     case 'doc':
                         return (
                             <DocLinkPreview key={i} docId={part.id || ''} />
+                        );
+
+                    case 'inline_code':
+                        return (
+                            <code
+                                key={i}
+                                className="px-1.5 py-0.5 mx-0.5 rounded bg-neutral-800 text-neutral-100 text-sm font-mono"
+                            >
+                                {part.content}
+                            </code>
                         );
 
                     default:
