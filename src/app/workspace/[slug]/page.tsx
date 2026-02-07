@@ -15,6 +15,7 @@ import {
     TrendingUp,
     Calendar,
 } from "lucide-react";
+import { ActivityFeed } from "@/components/dashboard/ActivityFeed";
 
 interface WorkspaceDashboardProps {
     params: Promise<{ slug: string }>;
@@ -175,48 +176,54 @@ export default function WorkspaceDashboard({ params }: WorkspaceDashboardProps) 
                 </div>
             </div>
 
-            {/* Recent Documents */}
-            <div>
-                <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-semibold">Recent Documents</h2>
-                    <Button variant="ghost" size="sm" asChild>
-                        <Link href={`/workspace/${slug}/documents`}>View all</Link>
-                    </Button>
+            {/* Recent Documents & Activity Feed - Two Column Layout */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Recent Documents */}
+                <div>
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-lg font-semibold">Recent Documents</h2>
+                        <Button variant="ghost" size="sm" asChild>
+                            <Link href={`/workspace/${slug}/documents`}>View all</Link>
+                        </Button>
+                    </div>
+
+                    {recentDocs.length === 0 ? (
+                        <Card className="border-dashed">
+                            <CardContent className="flex flex-col items-center justify-center py-12">
+                                <FileText className="w-12 h-12 text-muted-foreground mb-4" />
+                                <p className="text-muted-foreground mb-4">No documents yet</p>
+                                <Button asChild>
+                                    <Link href={`/workspace/${slug}/documents?new=true`}>
+                                        <Plus className="w-4 h-4 mr-2" />
+                                        Create your first document
+                                    </Link>
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    ) : (
+                        <div className="grid gap-3">
+                            {recentDocs.map((doc) => (
+                                <Link
+                                    key={doc.id}
+                                    href={`/workspace/${slug}/editor/${doc.id}`}
+                                    className="flex items-center gap-4 p-4 rounded-lg border bg-card hover:bg-muted/50 transition-colors"
+                                >
+                                    <FileText className="w-5 h-5 text-primary" />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-medium truncate">{doc.title}</p>
+                                        <p className="text-xs text-muted-foreground">
+                                            Updated {formatDate(doc.updatedAt)}
+                                        </p>
+                                    </div>
+                                    <Clock className="w-4 h-4 text-muted-foreground" />
+                                </Link>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
-                {recentDocs.length === 0 ? (
-                    <Card className="border-dashed">
-                        <CardContent className="flex flex-col items-center justify-center py-12">
-                            <FileText className="w-12 h-12 text-muted-foreground mb-4" />
-                            <p className="text-muted-foreground mb-4">No documents yet</p>
-                            <Button asChild>
-                                <Link href={`/workspace/${slug}/documents?new=true`}>
-                                    <Plus className="w-4 h-4 mr-2" />
-                                    Create your first document
-                                </Link>
-                            </Button>
-                        </CardContent>
-                    </Card>
-                ) : (
-                    <div className="grid gap-3">
-                        {recentDocs.map((doc) => (
-                            <Link
-                                key={doc.id}
-                                href={`/workspace/${slug}/editor/${doc.id}`}
-                                className="flex items-center gap-4 p-4 rounded-lg border bg-card hover:bg-muted/50 transition-colors"
-                            >
-                                <FileText className="w-5 h-5 text-primary" />
-                                <div className="flex-1 min-w-0">
-                                    <p className="font-medium truncate">{doc.title}</p>
-                                    <p className="text-xs text-muted-foreground">
-                                        Updated {formatDate(doc.updatedAt)}
-                                    </p>
-                                </div>
-                                <Clock className="w-4 h-4 text-muted-foreground" />
-                            </Link>
-                        ))}
-                    </div>
-                )}
+                {/* Activity Feed */}
+                <ActivityFeed />
             </div>
         </div>
     );
