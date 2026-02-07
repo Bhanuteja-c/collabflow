@@ -2,6 +2,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { ensureUser } from "@/lib/ensureUser";
+import { Activity } from "@/lib/activity";
 
 // POST /api/cards - Create a new card
 export async function POST(req: NextRequest) {
@@ -12,6 +14,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
+        const userId = await ensureUser(session.user as any);
         const body = await req.json();
         const { title, description, columnId } = body;
 
@@ -19,6 +22,16 @@ export async function POST(req: NextRequest) {
         const lastCard = await prisma.card.findFirst({
             where: { columnId },
             orderBy: { order: "desc" },
+        });
+
+        // Get column and board info for activity logging
+        const column = await prisma.column.findUnique({
+            where: { id: columnId },
+            include: {
+                board: {
+                    select: { workspaceId: true }
+                }
+            }
         });
 
         const card = await prisma.card.create({
@@ -29,6 +42,11 @@ export async function POST(req: NextRequest) {
                 order: (lastCard?.order ?? -1) + 1,
             },
         });
+
+        // Log activity
+        if (column?.board?.workspaceId) {
+            Activity.cardCreated(userId, column.board.workspaceId, card.id, card.title);
+        }
 
         return NextResponse.json(card);
     } catch (error) {

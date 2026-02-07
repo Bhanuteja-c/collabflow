@@ -44,6 +44,9 @@ model User {
   assignedCards      Card[]         @relation("AssignedCards")
   cardComments       CardComment[]  @relation("CardCommentAuthor")
   
+  // Activity tracking
+  activities         Activity[]
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -87,6 +90,7 @@ model Workspace {
   documents   Document[]
   boards      Board[]
   channels    Channel[]
+  activities  Activity[]
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -384,3 +388,33 @@ model Reaction {
   @@index([userId])
 }
 
+// Activity Feed - tracks team actions for dashboard
+model Activity {
+  id          String   @id @default(cuid())
+  
+  // Who did the action
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Which workspace
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  
+  // Activity type and details
+  type        String   // "card_created", "card_moved", "card_completed", "document_created", "document_edited", "member_joined", "message_sent"
+  action      String   // Human-readable: "created a card", "moved card to Done", etc.
+  
+  // Referenced entity (optional)
+  entityType  String?  // "card", "document", "channel", "board"
+  entityId    String?
+  entityTitle String?  // Snapshot of title at time of activity
+  
+  // Extra metadata as JSON
+  metadata    Json?    // { oldColumn: "Todo", newColumn: "Done" }
+  
+  createdAt   DateTime @default(now())
+  
+  @@index([workspaceId])
+  @@index([userId])
+  @@index([workspaceId, createdAt])
+}
