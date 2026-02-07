@@ -1,11 +1,12 @@
 // src/components/chat/MessageContent.tsx
-// Renders message content with @mentions and entity links
+// Renders message content with @mentions, entity links, and code blocks
 "use client";
 
 import React, { useMemo } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { CardLinkPreview } from "./CardLinkPreview";
+import { CodeBlock } from "./CodeBlock";
 
 interface MessageContentProps {
     content: string;
@@ -13,22 +14,53 @@ interface MessageContentProps {
     onMentionClick?: (userId: string) => void;
 }
 
-// Patterns for parsing
-const MENTION_REGEX = /@(\w+)/g;
-const CARD_LINK_REGEX = /#card:(\w+)/g;
-const DOC_LINK_REGEX = /#doc:(\w+)/g;
-
 interface ContentPart {
-    type: 'text' | 'mention' | 'card' | 'doc';
+    type: 'text' | 'mention' | 'card' | 'doc' | 'code';
     content: string;
     id?: string;
+    language?: string;
 }
 
+// Parse code blocks first, then inline elements
 function parseContent(content: string): ContentPart[] {
+    const parts: ContentPart[] = [];
+
+    // First, extract code blocks (```language\ncode```)
+    const codeBlockRegex = /```(\w*)\n?([\s\S]*?)```/g;
+    let lastIndex = 0;
+    let match;
+
+    while ((match = codeBlockRegex.exec(content)) !== null) {
+        // Parse text before code block for inline elements
+        if (match.index > lastIndex) {
+            const textBefore = content.slice(lastIndex, match.index);
+            parts.push(...parseInlineElements(textBefore));
+        }
+
+        // Add code block
+        parts.push({
+            type: 'code',
+            content: match[2].trim(),
+            language: match[1] || '',
+        });
+
+        lastIndex = match.index + match[0].length;
+    }
+
+    // Parse remaining text for inline elements
+    if (lastIndex < content.length) {
+        parts.push(...parseInlineElements(content.slice(lastIndex)));
+    }
+
+    return parts;
+}
+
+// Parse inline elements (@mentions, #card:, #doc:)
+function parseInlineElements(content: string): ContentPart[] {
     const parts: ContentPart[] = [];
     let lastIndex = 0;
 
-    // Combined regex to match all patterns
+    // Combined regex to match all inline patterns
     const combinedRegex = /(@\w+|#card:\w+|#doc:\w+)/g;
     let match;
 
@@ -47,19 +79,19 @@ function parseContent(content: string): ContentPart[] {
             parts.push({
                 type: 'mention',
                 content: matched,
-                id: matched.slice(1), // Remove @
+                id: matched.slice(1),
             });
         } else if (matched.startsWith('#card:')) {
             parts.push({
                 type: 'card',
                 content: matched,
-                id: matched.slice(6), // Remove #card:
+                id: matched.slice(6),
             });
         } else if (matched.startsWith('#doc:')) {
             parts.push({
                 type: 'doc',
                 content: matched,
-                id: matched.slice(5), // Remove #doc:
+                id: matched.slice(5),
             });
         }
 
@@ -91,9 +123,18 @@ export function MessageContent({ content, workspaceMembers, onMentionClick }: Me
     };
 
     return (
-        <span className="whitespace-pre-wrap">
+        <div className="whitespace-pre-wrap">
             {parts.map((part, i) => {
                 switch (part.type) {
+                    case 'code':
+                        return (
+                            <CodeBlock
+                                key={i}
+                                code={part.content}
+                                language={part.language}
+                            />
+                        );
+
                     case 'mention': {
                         const member = getMemberByName(part.id || '');
                         if (member) {
@@ -136,6 +177,6 @@ export function MessageContent({ content, workspaceMembers, onMentionClick }: Me
                         return <span key={i}>{part.content}</span>;
                 }
             })}
-        </span>
+        </div>
     );
 }
