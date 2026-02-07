@@ -82,6 +82,7 @@ model Workspace {
   slug        String   @unique
   description String?
   image       String?
+  isPublic    Boolean  @default(false)  // Public workspaces can be discovered and joined
   
   ownerId     String
   owner       User     @relation("OwnedWorkspaces", fields: [ownerId], references: [id], onDelete: Cascade)
@@ -96,6 +97,7 @@ model Workspace {
   updatedAt   DateTime @updatedAt
   
   @@index([ownerId])
+  @@index([isPublic])
 }
 
 // Workspace membership with roles

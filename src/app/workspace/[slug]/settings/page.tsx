@@ -8,7 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Sun, Moon, Monitor, Loader2, Save, Trash2, LogOut } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Sun, Moon, Monitor, Loader2, Save, Trash2, LogOut, Globe } from "lucide-react";
 
 export default function WorkspaceSettingsPage({ params }: { params: Promise<{ slug: string }> }) {
     const { slug } = use(params);
@@ -18,6 +20,7 @@ export default function WorkspaceSettingsPage({ params }: { params: Promise<{ sl
     const [workspace, setWorkspace] = useState<any>(null);
     const [name, setName] = useState("");
     const [description, setDescription] = useState("");
+    const [isPublic, setIsPublic] = useState(false);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [userRole, setUserRole] = useState("");
@@ -33,6 +36,7 @@ export default function WorkspaceSettingsPage({ params }: { params: Promise<{ sl
                         setWorkspace(ws);
                         setName(ws.name);
                         setDescription(ws.description || "");
+                        setIsPublic(ws.isPublic || false);
 
                         const detailRes = await fetch(`/api/workspaces/${ws.id}`);
                         if (detailRes.ok) {
@@ -54,7 +58,7 @@ export default function WorkspaceSettingsPage({ params }: { params: Promise<{ sl
             await fetch(`/api/workspaces/${workspace.id}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name, description }),
+                body: JSON.stringify({ name, description, isPublic }),
             });
         } catch (e) { console.error(e); }
         finally { setSaving(false); }
@@ -129,8 +133,29 @@ export default function WorkspaceSettingsPage({ params }: { params: Promise<{ sl
                         <div>
                             <label className="text-sm font-medium">Description</label>
                             <Textarea value={description} onChange={(e) => setDescription(e.target.value)}
-                                className="mt-1" rows={3} />
+                                className="mt-1" rows={3} placeholder="What is this workspace about?" />
                         </div>
+
+                        {/* Public Workspace Toggle */}
+                        <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/30">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 rounded-lg bg-primary/10">
+                                    <Globe className="w-5 h-5 text-primary" />
+                                </div>
+                                <div>
+                                    <Label htmlFor="public-toggle" className="font-medium">Public Workspace</Label>
+                                    <p className="text-sm text-muted-foreground">
+                                        Allow anyone to discover and join this workspace
+                                    </p>
+                                </div>
+                            </div>
+                            <Switch
+                                id="public-toggle"
+                                checked={isPublic}
+                                onCheckedChange={setIsPublic}
+                            />
+                        </div>
+
                         <Button onClick={handleSave} disabled={saving}>
                             {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
                             Save Changes
@@ -158,3 +183,4 @@ export default function WorkspaceSettingsPage({ params }: { params: Promise<{ sl
         </div>
     );
 }
+

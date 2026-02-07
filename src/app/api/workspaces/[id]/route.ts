@@ -89,12 +89,13 @@ export async function PUT(
             return NextResponse.json({ error: "Permission denied" }, { status: 403 });
         }
 
-        const { name, description, image } = body;
+        const { name, description, image, isPublic } = body;
         const updateData: any = {};
 
         if (name) updateData.name = name.trim();
         if (description !== undefined) updateData.description = description?.trim() || null;
         if (image !== undefined) updateData.image = image;
+        if (isPublic !== undefined) updateData.isPublic = Boolean(isPublic);
 
         const workspace = await prisma.workspace.update({
             where: { id },
