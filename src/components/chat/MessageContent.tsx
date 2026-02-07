@@ -6,6 +6,7 @@ import React, { useMemo } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { CardLinkPreview } from "./CardLinkPreview";
+import { DocLinkPreview } from "./DocLinkPreview";
 import { CodeBlock } from "./CodeBlock";
 
 interface MessageContentProps {
@@ -163,14 +164,7 @@ export function MessageContent({ content, workspaceMembers, onMentionClick }: Me
 
                     case 'doc':
                         return (
-                            <Link
-                                key={i}
-                                href={`/workspace/${workspaceSlug}/documents/${part.id}`}
-                                className="inline-flex items-center gap-1 text-blue-600 hover:underline bg-blue-500/10 rounded px-1 -mx-0.5 font-medium"
-                            >
-                                <span className="text-[10px]">📄</span>
-                                <span>Doc</span>
-                            </Link>
+                            <DocLinkPreview key={i} docId={part.id || ''} />
                         );
 
                     default:
