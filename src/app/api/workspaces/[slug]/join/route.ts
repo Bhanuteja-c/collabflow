@@ -1,4 +1,4 @@
-// src/app/api/workspaces/[slug]/join/route.ts
+// src/app/api/workspaces/[id]/join/route.ts
 // POST to join a public workspace
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
@@ -6,24 +6,26 @@ import { prisma } from "@/lib/prisma";
 import { ensureUser } from "@/lib/ensureUser";
 import { Activity } from "@/lib/activity";
 
-// POST /api/workspaces/[slug]/join - Join a public workspace
+// POST /api/workspaces/[slug]/join
 export async function POST(
-    req: NextRequest,
+    request: NextRequest,
     { params }: { params: Promise<{ slug: string }> }
 ) {
     try {
         const session = await auth();
-        const { slug } = await params;
-
-        if (!session?.user?.id) {
+        if (!session?.user) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const userId = await ensureUser(session.user as any);
+        const { slug } = await params;
+        const id = slug; // Treat as ID/Slug
+        const userId = (session.user as { id: string }).id;
+        const { inviteCode } = await request.json();
 
-        // Find workspace
-        const workspace = await prisma.workspace.findUnique({
-            where: { slug },
+        // 1. Find workspace (by ID or Slug)
+        const isCuid = id.length === 25 && /^[a-z0-9]+$/.test(id);
+        const workspace = await prisma.workspace.findFirst({
+            where: isCuid ? { id } : { slug: id },
             include: {
                 members: {
                     where: { userId },

@@ -423,3 +423,72 @@ body {
 ::-webkit-scrollbar-thumb:hover {
     background: var(--color-muted-foreground);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Editor Enhancements
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Task Lists */
+ul[data-type="taskList"] {
+    list-style: none;
+    padding: 0;
+}
+
+ul[data-type="taskList"] p {
+    margin: 0;
+}
+
+li[data-type="taskItem"] {
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+    margin-bottom: 0.5rem;
+}
+
+li[data-type="taskItem"] label {
+    margin-top: 0.25rem;
+    user-select: none;
+}
+
+li[data-type="taskItem"] div {
+    flex: 1 1 auto;
+}
+
+/* Reusing checkbox styles but specific for editor */
+input[type="checkbox"] {
+    accent-color: var(--color-accent);
+}
+
+li[data-type="taskItem"] input[type="checkbox"] {
+    cursor: pointer;
+}
+
+
+li[data-type="taskItem"][data-checked="true"] div {
+    text-decoration: line-through;
+    color: var(--color-muted-foreground);
+    opacity: 0.8;
+}
+
+/* Placeholder */
+.tiptap p.is-editor-empty:first-child::before {
+    color: var(--color-muted-foreground);
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    pointer-events: none;
+    opacity: 0.5;
+}
+
+/* Images */
+.tiptap img {
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-md);
+    margin: 1.5rem 0;
+}
+
+.tiptap img.ProseMirror-selectednode {
+    outline: 3px solid var(--color-accent);
+}

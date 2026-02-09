@@ -14,6 +14,12 @@ CollabFlow is an open-source collaboration platform built with Next.js 15, featu
 - Workspace-scoped content (documents, boards, channels)
 - Activity feed dashboard
 
+### 🌐 Public Workspaces
+- Make workspaces discoverable to everyone
+- Browse & join public workspaces at `/explore`
+- One-click join for instant access
+- Toggle visibility in workspace settings
+
 ### 📄 Document Editor
 - Rich text editing with TipTap
 - Document history tracking
@@ -159,7 +165,7 @@ collabflow/
 - [x] Code snippets in chat
 - [x] Task ↔ Chat links (`#card:id`, `#doc:id`)
 - [x] Activity feed with logging
-- [ ] Public workspaces
+- [x] Public workspaces with discovery & join
 - [ ] Real-time collaboration (Yjs)
 - [ ] PDF/Markdown export
 

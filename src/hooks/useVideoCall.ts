@@ -93,33 +93,47 @@ export function useVideoCall({ roomId, userId, userName, userImage, localStream 
 
         peersRef.current.forEach((peer, socketId) => {
             const senders = peer.connection.getSenders();
-
-            let videoSender = senders.find(s => s.track?.kind === 'video');
-
-            if (!videoSender) {
-                videoSender = senders.find(s => {
-                    const transceiver = peer.connection.getTransceivers().find(t => t.sender === s);
-                    return transceiver?.receiver.track?.kind === 'video' ||
-                        transceiver?.mid?.includes('video');
-                });
-            }
+            const videoSender = senders.find(s => s.track?.kind === 'video');
 
             if (videoSender) {
                 videoSender.replaceTrack(newTrack)
                     .then(() => console.log(`[WebRTC] Track replaced for ${socketId}`))
                     .catch(err => console.error(`[WebRTC] Failed to replace track:`, err));
             } else {
-                try {
-                    const stream = new MediaStream([newTrack]);
-                    peer.connection.addTrack(newTrack, stream);
-                } catch (err) {
-                    console.error(`[WebRTC] Failed to add track:`, err);
+                // Try to find via transceiver
+                const transceiver = peer.connection.getTransceivers().find(t =>
+                    t.receiver.track?.kind === 'video' || t.mid?.includes('video')
+                );
+                if (transceiver && transceiver.sender) {
+                    transceiver.sender.replaceTrack(newTrack).catch(e => console.error("Replace track error:", e));
+                } else {
+                    console.warn(`[WebRTC] No video sender found for ${socketId}`);
                 }
             }
         });
     }, []);
 
-    // ICE restart for failed connections
+    // Replace audio track (for screen share with audio)
+    const replaceAudioTrack = useCallback((newTrack: MediaStreamTrack) => {
+        peersRef.current.forEach((peer, socketId) => {
+            const senders = peer.connection.getSenders();
+            const audioSender = senders.find(s => s.track?.kind === 'audio');
+
+            if (audioSender) {
+                audioSender.replaceTrack(newTrack)
+                    .catch(err => console.error(`[WebRTC] Failed to replace audio track for ${socketId}:`, err));
+            }
+        });
+    }, []);
+
+    // Active speakers state
+    const [activeSpeakers, setActiveSpeakers] = useState<Set<string>>(new Set());
+
+    // Toggle local speaking status
+    const setLocalSpeaking = useCallback((isSpeaking: boolean) => {
+        if (!socketRef.current || !roomId) return;
+        socketRef.current.emit("speaking-status", { roomId, isSpeaking });
+    }, [roomId]);
     const performIceRestart = useCallback((socketId: string) => {
         const peer = peersRef.current.get(socketId);
         if (!peer || !socketRef.current) return;
@@ -407,6 +421,19 @@ export function useVideoCall({ roomId, userId, userName, userImage, localStream 
             }]);
         });
 
+        // Handle speaking status
+        socket.on("speaking-status", (data: { userId: string; isSpeaking: boolean }) => {
+            setActiveSpeakers(prev => {
+                const newSet = new Set(prev);
+                if (data.isSpeaking) {
+                    newSet.add(data.userId);
+                } else {
+                    newSet.delete(data.userId);
+                }
+                return newSet;
+            });
+        });
+
         return () => {
             socket.emit("leave-room", roomId);
             peersRef.current.forEach((peer) => peer.connection.close());
@@ -424,5 +451,8 @@ export function useVideoCall({ roomId, userId, userName, userImage, localStream 
         chatMessages,
         sendChatMessage,
         replaceVideoTrack,
+        replaceAudioTrack,
+        activeSpeakers,
+        setLocalSpeaking,
     };
 }

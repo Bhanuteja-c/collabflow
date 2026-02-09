@@ -1,4 +1,4 @@
-// src/app/api/workspaces/[slug]/activities/route.ts
+// src/app/api/workspaces/[id]/activities/route.ts
 // GET workspace activity feed
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
@@ -13,16 +13,20 @@ export async function GET(
     try {
         const session = await auth();
         const { slug } = await params;
+        const id = slug; // Treat as ID/Slug
 
         if (!session?.user?.id) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const userId = await ensureUser(session.user as any);
+        const userId = await ensureUser(session.user as { id: string; name?: string; email?: string; image?: string });
+
+        // Support both id and slug lookup
+        const isCuid = id.length === 25 && /^[a-z0-9]+$/.test(id);
 
         // Find workspace and verify membership
-        const workspace = await prisma.workspace.findUnique({
-            where: { slug },
+        const workspace = await prisma.workspace.findFirst({
+            where: isCuid ? { id } : { slug: id },
             include: {
                 members: {
                     where: { userId },

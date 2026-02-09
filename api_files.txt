@@ -1,0 +1,13 @@
+D:\Coding\collabflow\src\app\api\workspaces\join
+D:\Coding\collabflow\src\app\api\workspaces\public
+D:\Coding\collabflow\src\app\api\workspaces\route.ts
+D:\Coding\collabflow\src\app\api\workspaces\[id]
+D:\Coding\collabflow\src\app\api\workspaces\join\route.ts
+D:\Coding\collabflow\src\app\api\workspaces\public\route.ts
+D:\Coding\collabflow\src\app\api\workspaces\[id]\activities
+D:\Coding\collabflow\src\app\api\workspaces\[id]\join
+D:\Coding\collabflow\src\app\api\workspaces\[id]\members
+D:\Coding\collabflow\src\app\api\workspaces\[id]\route.ts
+D:\Coding\collabflow\src\app\api\workspaces\[id]\activities\route.ts
+D:\Coding\collabflow\src\app\api\workspaces\[id]\join\route.ts
+D:\Coding\collabflow\src\app\api\workspaces\[id]\members\route.ts

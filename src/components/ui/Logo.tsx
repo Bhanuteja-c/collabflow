@@ -2,6 +2,7 @@
 "use client";
 
 import { useTheme } from "next-themes";
+import { useState, useEffect } from "react";
 
 interface LogoProps {
     className?: string;
@@ -17,7 +18,14 @@ const sizeMap = {
 
 export default function Logo({ className = "", showText = true, size = "md" }: LogoProps) {
     const { resolvedTheme } = useTheme();
-    const isDark = resolvedTheme === "dark";
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
+    // Use neutral color on server, then switch after hydration
+    const isDark = mounted && resolvedTheme === "dark";
     const { icon, text, gap } = sizeMap[size];
 
     return (

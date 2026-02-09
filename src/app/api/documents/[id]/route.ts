@@ -158,6 +158,7 @@ export async function PUT(
                 userId,
                 action,
                 details,
+                snapshot: content ?? existing.content, // Save current content state
             },
         });
 

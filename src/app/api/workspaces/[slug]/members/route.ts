@@ -1,7 +1,20 @@
-// src/app/api/workspaces/[id]/members/route.ts
+// src/app/api/workspaces/[slug]/members/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+
+// Helper to resolve slug to ID
+async function resolveWorkspaceId(slugOrId: string) {
+    // Basic CUID check
+    const isCuid = slugOrId.length === 25 && /^[a-z0-9]+$/.test(slugOrId);
+    if (isCuid) return slugOrId;
+
+    const workspace = await prisma.workspace.findUnique({
+        where: { slug: slugOrId },
+        select: { id: true }
+    });
+    return workspace?.id;
+}
 
 // Helper to check admin/owner access
 async function checkAdminAccess(workspaceId: string, userId: string) {
@@ -13,10 +26,10 @@ async function checkAdminAccess(workspaceId: string, userId: string) {
     return membership && ["owner", "admin"].includes(membership.role);
 }
 
-// GET /api/workspaces/[id]/members - List members
+// GET /api/workspaces/[slug]/members - List members
 export async function GET(
     request: NextRequest,
-    { params }: { params: Promise<{ id: string }> }
+    { params }: { params: Promise<{ slug: string }> }
 ) {
     try {
         const session = await auth();
@@ -24,19 +37,25 @@ export async function GET(
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const { id } = await params;
-        const userId = (session.user as any).id;
+        const { slug } = await params;
+        const workspaceId = await resolveWorkspaceId(slug);
+
+        if (!workspaceId) {
+            return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
+        }
+
+        const userId = (session.user as { id: string }).id;
 
         // Check membership
         const isMember = await prisma.workspaceMember.findUnique({
-            where: { workspaceId_userId: { workspaceId: id, userId } },
+            where: { workspaceId_userId: { workspaceId, userId } },
         });
         if (!isMember) {
             return NextResponse.json({ error: "Not a member" }, { status: 403 });
         }
 
         const members = await prisma.workspaceMember.findMany({
-            where: { workspaceId: id },
+            where: { workspaceId },
             include: {
                 user: {
                     select: { id: true, name: true, email: true, image: true },
@@ -52,10 +71,10 @@ export async function GET(
     }
 }
 
-// POST /api/workspaces/[id]/members - Add member by email
+// POST /api/workspaces/[slug]/members - Add member by email
 export async function POST(
     request: NextRequest,
-    { params }: { params: Promise<{ id: string }> }
+    { params }: { params: Promise<{ slug: string }> }
 ) {
     try {
         const session = await auth();
@@ -63,12 +82,18 @@ export async function POST(
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const { id } = await params;
-        const userId = (session.user as any).id;
+        const { slug } = await params;
+        const workspaceId = await resolveWorkspaceId(slug);
+
+        if (!workspaceId) {
+            return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
+        }
+
+        const userId = (session.user as { id: string }).id;
         const body = await request.json();
 
         // Check admin access
-        if (!await checkAdminAccess(id, userId)) {
+        if (!await checkAdminAccess(workspaceId, userId)) {
             return NextResponse.json({ error: "Permission denied" }, { status: 403 });
         }
 
@@ -89,7 +114,7 @@ export async function POST(
 
         // Check if already a member
         const existing = await prisma.workspaceMember.findUnique({
-            where: { workspaceId_userId: { workspaceId: id, userId: targetUser.id } },
+            where: { workspaceId_userId: { workspaceId, userId: targetUser.id } },
         });
 
         if (existing) {
@@ -99,7 +124,7 @@ export async function POST(
         // Add member
         const member = await prisma.workspaceMember.create({
             data: {
-                workspaceId: id,
+                workspaceId,
                 userId: targetUser.id,
                 role: ["admin", "member", "viewer"].includes(role) ? role : "member",
             },
@@ -117,10 +142,10 @@ export async function POST(
     }
 }
 
-// DELETE /api/workspaces/[id]/members?userId=xxx - Remove member
+// DELETE /api/workspaces/[slug]/members?userId=xxx - Remove member
 export async function DELETE(
     request: NextRequest,
-    { params }: { params: Promise<{ id: string }> }
+    { params }: { params: Promise<{ slug: string }> }
 ) {
     try {
         const session = await auth();
@@ -128,8 +153,14 @@ export async function DELETE(
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const { id } = await params;
-        const currentUserId = (session.user as any).id;
+        const { slug } = await params;
+        const workspaceId = await resolveWorkspaceId(slug);
+
+        if (!workspaceId) {
+            return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
+        }
+
+        const currentUserId = (session.user as { id: string }).id;
         const targetUserId = request.nextUrl.searchParams.get("userId");
 
         if (!targetUserId) {
@@ -138,11 +169,12 @@ export async function DELETE(
 
         // Get workspace to check owner
         const workspace = await prisma.workspace.findUnique({
-            where: { id },
+            where: { id: workspaceId },
             select: { ownerId: true },
         });
 
         if (!workspace) {
+            // Should be caught by resolveWorkspaceId generally, but safe to keep
             return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
         }
 
@@ -152,7 +184,7 @@ export async function DELETE(
         }
 
         // Self-removal or admin removal
-        const isAdmin = await checkAdminAccess(id, currentUserId);
+        const isAdmin = await checkAdminAccess(workspaceId, currentUserId);
         const isSelfRemoval = currentUserId === targetUserId;
 
         if (!isAdmin && !isSelfRemoval) {
@@ -160,7 +192,7 @@ export async function DELETE(
         }
 
         await prisma.workspaceMember.delete({
-            where: { workspaceId_userId: { workspaceId: id, userId: targetUserId } },
+            where: { workspaceId_userId: { workspaceId, userId: targetUserId } },
         });
 
         return NextResponse.json({ success: true });
@@ -170,10 +202,10 @@ export async function DELETE(
     }
 }
 
-// PATCH /api/workspaces/[id]/members - Update member role
+// PATCH /api/workspaces/[slug]/members - Update member role
 export async function PATCH(
     request: NextRequest,
-    { params }: { params: Promise<{ id: string }> }
+    { params }: { params: Promise<{ slug: string }> }
 ) {
     try {
         const session = await auth();
@@ -181,12 +213,18 @@ export async function PATCH(
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const { id } = await params;
-        const currentUserId = (session.user as any).id;
+        const { slug } = await params;
+        const workspaceId = await resolveWorkspaceId(slug);
+
+        if (!workspaceId) {
+            return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
+        }
+
+        const currentUserId = (session.user as { id: string }).id;
         const body = await request.json();
 
         // Check admin access
-        if (!await checkAdminAccess(id, currentUserId)) {
+        if (!await checkAdminAccess(workspaceId, currentUserId)) {
             return NextResponse.json({ error: "Permission denied" }, { status: 403 });
         }
 
@@ -197,7 +235,7 @@ export async function PATCH(
 
         // Get workspace to check owner
         const workspace = await prisma.workspace.findUnique({
-            where: { id },
+            where: { id: workspaceId },
             select: { ownerId: true },
         });
 
@@ -207,7 +245,7 @@ export async function PATCH(
         }
 
         const member = await prisma.workspaceMember.update({
-            where: { workspaceId_userId: { workspaceId: id, userId: targetUserId } },
+            where: { workspaceId_userId: { workspaceId, userId: targetUserId } },
             data: { role },
             include: {
                 user: {

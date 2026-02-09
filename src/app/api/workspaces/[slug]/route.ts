@@ -13,10 +13,10 @@ async function checkWorkspaceAccess(workspaceId: string, userId: string) {
     return membership;
 }
 
-// GET /api/workspaces/[id] - Get workspace details (supports both id and slug)
+// GET /api/workspaces/[slug] - Get workspace details (supports both id and slug)
 export async function GET(
     request: NextRequest,
-    { params }: { params: Promise<{ id: string }> }
+    { params }: { params: Promise<{ slug: string }> }
 ) {
     try {
         const session = await auth();
@@ -24,8 +24,9 @@ export async function GET(
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const { id } = await params;
-        const userId = (session.user as any).id;
+        const { slug } = await params;
+        const id = slug; // Treat the param as the ID/Slug
+        const userId = (session.user as { id: string }).id;
 
         // Support both id (cuid) and slug lookup
         // CUIDs are typically 25 characters, slugs are usually shorter and may have different characters
@@ -68,10 +69,10 @@ export async function GET(
     }
 }
 
-// PUT /api/workspaces/[id] - Update workspace
+// PUT /api/workspaces/[slug] - Update workspace
 export async function PUT(
     request: NextRequest,
-    { params }: { params: Promise<{ id: string }> }
+    { params }: { params: Promise<{ slug: string }> }
 ) {
     try {
         const session = await auth();
@@ -79,8 +80,9 @@ export async function PUT(
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const { id } = await params;
-        const userId = (session.user as any).id;
+        const { slug } = await params;
+        const id = slug;
+        const userId = (session.user as { id: string }).id;
         const body = await request.json();
 
         // Check admin/owner access
@@ -109,10 +111,10 @@ export async function PUT(
     }
 }
 
-// DELETE /api/workspaces/[id] - Delete workspace
+// DELETE /api/workspaces/[slug] - Delete workspace
 export async function DELETE(
     request: NextRequest,
-    { params }: { params: Promise<{ id: string }> }
+    { params }: { params: Promise<{ slug: string }> }
 ) {
     try {
         const session = await auth();
@@ -120,8 +122,9 @@ export async function DELETE(
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const { id } = await params;
-        const userId = (session.user as any).id;
+        const { slug } = await params;
+        const id = slug;
+        const userId = (session.user as { id: string }).id;
 
         // Only owner can delete
         const workspace = await prisma.workspace.findUnique({

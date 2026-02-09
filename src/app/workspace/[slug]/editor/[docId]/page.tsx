@@ -1,87 +1,55 @@
 "use client";
 
-import { useState, useEffect, useCallback, use, useMemo, useRef } from "react";
-import { useEditor, EditorContent } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import Collaboration from "@tiptap/extension-collaboration";
-import * as Y from "yjs";
+import { useState, useEffect, useCallback, use, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { useSession } from "next-auth/react";
-import {
-    Bold, Italic, List, ListOrdered, Heading1, Heading2, Undo, Redo,
-    Quote, Code, Minus, Strikethrough, Save, Loader2, ArrowLeft,
-    Check, History, Share2, Cloud, UserPlus, Trash2, Users
-} from "lucide-react";
+import { Loader2, ArrowLeft, Check, Share2, Wifi, WifiOff, Save, Clock } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import {
-    Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger,
-} from "@/components/ui/sheet";
-import {
-    Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription,
-} from "@/components/ui/dialog";
-import {
-    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 import { useDocumentSync } from "@/hooks/useDocumentSync";
-import { RemoteCursors } from "@/components/editor/RemoteCursors";
+import CollaborativeEditor from "@/components/editor/CollaborativeEditor";
 
-interface HistoryEntry {
-    id: string;
-    action: string;
-    details: string | null;
-    createdAt: string;
-    user: { name: string | null; image: string | null };
-}
-
-const getRandomColor = (): string => {
+const getColorFromId = (id: string): string => {
     const colors = ["#958DF1", "#F98181", "#FBBC88", "#FAF594", "#70CFF8", "#94FADB", "#B9F18D"];
-    return colors[Math.floor(Math.random() * colors.length)] ?? "#958DF1";
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) {
+        hash = ((hash << 5) - hash) + id.charCodeAt(i);
+        hash |= 0;
+    }
+    return colors[Math.abs(hash) % colors.length] ?? "#958DF1";
 };
 
 export default function WorkspaceEditorPage({ params }: { params: Promise<{ slug: string; docId: string }> }) {
     const { slug, docId } = use(params);
     const { data: session } = useSession();
-    const router = useRouter();
 
     const [title, setTitle] = useState("Untitled");
     const [initialContent, setInitialContent] = useState("");
-    const [history, setHistory] = useState<HistoryEntry[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
     const [permission, setPermission] = useState<"owner" | "edit" | "view">("view");
     const [copied, setCopied] = useState(false);
-
-    const [shareEmail, setShareEmail] = useState("");
-    const [sharePermission, setSharePermission] = useState<"view" | "edit">("view");
-    const [shares, setShares] = useState<any[]>([]);
-    const [loadingShares, setLoadingShares] = useState(false);
-    const [sharingInProgress, setSharingInProgress] = useState(false);
-    const [shareDialogOpen, setShareDialogOpen] = useState(false);
-    const [userSuggestions, setUserSuggestions] = useState<any[]>([]);
-
-    const ydoc = useMemo(() => new Y.Doc(), []);
-    const colorRef = useRef<string>(getRandomColor());
-    const userColor = colorRef.current;
-    const contentInitialized = useRef(false);
+    const [historyOpen, setHistoryOpen] = useState(false);
 
     const userId = (session?.user as any)?.id || "";
     const userName = session?.user?.name || "Anonymous";
     const userImage = session?.user?.image || "";
+    const userColor = getColorFromId(userId || docId);
 
-    const { connected, remoteUsers, sendCursorUpdate } = useDocumentSync({
+    // Use the enhanced document sync hook
+    const { ydoc, awareness, connected, connectionState, remoteUsers } = useDocumentSync({
         documentId: docId,
         userId,
         userName,
         userColor,
         userImage,
-        ydoc,
     });
 
+    // Fetch document metadata
     useEffect(() => {
         const fetchDoc = async () => {
             try {
@@ -94,8 +62,6 @@ export default function WorkspaceEditorPage({ params }: { params: Promise<{ slug
                 } else {
                     setError("Document not found");
                 }
-                const histRes = await fetch(`/api/documents/${docId}/history`);
-                if (histRes.ok) setHistory(await histRes.json());
             } catch (e) {
                 console.error(e);
                 setError("Failed to load");
@@ -105,47 +71,6 @@ export default function WorkspaceEditorPage({ params }: { params: Promise<{ slug
         };
         fetchDoc();
     }, [docId]);
-
-    useEffect(() => {
-        if (shareEmail.length < 2) { setUserSuggestions([]); return; }
-        const search = async () => {
-            const res = await fetch(`/api/users/search?q=${encodeURIComponent(shareEmail)}`);
-            if (res.ok) setUserSuggestions(await res.json());
-        };
-        const t = setTimeout(search, 300);
-        return () => clearTimeout(t);
-    }, [shareEmail]);
-
-    const editor = useEditor({
-        extensions: [
-            StarterKit,
-            Collaboration.configure({ document: ydoc }),
-        ],
-        content: initialContent,
-        editorProps: {
-            attributes: {
-                class: "prose prose-lg dark:prose-invert max-w-none focus:outline-none p-8 min-h-[calc(100vh-200px)]",
-            },
-        },
-        immediatelyRender: false,
-        onSelectionUpdate: ({ editor }) => {
-            const { from, to } = editor.state.selection;
-            sendCursorUpdate(from, to);
-        },
-    }, [ydoc, initialContent]);
-
-    useEffect(() => {
-        if (!editor) return;
-        let timeoutId: NodeJS.Timeout;
-        const handleUpdate = () => {
-            clearTimeout(timeoutId);
-            timeoutId = setTimeout(() => handleSave(editor.getHTML()), 2000);
-        };
-        editor.on("update", handleUpdate);
-        return () => { clearTimeout(timeoutId); editor.off("update", handleUpdate); };
-    }, [editor]);
-
-    useEffect(() => () => { ydoc.destroy(); }, [ydoc]);
 
     const handleSave = useCallback(async (content: string) => {
         setSaving(true);
@@ -167,79 +92,118 @@ export default function WorkspaceEditorPage({ params }: { params: Promise<{ slug
         setTimeout(() => setCopied(false), 2000);
     };
 
-    const ToolbarButton = ({ onClick, isActive, children, title: t }: any) => (
-        <Button variant="ghost" size="sm" onClick={onClick} title={t}
-            className={`h-9 w-9 p-0 ${isActive ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-secondary"}`}>
-            {children}
-        </Button>
-    );
-
     if (loading) return <div className="flex items-center justify-center h-full"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
     if (error) return <div className="flex items-center justify-center h-full"><p className="text-destructive">{error}</p></div>;
 
+    // Wait for Yjs to initialize on client - also check awareness.doc exists
+    const yjsReady = !!ydoc && !!awareness && !!awareness.doc;
+
     return (
         <div className="flex flex-col h-full bg-background">
-            <div className="sticky top-0 z-10 bg-background border-b">
-                <div className="flex items-center justify-between p-2 gap-4">
-                    <div className="flex items-center gap-2">
+            {/* Header */}
+            <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b">
+                <div className="flex items-center justify-between p-3 gap-4">
+                    {/* Left: Back + Title */}
+                    <div className="flex items-center gap-3">
                         <Button variant="ghost" size="icon" asChild>
                             <Link href={`/workspace/${slug}/documents`}><ArrowLeft className="w-4 h-4" /></Link>
                         </Button>
                         <Input value={title} onChange={(e) => setTitle(e.target.value)}
-                            className="font-medium border-0 bg-transparent focus-visible:ring-0 text-lg w-64" placeholder="Untitled Document" />
-                        <div className="flex items-center -space-x-2 ml-4">
-                            <Avatar className="h-8 w-8 border-2" style={{ borderColor: userColor }}>
-                                <AvatarImage src={userImage} />
-                                <AvatarFallback style={{ backgroundColor: userColor }} className="text-xs text-white">{userName?.[0]}</AvatarFallback>
-                            </Avatar>
-                            {remoteUsers.map((u) => (
-                                <Avatar key={u.socketId} className="h-8 w-8 border-2" style={{ borderColor: u.user.color }}>
-                                    <AvatarImage src={u.user.image} />
-                                    <AvatarFallback style={{ backgroundColor: u.user.color }} className="text-xs text-white">{u.user.name?.[0]}</AvatarFallback>
-                                </Avatar>
-                            ))}
-                            <div className="flex items-center justify-center h-8 w-8 rounded-full bg-muted text-xs ml-2 border">
-                                <Cloud className={`w-3 h-3 mr-1 ${connected ? "text-emerald-500" : "text-muted-foreground"}`} />
-                                {remoteUsers.length + 1}
-                            </div>
-                        </div>
+                            className="font-semibold border-0 bg-transparent focus-visible:ring-0 text-lg w-64"
+                            placeholder="Untitled Document" />
                     </div>
+
+                    {/* Center: Presence */}
+                    <div className="flex items-center gap-3">
+                        {remoteUsers.length > 0 ? (
+                            <>
+                                <span className="text-sm text-muted-foreground hidden sm:inline">Editing with</span>
+                                <div className="flex -space-x-2">
+                                    {remoteUsers.slice(0, 5).map((u) => (
+                                        <Avatar key={u.socketId} className="h-8 w-8 border-2 border-background ring-2 ring-background">
+                                            <AvatarImage src={u.user.image} alt={u.user.name} />
+                                            <AvatarFallback style={{ backgroundColor: u.user.color }} className="text-xs text-white font-medium">
+                                                {u.user.name?.[0]?.toUpperCase()}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                    ))}
+                                </div>
+                                {remoteUsers.length > 5 && (
+                                    <span className="text-sm text-muted-foreground">+{remoteUsers.length - 5}</span>
+                                )}
+                            </>
+                        ) : (
+                            <span className="text-sm text-muted-foreground hidden sm:inline">Solo editing</span>
+                        )}
+
+                        {/* Connection Status Badge */}
+                        <Badge
+                            variant={connected ? "default" : "secondary"}
+                            className={`h-7 px-3 gap-1.5 ${connected ? "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20" : ""}`}
+                        >
+                            {connected ? (
+                                <>
+                                    <Wifi className="w-3 h-3" />
+                                    <span className="hidden sm:inline">Live</span>
+                                </>
+                            ) : (
+                                <>
+                                    <WifiOff className="w-3 h-3" />
+                                    <span className="hidden sm:inline">
+                                        {connectionState === 'reconnecting' ? 'Reconnecting...' : 'Offline'}
+                                    </span>
+                                </>
+                            )}
+                        </Badge>
+                    </div>
+
+                    {/* Right: Actions */}
                     <div className="flex items-center gap-2">
+                        <Button variant="ghost" size="sm" onClick={() => setHistoryOpen(true)}>
+                            <Clock className="w-4 h-4 mr-1" />
+                            <span className="hidden sm:inline">History</span>
+                        </Button>
                         <Button variant="ghost" size="sm" onClick={copyShareLink}>
                             {copied ? <Check className="w-4 h-4 mr-1" /> : <Share2 className="w-4 h-4 mr-1" />}
-                            {copied ? "Copied!" : "Copy Link"}
+                            <span className="hidden sm:inline">{copied ? "Copied!" : "Share"}</span>
                         </Button>
-                        <Button onClick={() => editor && handleSave(editor.getHTML())} disabled={saving}
-                            variant={saved ? "outline" : "default"} className={saved ? "text-emerald-600 border-emerald-600" : ""} size="sm">
+                        <Button
+                            onClick={() => {/* Save handled by editor */ }}
+                            disabled={saving}
+                            variant={saved ? "outline" : "default"}
+                            className={saved ? "text-emerald-600 border-emerald-600" : ""}
+                            size="sm"
+                        >
                             {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : saved ? <Check className="w-4 h-4 mr-2" /> : <Save className="w-4 h-4 mr-2" />}
-                            {saving ? "Saving..." : saved ? "Saved" : "Save"}
+                            <span className="hidden sm:inline">{saving ? "Saving..." : saved ? "Saved" : "Save"}</span>
                         </Button>
                     </div>
                 </div>
-                {editor && (
-                    <div className="flex items-center gap-1 p-2 pt-0 flex-wrap border-t">
-                        <ToolbarButton onClick={() => editor.chain().focus().toggleBold().run()} isActive={editor.isActive("bold")} title="Bold"><Bold className="w-4 h-4" /></ToolbarButton>
-                        <ToolbarButton onClick={() => editor.chain().focus().toggleItalic().run()} isActive={editor.isActive("italic")} title="Italic"><Italic className="w-4 h-4" /></ToolbarButton>
-                        <ToolbarButton onClick={() => editor.chain().focus().toggleStrike().run()} isActive={editor.isActive("strike")} title="Strike"><Strikethrough className="w-4 h-4" /></ToolbarButton>
-                        <ToolbarButton onClick={() => editor.chain().focus().toggleCode().run()} isActive={editor.isActive("code")} title="Code"><Code className="w-4 h-4" /></ToolbarButton>
-                        <div className="w-px h-6 bg-border mx-1" />
-                        <ToolbarButton onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} isActive={editor.isActive("heading", { level: 1 })} title="H1"><Heading1 className="w-4 h-4" /></ToolbarButton>
-                        <ToolbarButton onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} isActive={editor.isActive("heading", { level: 2 })} title="H2"><Heading2 className="w-4 h-4" /></ToolbarButton>
-                        <div className="w-px h-6 bg-border mx-1" />
-                        <ToolbarButton onClick={() => editor.chain().focus().toggleBulletList().run()} isActive={editor.isActive("bulletList")} title="List"><List className="w-4 h-4" /></ToolbarButton>
-                        <ToolbarButton onClick={() => editor.chain().focus().toggleOrderedList().run()} isActive={editor.isActive("orderedList")} title="Ordered"><ListOrdered className="w-4 h-4" /></ToolbarButton>
-                        <ToolbarButton onClick={() => editor.chain().focus().toggleBlockquote().run()} isActive={editor.isActive("blockquote")} title="Quote"><Quote className="w-4 h-4" /></ToolbarButton>
-                        <div className="w-px h-6 bg-border mx-1" />
-                        <ToolbarButton onClick={() => editor.chain().focus().undo().run()} title="Undo"><Undo className="w-4 h-4" /></ToolbarButton>
-                        <ToolbarButton onClick={() => editor.chain().focus().redo().run()} title="Redo"><Redo className="w-4 h-4" /></ToolbarButton>
+            </div>
+
+            {/* Editor Content - Only render when Yjs is ready */}
+            <div className="flex-1 overflow-hidden h-full">
+                {yjsReady ? (
+                    <div className="h-full flex flex-col">
+                        <CollaborativeEditor
+                            ydoc={ydoc}
+                            awareness={awareness}
+                            initialContent={initialContent}
+                            permission={permission}
+                            userName={userName}
+                            userColor={userColor}
+                            onSave={handleSave}
+                            saving={saving}
+                            historyOpen={historyOpen}
+                            onHistoryClose={() => setHistoryOpen(false)}
+                            documentId={docId}
+                        />
+                    </div>
+                ) : (
+                    <div className="flex items-center justify-center h-full">
+                        <Loader2 className="w-8 h-8 animate-spin text-primary" />
                     </div>
                 )}
-            </div>
-            <div className="flex-1 overflow-auto bg-background">
-                <div className="max-w-4xl mx-auto relative">
-                    <EditorContent editor={editor} />
-                    <RemoteCursors editor={editor} remoteUsers={remoteUsers} />
-                </div>
             </div>
         </div>
     );
