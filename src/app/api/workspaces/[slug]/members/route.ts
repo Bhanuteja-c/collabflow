@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { Activity } from "@/lib/activity";
 
 // Helper to resolve slug to ID
 async function resolveWorkspaceId(slugOrId: string) {
@@ -134,6 +135,9 @@ export async function POST(
                 },
             },
         });
+
+        // Log activity
+        Activity.memberJoined(targetUser.id, workspaceId, targetUser.name || targetUser.email || "A new member");
 
         return NextResponse.json(member, { status: 201 });
     } catch (error) {

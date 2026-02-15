@@ -2,8 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import { Logo } from "@/components/ui/Logo";
 import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
+import { useWorkspacePresence } from "@/hooks/useWorkspacePresence";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
     Sheet,
     SheetContent,
@@ -40,6 +43,17 @@ const navItems = [
 function SidebarContent({ workspaceSlug, onItemClick }: { workspaceSlug: string; onItemClick?: () => void }) {
     const pathname = usePathname();
     const baseUrl = `/workspace/${workspaceSlug}`;
+    const [workspaceId, setWorkspaceId] = useState<string | undefined>();
+
+    // Fetch workspace ID from slug
+    useEffect(() => {
+        fetch(`/api/workspaces/${workspaceSlug}`)
+            .then(res => res.ok ? res.json() : null)
+            .then(data => { if (data?.id) setWorkspaceId(data.id); })
+            .catch(() => { });
+    }, [workspaceSlug]);
+
+    const { onlineUsers } = useWorkspacePresence(workspaceId);
 
     return (
         <>
@@ -79,6 +93,36 @@ function SidebarContent({ workspaceSlug, onItemClick }: { workspaceSlug: string;
                     );
                 })}
             </nav>
+
+            {/* Online Members Section */}
+            {onlineUsers.length > 0 && (
+                <div className="p-3 border-t">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2 px-1">
+                        Online — {onlineUsers.length}
+                    </p>
+                    <div className="space-y-1">
+                        {onlineUsers.slice(0, 5).map((u) => (
+                            <div key={u.socketId} className="flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-muted/50 transition-colors">
+                                <div className="relative flex-shrink-0">
+                                    <Avatar className="h-6 w-6">
+                                        {u.user.image && <AvatarImage src={u.user.image} />}
+                                        <AvatarFallback className="text-[10px] bg-primary/15 text-primary">
+                                            {u.user.name?.[0]?.toUpperCase() || "?"}
+                                        </AvatarFallback>
+                                    </Avatar>
+                                    <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-card" />
+                                </div>
+                                <span className="text-xs text-foreground truncate">{u.user.name}</span>
+                            </div>
+                        ))}
+                        {onlineUsers.length > 5 && (
+                            <p className="text-[10px] text-muted-foreground px-2 py-1">
+                                +{onlineUsers.length - 5} more online
+                            </p>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {/* Footer */}
             <div className="p-4 border-t text-xs text-muted-foreground text-center">
@@ -121,3 +165,4 @@ export function MobileSidebar({
         </Sheet>
     );
 }
+

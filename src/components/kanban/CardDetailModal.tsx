@@ -35,6 +35,9 @@ import {
     X,
     Loader2,
     AlertCircle,
+    Tag,
+    Clock,
+    CircleCheck,
 } from "lucide-react";
 import { format, isAfter, isBefore, addDays } from "date-fns";
 
@@ -65,6 +68,9 @@ interface Card {
     description?: string;
     priority?: "low" | "medium" | "high";
     dueDate?: string;
+    startDate?: string;
+    labels?: string[];
+    status?: string;
     assigneeId?: string;
     assignee?: User;
     comments?: Comment[];
@@ -89,6 +95,19 @@ const priorityConfig = {
     low: { color: "bg-emerald-500", textColor: "text-emerald-600 dark:text-emerald-400", label: "Low", icon: "🟢" },
 };
 
+const PRESET_LABELS = ["Bug", "Feature", "Enhancement", "Documentation", "Design", "Urgent", "Backend", "Frontend"];
+
+const labelColorMap: Record<string, string> = {
+    Bug: "bg-red-500/15 text-red-700 dark:text-red-300",
+    Feature: "bg-blue-500/15 text-blue-700 dark:text-blue-300",
+    Enhancement: "bg-violet-500/15 text-violet-700 dark:text-violet-300",
+    Documentation: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+    Design: "bg-pink-500/15 text-pink-700 dark:text-pink-300",
+    Urgent: "bg-red-600/15 text-red-800 dark:text-red-200",
+    Backend: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+    Frontend: "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300",
+};
+
 export default function CardDetailModal({
     card,
     isOpen,
@@ -101,6 +120,9 @@ export default function CardDetailModal({
     const [description, setDescription] = useState(card?.description || "");
     const [priority, setPriority] = useState<"low" | "medium" | "high">(card?.priority || "medium");
     const [dueDate, setDueDate] = useState(card?.dueDate || "");
+    const [startDate, setStartDate] = useState(card?.startDate || "");
+    const [labels, setLabels] = useState<string[]>(card?.labels || []);
+    const [status, setStatus] = useState(card?.status || "active");
     const [assigneeId, setAssigneeId] = useState(card?.assigneeId || "");
     const [comments, setComments] = useState<Comment[]>(card?.comments || []);
     const [checklist, setChecklist] = useState<ChecklistItem[]>(card?.checklist || []);
@@ -119,6 +141,9 @@ export default function CardDetailModal({
             setDescription(card.description || "");
             setPriority(card.priority || "medium");
             setDueDate(card.dueDate ? card.dueDate.split("T")[0] : "");
+            setStartDate(card.startDate ? card.startDate.split("T")[0] : "");
+            setLabels(card.labels || []);
+            setStatus(card.status || "active");
             setAssigneeId(card.assigneeId || "");
             fetchCardDetails();
         }
@@ -189,6 +214,25 @@ export default function CardDetailModal({
     const handleAssigneeChange = (userId: string) => {
         setAssigneeId(userId);
         saveField("assigneeId", userId || null);
+    };
+
+    const handleStartDateChange = (value: string) => {
+        setStartDate(value);
+        saveField("startDate", value ? new Date(value).toISOString() : null);
+    };
+
+    const handleLabelToggle = (label: string) => {
+        const newLabels = labels.includes(label)
+            ? labels.filter(l => l !== label)
+            : [...labels, label];
+        setLabels(newLabels);
+        saveField("labels", newLabels);
+    };
+
+    const handleStatusToggle = () => {
+        const newStatus = status === "active" ? "completed" : "active";
+        setStatus(newStatus);
+        saveField("status", newStatus);
     };
 
     // Comments
@@ -399,6 +443,51 @@ export default function CardDetailModal({
                                 ))}
                             </DropdownMenuContent>
                         </DropdownMenu>
+                        {/* Start Date */}
+                        <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-muted-foreground" />
+                            <Input
+                                type="date"
+                                value={startDate}
+                                onChange={(e) => handleStartDateChange(e.target.value)}
+                                className="w-auto h-9"
+                                title="Start date"
+                            />
+                        </div>
+
+                        {/* Status toggle */}
+                        <Button
+                            variant={status === "completed" ? "default" : "outline"}
+                            size="sm"
+                            onClick={handleStatusToggle}
+                            className={`gap-2 ${status === "completed" ? "bg-emerald-600 hover:bg-emerald-700" : ""}`}
+                        >
+                            <CircleCheck className="w-4 h-4" />
+                            {status === "completed" ? "Completed" : "Mark Done"}
+                        </Button>
+                    </div>
+
+                    {/* Labels */}
+                    <div className="space-y-2">
+                        <h4 className="font-medium text-sm text-muted-foreground flex items-center gap-2">
+                            <Tag className="w-4 h-4" />
+                            Labels
+                        </h4>
+                        <div className="flex flex-wrap gap-1.5">
+                            {PRESET_LABELS.map((label) => (
+                                <button
+                                    key={label}
+                                    onClick={() => handleLabelToggle(label)}
+                                    className={`text-xs font-medium px-2.5 py-1 rounded-full border transition-all ${
+                                        labels.includes(label)
+                                            ? `${labelColorMap[label] || "bg-violet-500/15 text-violet-700"} border-current/20 ring-1 ring-current/20`
+                                            : "bg-muted/50 text-muted-foreground border-border hover:bg-muted"
+                                    }`}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
                     {/* Description */}

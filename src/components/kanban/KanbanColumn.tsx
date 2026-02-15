@@ -7,7 +7,14 @@ import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, MoreHorizontal, X } from "lucide-react";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Plus, MoreHorizontal, X, Pencil, Trash2 } from "lucide-react";
 import KanbanCard from "./KanbanCard";
 
 interface User {
@@ -22,12 +29,14 @@ interface CardType {
     description?: string;
     priority?: "low" | "medium" | "high";
     dueDate?: string;
+    startDate?: string;
+    labels?: string[];
+    status?: string;
     assignee?: User;
     assigneeId?: string;
     commentsCount?: number;
     checklistCompleted?: number;
     checklistTotal?: number;
-    labels?: string[];
     order?: number;
 }
 
@@ -41,6 +50,9 @@ interface ColumnProps {
     onUpdateCard?: (cardId: string, title: string) => void;
     onDeleteCard?: (cardId: string) => void;
     onOpenDetail?: (card: CardType) => void;
+    onRenameColumn?: (columnId: string, title: string) => void;
+    onDeleteColumn?: (columnId: string) => void;
+    canDelete?: boolean;
 }
 
 // Color coding for columns
@@ -53,9 +65,20 @@ const columnColors: Record<string, { bg: string; text: string; dot: string }> = 
 
 const defaultColors = { bg: "bg-violet-500/10", text: "text-violet-600 dark:text-violet-400", dot: "bg-violet-500" };
 
-export default function KanbanColumn({ column, onAddCard, onUpdateCard, onDeleteCard, onOpenDetail }: ColumnProps) {
+export default function KanbanColumn({
+    column,
+    onAddCard,
+    onUpdateCard,
+    onDeleteCard,
+    onOpenDetail,
+    onRenameColumn,
+    onDeleteColumn,
+    canDelete = true,
+}: ColumnProps) {
     const [isAdding, setIsAdding] = useState(false);
     const [newCardTitle, setNewCardTitle] = useState("");
+    const [isRenaming, setIsRenaming] = useState(false);
+    const [renameDraft, setRenameDraft] = useState("");
 
     const { setNodeRef, isOver } = useDroppable({
         id: column.id,
@@ -80,6 +103,18 @@ export default function KanbanColumn({ column, onAddCard, onUpdateCard, onDelete
         }
     };
 
+    const handleStartRename = () => {
+        setRenameDraft(column.title);
+        setIsRenaming(true);
+    };
+
+    const handleSaveRename = () => {
+        if (renameDraft.trim() && renameDraft.trim() !== column.title) {
+            onRenameColumn?.(column.id, renameDraft.trim());
+        }
+        setIsRenaming(false);
+    };
+
     return (
         <div className="w-72 sm:w-80 flex-shrink-0">
             <Card
@@ -93,16 +128,56 @@ export default function KanbanColumn({ column, onAddCard, onUpdateCard, onDelete
                 {/* Column Header */}
                 <CardHeader className={`p-3 pb-2 rounded-t-lg ${colors.bg}`}>
                     <div className="flex items-center justify-between">
-                        <CardTitle className={`text-sm font-semibold flex items-center gap-2 ${colors.text}`}>
-                            <div className={`w-2.5 h-2.5 rounded-full ${colors.dot}`} />
-                            <span className="text-foreground">{column.title}</span>
-                            <span className="text-xs font-normal bg-background/80 text-muted-foreground px-2 py-0.5 rounded-full">
-                                {column.cards.length}
-                            </span>
-                        </CardTitle>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground">
-                            <MoreHorizontal className="w-4 h-4" />
-                        </Button>
+                        {isRenaming ? (
+                            <Input
+                                value={renameDraft}
+                                onChange={(e) => setRenameDraft(e.target.value)}
+                                onBlur={handleSaveRename}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter") handleSaveRename();
+                                    if (e.key === "Escape") setIsRenaming(false);
+                                }}
+                                autoFocus
+                                className="text-sm font-semibold h-7 w-full"
+                            />
+                        ) : (
+                            <CardTitle className={`text-sm font-semibold flex items-center gap-2 ${colors.text}`}>
+                                <div className={`w-2.5 h-2.5 rounded-full ${colors.dot}`} />
+                                <span className="text-foreground">{column.title}</span>
+                                <span className="text-xs font-normal bg-background/80 text-muted-foreground px-2 py-0.5 rounded-full">
+                                    {column.cards.length}
+                                </span>
+                            </CardTitle>
+                        )}
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground">
+                                    <MoreHorizontal className="w-4 h-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-40">
+                                <DropdownMenuItem onClick={() => setIsAdding(true)} className="gap-2">
+                                    <Plus className="w-3.5 h-3.5" />
+                                    Add Card
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={handleStartRename} className="gap-2">
+                                    <Pencil className="w-3.5 h-3.5" />
+                                    Rename
+                                </DropdownMenuItem>
+                                {canDelete && (
+                                    <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                            onClick={() => onDeleteColumn?.(column.id)}
+                                            className="gap-2 text-red-600 focus:text-red-600"
+                                        >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                            Delete Column
+                                        </DropdownMenuItem>
+                                    </>
+                                )}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
                 </CardHeader>
 

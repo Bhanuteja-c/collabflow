@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ensureUser } from "@/lib/ensureUser";
+import { Activity } from "@/lib/activity";
+import { CrossNotifier } from "@/lib/crossNotifier";
 
 // Helper to check workspace access via card -> column -> board -> workspace
 async function checkCardAccess(cardId: string, userId: string) {
@@ -62,7 +64,7 @@ export async function PUT(
         }
 
         const body = await req.json();
-        const { title, description, columnId, order, priority, dueDate, assigneeId, startDate, endDate, estimatedHours, actualHours, tags, status, isBlocked, blockedReason } = body;
+        const { title, description, columnId, order, priority, dueDate, assigneeId, startDate, labels, status } = body;
 
         const card = await prisma.card.update({
             where: { id },
@@ -75,13 +77,8 @@ export async function PUT(
                 ...(dueDate !== undefined && { dueDate: dueDate ? new Date(dueDate) : null }),
                 ...(assigneeId !== undefined && { assigneeId: assigneeId || null }),
                 ...(startDate !== undefined && { startDate: startDate ? new Date(startDate) : null }),
-                ...(endDate !== undefined && { endDate: endDate ? new Date(endDate) : null }),
-                ...(estimatedHours !== undefined && { estimatedHours }),
-                ...(actualHours !== undefined && { actualHours }),
-                ...(tags !== undefined && { tags }),
+                ...(labels !== undefined && { labels }),
                 ...(status !== undefined && { status }),
-                ...(isBlocked !== undefined && { isBlocked }),
-                ...(blockedReason !== undefined && { blockedReason }),
             },
             include: {
                 assignee: {
@@ -89,6 +86,38 @@ export async function PUT(
                 }
             }
         });
+
+        // Log activity and cross-feature notifications
+        const workspaceId = existing.column.board.workspace?.id;
+        if (workspaceId) {
+            // Card assigned → log activity + chat notification
+            if (assigneeId !== undefined && assigneeId !== existing.assigneeId) {
+                const assignee = card.assignee;
+                if (assignee) {
+                    Activity.cardAssigned(userId, workspaceId, id, card.title, assignee.name || "someone");
+                    CrossNotifier.cardAssigned({
+                        workspaceId,
+                        userId,
+                        cardTitle: card.title,
+                        assigneeName: assignee.name || "someone",
+                    });
+                }
+            }
+
+            // Card moved to a "done" column → chat notification
+            if (columnId !== undefined && columnId !== existing.columnId) {
+                const newColumn = await prisma.column.findUnique({ where: { id: columnId }, select: { title: true } });
+                const doneNames = ["done", "complete", "completed", "finished", "closed"];
+                if (newColumn && doneNames.includes(newColumn.title.toLowerCase())) {
+                    CrossNotifier.cardCompleted({
+                        workspaceId,
+                        userId,
+                        cardTitle: card.title,
+                        boardName: existing.column.board.title,
+                    });
+                }
+            }
+        }
 
         return NextResponse.json(card);
     } catch (error) {

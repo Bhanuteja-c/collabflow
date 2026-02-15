@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, use } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,7 +13,7 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Users, UserPlus, Loader2, Mail, Shield, Trash2, Crown } from "lucide-react";
-
+    
 export default function WorkspaceMembersPage({ params }: { params: Promise<{ slug: string }> }) {
     const { slug } = use(params);
     const [workspace, setWorkspace] = useState<any>(null);
@@ -72,11 +73,12 @@ export default function WorkspaceMembersPage({ params }: { params: Promise<{ slu
                 setMembers((prev) => [...prev, member]);
                 setInviteEmail("");
                 setDialogOpen(false);
+                toast.success("Member invited successfully");
             } else {
                 const err = await res.json();
-                alert(err.error || "Failed to invite");
+                toast.error(err.error || "Failed to invite member");
             }
-        } catch (e) { console.error(e); }
+        } catch (e) { toast.error("Failed to invite member"); }
         finally { setInviting(false); }
     };
 
@@ -85,7 +87,8 @@ export default function WorkspaceMembersPage({ params }: { params: Promise<{ slu
         try {
             await fetch(`/api/workspaces/${workspace.id}/members?userId=${userId}`, { method: "DELETE" });
             setMembers((prev) => prev.filter((m) => m.userId !== userId));
-        } catch (e) { console.error(e); }
+            toast.success("Member removed");
+        } catch (e) { toast.error("Failed to remove member"); }
     };
 
     const handleRoleChange = async (userId: string, newRole: string) => {
@@ -97,7 +100,8 @@ export default function WorkspaceMembersPage({ params }: { params: Promise<{ slu
                 body: JSON.stringify({ userId, role: newRole }),
             });
             setMembers((prev) => prev.map((m) => m.userId === userId ? { ...m, role: newRole } : m));
-        } catch (e) { console.error(e); }
+            toast.success(`Role updated to ${newRole}`);
+        } catch (e) { toast.error("Failed to update role"); }
     };
 
     const canManage = ["owner", "admin"].includes(userRole);

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useSession } from "next-auth/react";
-import { Loader2, ArrowLeft, Check, Share2, Wifi, WifiOff, Save, Clock } from "lucide-react";
+import { Loader2, ArrowLeft, Check, Share2, Wifi, WifiOff, Save, Clock, Download, FileText } from "lucide-react";
 import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useDocumentSync } from "@/hooks/useDocumentSync";
@@ -39,6 +39,11 @@ export default function WorkspaceEditorPage({ params }: { params: Promise<{ slug
     const userName = session?.user?.name || "Anonymous";
     const userImage = session?.user?.image || "";
     const userColor = getColorFromId(userId || docId);
+
+    // Word count state
+    const [wordCount, setWordCount] = useState(0);
+    const [charCount, setCharCount] = useState(0);
+    const contentRef = useRef("");
 
     // Use the enhanced document sync hook
     const { ydoc, awareness, connected, connectionState, remoteUsers } = useDocumentSync({
@@ -91,6 +96,51 @@ export default function WorkspaceEditorPage({ params }: { params: Promise<{ slug
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
     };
+
+    // Track content for word count and export
+    const handleContentChange = useCallback((content: string) => {
+        contentRef.current = content;
+        // Strip HTML tags for plain text counting
+        const text = content.replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+        const words = text ? text.split(/\s+/).length : 0;
+        setWordCount(words);
+        setCharCount(text.length);
+    }, []);
+
+    // Export as markdown
+    const exportMarkdown = useCallback(() => {
+        const content = contentRef.current;
+        // Simple HTML-to-markdown conversion
+        let md = content
+            .replace(/<h1[^>]*>(.*?)<\/h1>/gi, "# $1\n")
+            .replace(/<h2[^>]*>(.*?)<\/h2>/gi, "## $1\n")
+            .replace(/<h3[^>]*>(.*?)<\/h3>/gi, "### $1\n")
+            .replace(/<h4[^>]*>(.*?)<\/h4>/gi, "#### $1\n")
+            .replace(/<strong>(.*?)<\/strong>/gi, "**$1**")
+            .replace(/<b>(.*?)<\/b>/gi, "**$1**")
+            .replace(/<em>(.*?)<\/em>/gi, "*$1*")
+            .replace(/<i>(.*?)<\/i>/gi, "*$1*")
+            .replace(/<code>(.*?)<\/code>/gi, "`$1`")
+            .replace(/<li>(.*?)<\/li>/gi, "- $1\n")
+            .replace(/<br\s*\/?>/gi, "\n")
+            .replace(/<p>(.*?)<\/p>/gi, "$1\n\n")
+            .replace(/<blockquote>(.*?)<\/blockquote>/gi, "> $1\n")
+            .replace(/<[^>]*>/g, "")
+            .replace(/&nbsp;/g, " ")
+            .replace(/&amp;/g, "&")
+            .replace(/&lt;/g, "<")
+            .replace(/&gt;/g, ">")
+            .replace(/\n{3,}/g, "\n\n")
+            .trim();
+
+        const blob = new Blob([md], { type: "text/markdown" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${title.replace(/[^a-zA-Z0-9 ]/g, "").trim() || "document"}.md`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }, [title]);
 
     if (loading) return <div className="flex items-center justify-center h-full"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
     if (error) return <div className="flex items-center justify-center h-full"><p className="text-destructive">{error}</p></div>;
@@ -159,6 +209,10 @@ export default function WorkspaceEditorPage({ params }: { params: Promise<{ slug
 
                     {/* Right: Actions */}
                     <div className="flex items-center gap-2">
+                        <Button variant="ghost" size="sm" onClick={exportMarkdown} title="Export as Markdown">
+                            <Download className="w-4 h-4 mr-1" />
+                            <span className="hidden sm:inline">Export</span>
+                        </Button>
                         <Button variant="ghost" size="sm" onClick={() => setHistoryOpen(true)}>
                             <Clock className="w-4 h-4 mr-1" />
                             <span className="hidden sm:inline">History</span>
@@ -197,6 +251,7 @@ export default function WorkspaceEditorPage({ params }: { params: Promise<{ slug
                             historyOpen={historyOpen}
                             onHistoryClose={() => setHistoryOpen(false)}
                             documentId={docId}
+                            onContentChange={handleContentChange}
                         />
                     </div>
                 ) : (
@@ -204,6 +259,13 @@ export default function WorkspaceEditorPage({ params }: { params: Promise<{ slug
                         <Loader2 className="w-8 h-8 animate-spin text-primary" />
                     </div>
                 )}
+            </div>
+
+            {/* Word Count Footer */}
+            <div className="border-t bg-muted/30 px-4 py-1.5 flex items-center gap-4 text-xs text-muted-foreground">
+                <span><FileText className="w-3 h-3 inline mr-1" />{wordCount} word{wordCount !== 1 ? "s" : ""}</span>
+                <span>{charCount} character{charCount !== 1 ? "s" : ""}</span>
+                <span>~{Math.max(1, Math.ceil(wordCount / 200))} min read</span>
             </div>
         </div>
     );

@@ -24,6 +24,8 @@ import {
     Search
 } from "lucide-react";
 import { ActivityFeed } from "@/components/dashboard/ActivityFeed";
+import { MyTasks } from "@/components/dashboard/MyTasks";
+import { useWorkspacePresence } from "@/hooks/useWorkspacePresence";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
@@ -37,6 +39,7 @@ export default function WorkspaceDashboard({ params }: WorkspaceDashboardProps) 
     const [workspace, setWorkspace] = useState<any>(null);
     const [recentDocs, setRecentDocs] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const { onlineUsers } = useWorkspacePresence(workspace?.id);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -97,7 +100,7 @@ export default function WorkspaceDashboard({ params }: WorkspaceDashboardProps) 
     }
 
     return (
-        <div className="min-h-full p-6 space-y-8 max-w-7xl mx-auto">
+        <div className="min-h-full p-4 md:p-6 space-y-6 md:space-y-8 max-w-7xl mx-auto">
             {/* Header Section */}
             <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
@@ -112,7 +115,7 @@ export default function WorkspaceDashboard({ params }: WorkspaceDashboardProps) 
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: 0.1 }}
-                        className="text-4xl font-bold tracking-tight"
+                        className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight"
                     >
                         {getGreeting()}, <span className="bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">{session?.user?.name?.split(" ")[0]}</span>
                     </motion.h1>
@@ -124,10 +127,10 @@ export default function WorkspaceDashboard({ params }: WorkspaceDashboardProps) 
                     <Button variant="outline" size="icon" className="rounded-full">
                         <Settings className="w-4 h-4" />
                     </Button>
-                    <Button asChild className="rounded-full px-6 shadow-lg shadow-primary/20">
+                    <Button asChild className="rounded-full px-4 sm:px-6 shadow-lg shadow-primary/20">
                         <Link href={`/workspace/${slug}/documents?new=true`}>
-                            <Plus className="w-4 h-4 mr-2" />
-                            Create Project
+                            <Plus className="w-4 h-4 sm:mr-2" />
+                            <span className="hidden sm:inline">Create Project</span>
                         </Link>
                     </Button>
                 </div>
@@ -157,7 +160,7 @@ export default function WorkspaceDashboard({ params }: WorkspaceDashboardProps) 
                     title="Team Members"
                     value={workspace?._count?.members || 0}
                     icon={Users}
-                    trend="2 Online Now"
+                    trend={`${onlineUsers.length + 1} Online Now`}
                     color="text-emerald-500"
                     bgColor="bg-emerald-500/10"
                     delay={0.3}
@@ -271,6 +274,7 @@ export default function WorkspaceDashboard({ params }: WorkspaceDashboardProps) 
                 {/* Sidebar */}
                 <div className="lg:col-span-4 space-y-6">
                     <ActivityFeed />
+                    <MyTasks workspaceId={workspace?.id} />
 
                     {/* Mini Calendar / Tips could go here too */}
                     <Card className="bg-gradient-to-br from-primary/10 via-background to-background border-primary/20">
@@ -282,7 +286,7 @@ export default function WorkspaceDashboard({ params }: WorkspaceDashboardProps) 
                         </CardHeader>
                         <CardContent>
                             <p className="text-xs text-muted-foreground/80 leading-relaxed">
-                                Use <kbd className="bg-background border rounded px-1 text-[10px] font-mono mx-1">Cmd+K</kbd> to open the command palette and quickly navigate between documents and boards.
+                                Press <kbd className="bg-background border rounded px-1 text-[10px] font-mono mx-1">Shift+?</kbd> to see all keyboard shortcuts, or <kbd className="bg-background border rounded px-1 text-[10px] font-mono mx-1">Ctrl+K</kbd> to search.
                             </p>
                         </CardContent>
                     </Card>

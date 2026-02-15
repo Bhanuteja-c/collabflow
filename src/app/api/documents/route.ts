@@ -55,10 +55,21 @@ export async function GET(request: NextRequest) {
                 author: {
                     select: { id: true, name: true, image: true },
                 },
+                stars: {
+                    where: { userId },
+                    select: { id: true },
+                },
             },
         });
 
-        return NextResponse.json(documents);
+        // Flatten stars to isStarred boolean
+        const docsWithStars = documents.map(doc => ({
+            ...doc,
+            isStarred: doc.stars.length > 0,
+            stars: undefined,
+        }));
+
+        return NextResponse.json(docsWithStars);
     } catch (error) {
         console.error("[API/documents] Error:", error);
         return NextResponse.json({

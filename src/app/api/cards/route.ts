@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ensureUser } from "@/lib/ensureUser";
 import { Activity } from "@/lib/activity";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rateLimit";
 
 // POST /api/cards - Create a new card
 export async function POST(req: NextRequest) {
@@ -15,6 +16,16 @@ export async function POST(req: NextRequest) {
         }
 
         const userId = await ensureUser(session.user as any);
+
+        // Rate limit check
+        const rl = checkRateLimit(`card:${userId}`, RATE_LIMITS.write);
+        if (!rl.success) {
+            return NextResponse.json(
+                { error: "Too many requests. Please wait." },
+                { status: 429, headers: { "Retry-After": String(rl.retryAfter) } }
+            );
+        }
+
         const body = await req.json();
         const { title, description, columnId } = body;
 

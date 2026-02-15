@@ -36,6 +36,7 @@ model User {
 
   // Document sharing
   sharedDocuments DocumentShare[]
+  starredDocuments DocumentStar[]
 
   // Notifications
   notifications Notification[]
@@ -171,6 +172,7 @@ model Document {
 
   history DocumentHistory[]
   shares  DocumentShare[]
+  stars   DocumentStar[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -258,8 +260,11 @@ model Card {
   order       Int     @default(0)
 
   // Enhanced fields for Kanban improvements
-  priority String    @default("medium") // "low" | "medium" | "high"
-  dueDate  DateTime?
+  priority  String    @default("medium") // "low" | "medium" | "high"
+  dueDate   DateTime?
+  startDate DateTime?
+  labels    String[]  @default([])
+  status    String    @default("active") // "active" | "completed" | "archived"
 
   // Assignee (single user for simplicity)
   assigneeId String?
@@ -313,9 +318,10 @@ model ChecklistItem {
 
 // Chat models
 model Channel {
-  id   String @id @default(cuid())
-  name String
-  type String @default("public") // public, private, direct
+  id          String  @id @default(cuid())
+  name        String
+  description String? // Channel topic/description
+  type        String  @default("public") // public, private, direct
 
   workspaceId String?
   workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -340,7 +346,8 @@ model ChannelMember {
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  role String @default("member") // admin, member
+  role       String    @default("member") // admin, member
+  lastReadAt DateTime? // For unread message tracking
 
   joinedAt DateTime @default(now())
 
@@ -360,6 +367,16 @@ model Message {
   isDeleted Boolean   @default(false)
   deletedAt DateTime?
 
+  // Pinning
+  isPinned Boolean   @default(false)
+  pinnedAt DateTime?
+
+  // Threading support
+  parentId    String?
+  parent      Message?   @relation("MessageThread", fields: [parentId], references: [id], onDelete: SetNull)
+  replies     Message[]  @relation("MessageThread")
+  replyCount  Int        @default(0)
+
   channelId String
   channel   Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
@@ -372,6 +389,7 @@ model Message {
 
   @@index([channelId])
   @@index([authorId])
+  @@index([parentId])
 }
 
 model Reaction {
@@ -389,6 +407,23 @@ model Reaction {
   @@unique([messageId, userId, emoji])
   @@index([messageId])
   @@index([userId])
+}
+
+// Starred/Favorite Documents
+model DocumentStar {
+  id String @id @default(cuid())
+
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([documentId, userId])
+  @@index([userId])
+  @@index([documentId])
 }
 
 // Activity Feed - tracks team actions for dashboard

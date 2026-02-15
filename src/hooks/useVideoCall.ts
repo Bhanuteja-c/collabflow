@@ -17,6 +17,7 @@ interface Peer {
     connection: RTCPeerConnection;
     stream: MediaStream | null;
     connectionQuality: 'excellent' | 'good' | 'fair' | 'poor' | 'unknown';
+    iceCandidateBuffer: RTCIceCandidateInit[];
 }
 
 export interface ChatMessage {
@@ -258,6 +259,7 @@ export function useVideoCall({ roomId, userId, userName, userImage, localStream 
             connection: pc,
             stream: null,
             connectionQuality: 'unknown',
+            iceCandidateBuffer: [],
         };
         peersRef.current.set(targetSocketId, peer);
         setPeers(Array.from(peersRef.current.values()));
@@ -346,26 +348,45 @@ export function useVideoCall({ roomId, userId, userName, userImage, localStream 
             });
         });
 
-        // Handle new user joining
+        // Handle new user joining — existing user should NOT initiate (wait for offer)
         socket.on("user-joined-room", (data: { socketId: string; userId: string; userName: string; userImage: string }) => {
             console.log("[Socket.io] User joined:", data);
             createPeerConnection(
                 data.socketId,
                 { id: data.userId, name: data.userName, image: data.userImage },
-                true
+                false  // Existing user waits for offer from new joiner
             );
         });
 
         // Handle offer
         socket.on("offer", async (data: { offer: RTCSessionDescriptionInit; fromSocketId: string; userData: UserData }) => {
-            let pc = peersRef.current.get(data.fromSocketId)?.connection;
+            let peer = peersRef.current.get(data.fromSocketId);
 
-            if (!pc) {
-                pc = createPeerConnection(data.fromSocketId, data.userData, false);
+            if (!peer) {
+                const pc = createPeerConnection(data.fromSocketId, data.userData, false);
+                peer = peersRef.current.get(data.fromSocketId)!;
             }
 
+            const pc = peer.connection;
+
             try {
+                // Handle glare: if we already have a local offer, rollback first
+                if (pc.signalingState === 'have-local-offer') {
+                    console.log(`[WebRTC] Glare detected with ${data.fromSocketId}, rolling back`);
+                    await pc.setLocalDescription({ type: 'rollback' });
+                }
+
                 await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+
+                // Drain buffered ICE candidates
+                if (peer.iceCandidateBuffer.length > 0) {
+                    console.log(`[WebRTC] Draining ${peer.iceCandidateBuffer.length} buffered ICE candidates`);
+                    for (const candidate of peer.iceCandidateBuffer) {
+                        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+                    }
+                    peer.iceCandidateBuffer = [];
+                }
+
                 const answer = await pc.createAnswer();
                 await pc.setLocalDescription(answer);
                 socket.emit("answer", {
@@ -383,18 +404,32 @@ export function useVideoCall({ roomId, userId, userName, userImage, localStream 
             if (peer) {
                 try {
                     await peer.connection.setRemoteDescription(new RTCSessionDescription(data.answer));
+
+                    // Drain buffered ICE candidates
+                    if (peer.iceCandidateBuffer.length > 0) {
+                        console.log(`[WebRTC] Draining ${peer.iceCandidateBuffer.length} buffered ICE candidates after answer`);
+                        for (const candidate of peer.iceCandidateBuffer) {
+                            await peer.connection.addIceCandidate(new RTCIceCandidate(candidate));
+                        }
+                        peer.iceCandidateBuffer = [];
+                    }
                 } catch (err) {
                     console.error("[WebRTC] Error setting answer:", err);
                 }
             }
         });
 
-        // Handle ICE candidate
+        // Handle ICE candidate — buffer if remote description not yet set
         socket.on("ice-candidate", async (data: { candidate: RTCIceCandidateInit; fromSocketId: string }) => {
             const peer = peersRef.current.get(data.fromSocketId);
             if (peer) {
                 try {
-                    await peer.connection.addIceCandidate(new RTCIceCandidate(data.candidate));
+                    if (peer.connection.remoteDescription) {
+                        await peer.connection.addIceCandidate(new RTCIceCandidate(data.candidate));
+                    } else {
+                        // Buffer candidate until remote description is set
+                        peer.iceCandidateBuffer.push(data.candidate);
+                    }
                 } catch (err) {
                     console.error("[WebRTC] Error adding ICE candidate:", err);
                 }

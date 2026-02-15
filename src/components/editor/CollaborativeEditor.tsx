@@ -35,6 +35,7 @@ interface CollaborativeEditorProps {
     historyOpen: boolean;
     onHistoryClose: () => void;
     documentId: string;
+    onContentChange?: (content: string) => void;
 }
 
 export default function CollaborativeEditor({
@@ -49,6 +50,7 @@ export default function CollaborativeEditor({
     historyOpen,
     onHistoryClose,
     documentId,
+    onContentChange,
 }: CollaborativeEditorProps) {
     // ... extensions ...
     const extensions = useMemo(() => [
@@ -83,6 +85,9 @@ export default function CollaborativeEditor({
         },
         immediatelyRender: false,
         editable: permission !== "view",
+        onUpdate: ({ editor }) => {
+            onContentChange?.(editor.getHTML());
+        },
     });
 
     const handleRestore = useCallback(async (content: string) => {

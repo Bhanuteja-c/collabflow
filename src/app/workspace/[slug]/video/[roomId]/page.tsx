@@ -412,7 +412,7 @@ export default function WorkspaceVideoRoomPage({ params }: VideoRoomPageProps) {
                                 {/* Peers (Grid) */}
                                 {peers.map((peer) => (
                                     <div key={peer.socketId} className={`relative bg-neutral-900 rounded-xl overflow-hidden shadow-lg border border-border ${activeSpeakers.has(peer.socketId) ? 'ring-2 ring-emerald-500' : ''}`}>
-                                        <VideoPlayer stream={peer.stream} isMuted={false} />
+                                        <VideoPlayer stream={peer.stream} isMuted={false} peerName={peer.userData.name} peerImage={peer.userData.image} />
                                         <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-sm px-2 py-1 rounded text-xs font-medium text-white flex items-center gap-2">
                                             <span>{peer.userData.name || 'Guest'}</span>
                                         </div>
@@ -431,7 +431,7 @@ export default function WorkspaceVideoRoomPage({ params }: VideoRoomPageProps) {
                                     {/* ... (Existing logic for speaker view) ... */}
                                     {/* To simplify replacement, I'll keep the structure but update container classes */}
                                     {peers.length > 0 ? (
-                                        <VideoPlayer stream={peers[0].stream} isMuted={false} />
+                                        <VideoPlayer stream={peers[0].stream} isMuted={false} peerName={peers[0].userData.name} peerImage={peers[0].userData.image} />
                                     ) : (
                                         <video
                                             ref={userVideoRef}
@@ -459,7 +459,7 @@ export default function WorkspaceVideoRoomPage({ params }: VideoRoomPageProps) {
                                     </div>
                                     {peers.map((peer) => (
                                         <div key={peer.socketId} className="relative aspect-video bg-neutral-900 rounded-lg overflow-hidden border border-border flex-shrink-0">
-                                            <VideoPlayer stream={peer.stream} isMuted={false} />
+                                            <VideoPlayer stream={peer.stream} isMuted={false} peerName={peer.userData.name} peerImage={peer.userData.image} />
                                             <div className="absolute bottom-1 left-1 bg-black/60 px-1.5 py-0.5 rounded text-[10px] text-white">
                                                 {peer.userData.name}
                                             </div>
@@ -597,22 +597,52 @@ export default function WorkspaceVideoRoomPage({ params }: VideoRoomPageProps) {
     );
 }
 
-function VideoPlayer({ stream, isMuted }: { stream: MediaStream | null, isMuted: boolean }) {
+function VideoPlayer({ stream, isMuted, peerName, peerImage }: { stream: MediaStream | null, isMuted: boolean, peerName?: string, peerImage?: string }) {
     const videoRef = useRef<HTMLVideoElement>(null);
 
     useEffect(() => {
-        if (videoRef.current && stream) {
-            videoRef.current.srcObject = stream;
+        const el = videoRef.current;
+        if (!el) return;
+
+        if (stream) {
+            // Always re-assign to handle stream identity changes
+            if (el.srcObject !== stream) {
+                el.srcObject = stream;
+            }
+            // Force play (browsers may block autoplay)
+            el.play().catch(() => { });
+        } else {
+            el.srcObject = null;
         }
     }, [stream]);
 
+    // Check if stream has active video tracks
+    const hasVideo = stream && stream.getVideoTracks().some(t => t.enabled && t.readyState === 'live');
+
     return (
-        <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            muted={isMuted}
-            className="w-full h-full object-cover"
-        />
+        <div className="relative w-full h-full">
+            <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted={isMuted}
+                className={`w-full h-full object-cover ${!hasVideo ? 'hidden' : ''}`}
+            />
+            {!hasVideo && (
+                <div className="absolute inset-0 flex items-center justify-center bg-neutral-800">
+                    <div className="flex flex-col items-center gap-2">
+                        <Avatar className="h-20 w-20">
+                            {peerImage && <AvatarImage src={peerImage} />}
+                            <AvatarFallback className="text-2xl bg-primary/20 text-primary">
+                                {peerName?.[0]?.toUpperCase() || "?"}
+                            </AvatarFallback>
+                        </Avatar>
+                        {peerName && (
+                            <span className="text-sm text-white/70 font-medium">{peerName}</span>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
     );
 }

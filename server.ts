@@ -46,6 +46,45 @@ app.prepare().then(() => {
     io.on("connection", (socket) => {
         console.log(`[Socket.io] Client connected: ${socket.id}`);
 
+        // ==================== WORKSPACE PRESENCE ====================
+
+        socket.on("join-workspace", (data: { workspaceId: string; user: { id: string; name: string; image?: string } }) => {
+            socket.join(`workspace:${data.workspaceId}`);
+            (socket as any).workspaceId = data.workspaceId;
+            (socket as any).workspaceUser = data.user;
+
+            // Notify others
+            socket.to(`workspace:${data.workspaceId}`).emit("workspace-user-joined", {
+                socketId: socket.id,
+                user: data.user,
+            });
+
+            // Send existing online users to joiner
+            const room = io.sockets.adapter.rooms.get(`workspace:${data.workspaceId}`);
+            if (room) {
+                const onlineUsers: any[] = [];
+                room.forEach((socketId) => {
+                    const s = io.sockets.sockets.get(socketId);
+                    if (s && socketId !== socket.id && (s as any).workspaceUser) {
+                        onlineUsers.push({
+                            socketId,
+                            user: (s as any).workspaceUser,
+                        });
+                    }
+                });
+                socket.emit("workspace-presence", { users: onlineUsers });
+            }
+        });
+
+        socket.on("leave-workspace", (workspaceId: string) => {
+            socket.leave(`workspace:${workspaceId}`);
+            socket.to(`workspace:${workspaceId}`).emit("workspace-user-left", {
+                socketId: socket.id,
+            });
+            (socket as any).workspaceId = null;
+            (socket as any).workspaceUser = null;
+        });
+
         // ==================== CHAT CHANNEL EVENTS ====================
 
         // Join a channel room with presence tracking
@@ -375,6 +414,14 @@ app.prepare().then(() => {
             const boardId = (socket as any).currentBoardId;
             if (boardId) {
                 socket.to(`board:${boardId}`).emit("user-left-board", {
+                    socketId: socket.id,
+                });
+            }
+
+            // Notify workspace presence
+            const wsId = (socket as any).workspaceId;
+            if (wsId) {
+                socket.to(`workspace:${wsId}`).emit("workspace-user-left", {
                     socketId: socket.id,
                 });
             }

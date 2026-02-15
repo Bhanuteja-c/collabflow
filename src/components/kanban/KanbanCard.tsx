@@ -5,11 +5,10 @@ import { useState, useRef, useEffect } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Card, CardContent } from "@/components/ui/card";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
     Pencil,
     Trash2,
@@ -34,12 +33,14 @@ interface CardData {
     description?: string;
     priority?: "low" | "medium" | "high";
     dueDate?: string;
+    startDate?: string;
+    labels?: string[];
+    status?: string;
     assignee?: User;
     assigneeId?: string;
     commentsCount?: number;
     checklistCompleted?: number;
     checklistTotal?: number;
-    labels?: string[];
     order?: number;
 }
 
@@ -58,12 +59,12 @@ const priorityConfig = {
 };
 
 const labelColors = [
-    "bg-blue-500",
-    "bg-emerald-500",
-    "bg-violet-500",
-    "bg-amber-500",
-    "bg-pink-500",
-    "bg-cyan-500",
+    "bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/20",
+    "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/20",
+    "bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/20",
+    "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/20",
+    "bg-pink-500/15 text-pink-700 dark:text-pink-300 border-pink-500/20",
+    "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-500/20",
 ];
 
 export default function KanbanCard({
@@ -75,6 +76,7 @@ export default function KanbanCard({
 }: CardProps) {
     const [isEditing, setIsEditing] = useState(false);
     const [editTitle, setEditTitle] = useState(card.title);
+    const [showActions, setShowActions] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
 
     const {
@@ -84,30 +86,12 @@ export default function KanbanCard({
         transform,
         transition,
         isDragging: isSortableDragging,
-    } = useSortable({
-        id: card.id,
-        data: {
-            type: "card",
-            card,
-        },
-    });
+    } = useSortable({ id: card.id });
 
     const style = {
         transform: CSS.Transform.toString(transform),
         transition,
     };
-
-    const dragging = isDragging || isSortableDragging;
-
-    // Computed date status
-    const isOverdue = card.dueDate && isBefore(new Date(card.dueDate), new Date());
-    const isDueSoon = card.dueDate && !isOverdue && isBefore(new Date(card.dueDate), addDays(new Date(), 1));
-
-    // Checklist progress
-    const hasChecklist = (card.checklistTotal ?? 0) > 0;
-    const checklistProgress = hasChecklist
-        ? ((card.checklistCompleted ?? 0) / (card.checklistTotal ?? 1)) * 100
-        : 0;
 
     useEffect(() => {
         if (isEditing && inputRef.current) {
@@ -117,7 +101,7 @@ export default function KanbanCard({
     }, [isEditing]);
 
     const handleSave = () => {
-        if (editTitle.trim() && editTitle !== card.title) {
+        if (editTitle.trim() && editTitle.trim() !== card.title) {
             onUpdate?.(card.id, editTitle.trim());
         }
         setIsEditing(false);
@@ -129,65 +113,60 @@ export default function KanbanCard({
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === "Enter") {
-            handleSave();
-        } else if (e.key === "Escape") {
-            handleCancel();
-        }
+        if (e.key === "Enter") handleSave();
+        if (e.key === "Escape") handleCancel();
     };
 
     const handleCardClick = (e: React.MouseEvent) => {
-        if (!isEditing && onOpenDetail) {
-            e.stopPropagation();
-            onOpenDetail(card);
-        }
+        if (isEditing) return;
+        if ((e.target as HTMLElement).closest("button")) return;
+        onOpenDetail?.(card);
     };
 
     const formatDueDate = (dateStr: string) => {
-        try {
-            return format(new Date(dateStr), "MMM d");
-        } catch {
-            return dateStr;
-        }
+        const date = new Date(dateStr);
+        return format(date, "MMM d");
     };
 
+    const isOverdue = card.dueDate && isBefore(new Date(card.dueDate), new Date());
+    const isDueSoon = card.dueDate && !isOverdue && isBefore(new Date(card.dueDate), addDays(new Date(), 2));
+    const priority = card.priority && priorityConfig[card.priority];
+
     return (
-        <Card
+        <div
             ref={setNodeRef}
             style={style}
-            {...(!isEditing ? { ...attributes, ...listeners } : {})}
-            onClick={handleCardClick}
-            className={`
-                bg-card border shadow-sm
-                transition-all duration-200
-                ${dragging
-                    ? "opacity-90 shadow-xl ring-2 ring-accent scale-[1.02] rotate-1 z-50"
-                    : "hover:shadow-md hover:border-accent/30 cursor-pointer active:cursor-grabbing"
-                }
-                ${isEditing ? "ring-2 ring-accent" : ""}
-                group
-            `}
+            className={`group ${isDragging || isSortableDragging ? "opacity-50" : ""}`}
+            onMouseEnter={() => setShowActions(true)}
+            onMouseLeave={() => setShowActions(false)}
         >
-            <CardContent className="p-3 space-y-2">
-                {/* Labels */}
-                {card.labels && card.labels.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                        {card.labels.map((label, i) => (
-                            <span
-                                key={i}
-                                className={`${labelColors[i % labelColors.length]} h-1.5 w-8 rounded-full`}
-                            />
-                        ))}
-                    </div>
-                )}
+            <Card
+                className={`
+                    shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer
+                    border hover:border-accent/50
+                    ${isOverdue ? "border-red-500/40 ring-1 ring-red-500/20" : ""}
+                    ${isDragging ? "shadow-lg rotate-2 scale-105" : ""}
+                    ${card.status === "completed" ? "opacity-60" : ""}
+                `}
+                onClick={handleCardClick}
+            >
+                <CardContent className="p-3 space-y-2">
+                    {/* Labels */}
+                    {card.labels && card.labels.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                            {card.labels.map((label, i) => (
+                                <span
+                                    key={i}
+                                    className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${labelColors[i % labelColors.length]}`}
+                                >
+                                    {label}
+                                </span>
+                            ))}
+                        </div>
+                    )}
 
-                <div className="flex items-start gap-2">
-                    {/* Drag indicator */}
-                    <div className="mt-0.5 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors flex-shrink-0">
-                        <GripVertical className="w-4 h-4" />
-                    </div>
-
-                    <div className="flex-1 min-w-0">
+                    {/* Title row */}
+                    <div className="flex items-start justify-between gap-1">
                         {isEditing ? (
                             <Input
                                 ref={inputRef}
@@ -195,103 +174,107 @@ export default function KanbanCard({
                                 onChange={(e) => setEditTitle(e.target.value)}
                                 onKeyDown={handleKeyDown}
                                 onBlur={handleSave}
-                                className="h-7 text-sm"
+                                className="text-sm h-7"
                                 onClick={(e) => e.stopPropagation()}
                             />
                         ) : (
-                            <p className="font-medium text-sm text-foreground leading-snug">
-                                {card.title}
-                            </p>
+                            <div className="flex items-start gap-1.5 min-w-0 flex-1">
+                                <div
+                                    className="mt-1 cursor-grab active:cursor-grabbing flex-shrink-0 opacity-0 group-hover:opacity-50 hover:!opacity-100 transition-opacity"
+                                    {...attributes}
+                                    {...listeners}
+                                >
+                                    <GripVertical className="w-3.5 h-3.5 text-muted-foreground" />
+                                </div>
+                                <span className={`text-sm leading-snug ${card.status === "completed" ? "line-through text-muted-foreground" : ""}`}>
+                                    {card.title}
+                                </span>
+                            </div>
                         )}
-                        {card.description && !isEditing && (
-                            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                                {card.description}
-                            </p>
+
+                        {/* Actions */}
+                        {showActions && !isEditing && (
+                            <div className="flex gap-0.5 flex-shrink-0">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6"
+                                    onClick={(e) => { e.stopPropagation(); setIsEditing(true); }}
+                                >
+                                    <Pencil className="w-3 h-3" />
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 text-red-500 hover:text-red-600"
+                                    onClick={(e) => { e.stopPropagation(); onDelete?.(card.id); }}
+                                >
+                                    <Trash2 className="w-3 h-3" />
+                                </Button>
+                            </div>
                         )}
                     </div>
 
-                    {/* Priority indicator */}
-                    {card.priority && !isEditing && (
-                        <Flag className={`w-3.5 h-3.5 flex-shrink-0 ${priorityConfig[card.priority].textColor}`} />
-                    )}
+                    {/* Meta row */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                        {/* Priority */}
+                        {priority && (
+                            <div className="flex items-center gap-1">
+                                <Flag className={`w-3 h-3 ${priority.textColor}`} />
+                                <span className={`text-[10px] font-medium ${priority.textColor}`}>
+                                    {priority.label}
+                                </span>
+                            </div>
+                        )}
 
-                    {/* Actions */}
-                    {!isEditing && (
-                        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setIsEditing(true);
-                                }}
-                            >
-                                <Pencil className="w-3 h-3" />
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6 text-destructive hover:text-destructive"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onDelete?.(card.id);
-                                }}
-                            >
-                                <Trash2 className="w-3 h-3" />
-                            </Button>
-                        </div>
-                    )}
-                </div>
-
-                {/* Footer with metadata */}
-                {(card.dueDate || hasChecklist || card.commentsCount || card.assignee) && !isEditing && (
-                    <div className="flex items-center justify-between gap-2 pt-1">
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-                            {/* Due date with status indicator */}
-                            {card.dueDate && (
-                                <span className={`flex items-center gap-1 px-1.5 py-0.5 rounded ${isOverdue
-                                    ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                        {/* Due date */}
+                        {card.dueDate && (
+                            <div className={`flex items-center gap-1 text-[10px] font-medium rounded-full px-1.5 py-0.5 ${
+                                isOverdue
+                                    ? "bg-red-500/10 text-red-600 dark:text-red-400"
                                     : isDueSoon
-                                        ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-                                        : ""
-                                    }`}>
-                                    {isOverdue && <AlertCircle className="w-3 h-3" />}
-                                    <Calendar className="w-3 h-3" />
-                                    {formatDueDate(card.dueDate)}
-                                </span>
-                            )}
+                                        ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                                        : "text-muted-foreground"
+                            }`}>
+                                {isOverdue && <AlertCircle className="w-3 h-3" />}
+                                <Calendar className="w-3 h-3" />
+                                {formatDueDate(card.dueDate)}
+                            </div>
+                        )}
 
-                            {/* Checklist progress */}
-                            {hasChecklist && (
-                                <span className="flex items-center gap-1.5">
-                                    <CheckSquare className="w-3 h-3" />
-                                    <span>{card.checklistCompleted}/{card.checklistTotal}</span>
-                                    <Progress value={checklistProgress} className="w-10 h-1.5" />
-                                </span>
-                            )}
+                        {/* Checklist progress */}
+                        {card.checklistTotal != null && card.checklistTotal > 0 && (
+                            <div className={`flex items-center gap-1 text-[10px] font-medium ${
+                                card.checklistCompleted === card.checklistTotal
+                                    ? "text-emerald-500"
+                                    : "text-muted-foreground"
+                            }`}>
+                                <CheckSquare className="w-3 h-3" />
+                                {card.checklistCompleted}/{card.checklistTotal}
+                            </div>
+                        )}
 
-                            {/* Comments count */}
-                            {card.commentsCount && card.commentsCount > 0 && (
-                                <span className="flex items-center gap-1">
-                                    <MessageSquare className="w-3 h-3" />
-                                    {card.commentsCount}
-                                </span>
-                            )}
-                        </div>
+                        {/* Comments */}
+                        {card.commentsCount != null && card.commentsCount > 0 && (
+                            <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                                <MessageSquare className="w-3 h-3" />
+                                {card.commentsCount}
+                            </div>
+                        )}
 
-                        {/* Assignee avatar */}
+                        {/* Spacer + Assignee */}
+                        <div className="flex-1" />
                         {card.assignee && (
-                            <Avatar className="w-5 h-5">
+                            <Avatar className="w-5 h-5" title={card.assignee.name || "Assigned"}>
                                 <AvatarImage src={card.assignee.image || undefined} />
-                                <AvatarFallback className="text-[10px]">
+                                <AvatarFallback className="text-[8px]">
                                     {card.assignee.name?.[0] || "?"}
                                 </AvatarFallback>
                             </Avatar>
                         )}
                     </div>
-                )}
-            </CardContent>
-        </Card>
+                </CardContent>
+            </Card>
+        </div>
     );
 }

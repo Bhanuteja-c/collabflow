@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, use } from "react";
+import { toast } from "sonner";
 import { useSession, signOut } from "next-auth/react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
@@ -60,7 +61,8 @@ export default function WorkspaceSettingsPage({ params }: { params: Promise<{ sl
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ name, description, isPublic }),
             });
-        } catch (e) { console.error(e); }
+            toast.success("Settings saved");
+        } catch (e) { toast.error("Failed to save settings"); }
         finally { setSaving(false); }
     };
 
@@ -68,8 +70,9 @@ export default function WorkspaceSettingsPage({ params }: { params: Promise<{ sl
         if (!workspace || !confirm("Delete this workspace? This action cannot be undone.")) return;
         try {
             await fetch(`/api/workspaces/${workspace.id}`, { method: "DELETE" });
+            toast.success("Workspace deleted");
             window.location.href = "/workspace/new";
-        } catch (e) { console.error(e); }
+        } catch (e) { toast.error("Failed to delete workspace"); }
     };
 
     const canManage = ["owner", "admin"].includes(userRole);

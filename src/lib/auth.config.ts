@@ -64,7 +64,7 @@ export const authConfig = {
             const isLoggedIn = !!auth?.user;
             const pathname = nextUrl.pathname;
 
-            const publicRoutes = ["/", "/sign-in", "/sign-up"];
+            const publicRoutes = ["/", "/sign-in", "/sign-up", "/explore"];
             const isPublicRoute = publicRoutes.includes(pathname) ||
                 pathname.startsWith("/api/auth") ||
                 pathname.startsWith("/api/register");
@@ -74,7 +74,7 @@ export const authConfig = {
             }
 
             if (isLoggedIn && (pathname === "/sign-in" || pathname === "/sign-up")) {
-                return Response.redirect(new URL("/app", nextUrl.origin));
+                return Response.redirect(new URL("/dashboard", nextUrl.origin));
             }
 
             return true;

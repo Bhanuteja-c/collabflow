@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ensureUser } from "@/lib/ensureUser";
+import { Activity } from "@/lib/activity";
 
 // GET /api/channels - List workspace channels
 export async function GET(req: NextRequest) {
@@ -60,7 +61,28 @@ export async function GET(req: NextRequest) {
             orderBy: { updatedAt: "desc" },
         });
 
-        return NextResponse.json(channels);
+        // Compute unread counts for each channel
+        const channelsWithUnread = await Promise.all(
+            channels.map(async (channel) => {
+                const membership = channel.members.find(m => m.userId === userId);
+                const lastReadAt = membership?.lastReadAt;
+
+                const unreadCount = lastReadAt
+                    ? await prisma.message.count({
+                        where: {
+                            channelId: channel.id,
+                            createdAt: { gt: lastReadAt },
+                            authorId: { not: userId },
+                            parentId: null,
+                        },
+                    })
+                    : 0; // No lastReadAt = never opened = show 0 initially
+
+                return { ...channel, unreadCount };
+            })
+        );
+
+        return NextResponse.json(channelsWithUnread);
     } catch (error) {
         console.error("[API/channels] Error:", error);
         return NextResponse.json({
@@ -137,6 +159,11 @@ export async function POST(req: NextRequest) {
                 },
             },
         });
+
+        // Log activity
+        if (workspaceId) {
+            Activity.channelCreated(userId, workspaceId, channel.id, name.trim());
+        }
 
         return NextResponse.json(channel);
     } catch (error) {

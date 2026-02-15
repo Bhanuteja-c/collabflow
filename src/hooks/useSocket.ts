@@ -25,6 +25,11 @@ interface Message {
     isEdited?: boolean;
     editedAt?: string;
     isDeleted?: boolean;
+    isPinned?: boolean;
+    // Threading
+    parentId?: string | null;
+    replyCount?: number;
+    replies?: { author: { id: string; name: string | null; image: string | null }; createdAt: string }[];
     // UI state for optimistic updates
     status?: 'pending' | 'sent' | 'failed';
 }
@@ -191,6 +196,25 @@ export function useSocket({ channelId, currentUser }: UseSocketOptions): UseSock
                     }
                 })
             );
+        });
+
+        // Listen for thread reply count updates
+        socket.on("reply-count-update", (data: { messageId: string; replyCount: number; latestReply: any }) => {
+            setMessages((prev) =>
+                prev.map((msg) =>
+                    msg.id === data.messageId
+                        ? { ...msg, replyCount: data.replyCount, replies: [data.latestReply] }
+                        : msg
+                )
+            );
+        });
+
+        // Listen for new thread replies (for when thread panel is open)
+        socket.on("thread-reply", (message: Message) => {
+            setMessages((prev) => {
+                if (prev.some(m => m.id === message.id)) return prev;
+                return [...prev, { ...message, status: 'sent' }];
+            });
         });
 
         // Listen for channel presence

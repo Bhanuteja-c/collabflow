@@ -4,8 +4,10 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ensureUser } from "@/lib/ensureUser";
 import { emitToChannel } from "@/lib/socket";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rateLimit";
 
 // GET /api/messages?channelId=xxx - Get messages for a channel
+// GET /api/messages?channelId=xxx&parentId=yyy - Get replies to a message (thread)
 export async function GET(req: NextRequest) {
     try {
         const session = await auth();
@@ -17,6 +19,7 @@ export async function GET(req: NextRequest) {
         const userId = await ensureUser(session.user as any);
         const { searchParams } = new URL(req.url);
         const channelId = searchParams.get("channelId");
+        const parentId = searchParams.get("parentId");
 
         if (!channelId) {
             return NextResponse.json({ error: "channelId is required" }, { status: 400 });
@@ -33,14 +36,49 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: "Not a member of this channel" }, { status: 403 });
         }
 
+        // Update lastReadAt to track unread messages (only for top-level views)
+        if (!parentId) {
+            await prisma.channelMember.update({
+                where: { id: membership.id },
+                data: { lastReadAt: new Date() },
+            });
+        }
+
+        if (parentId) {
+            // Fetch replies to a specific message (thread view)
+            const replies = await prisma.message.findMany({
+                where: { channelId, parentId },
+                orderBy: { createdAt: "asc" },
+                include: {
+                    author: {
+                        select: { id: true, name: true, image: true },
+                    },
+                    reactions: true,
+                },
+            });
+            return NextResponse.json(replies);
+        }
+
+        // Fetch top-level messages only (no parentId)
         const messages = await prisma.message.findMany({
-            where: { channelId },
+            where: { channelId, parentId: null },
             orderBy: { createdAt: "asc" },
             include: {
                 author: {
                     select: { id: true, name: true, image: true },
                 },
                 reactions: true,
+                // Include latest reply author for thread preview
+                replies: {
+                    orderBy: { createdAt: "desc" },
+                    take: 1,
+                    select: {
+                        author: {
+                            select: { id: true, name: true, image: true },
+                        },
+                        createdAt: true,
+                    },
+                },
             },
         });
 
@@ -54,7 +92,7 @@ export async function GET(req: NextRequest) {
     }
 }
 
-// POST /api/messages - Send a message
+// POST /api/messages - Send a message (or reply to one)
 export async function POST(req: NextRequest) {
     try {
         const session = await auth();
@@ -64,8 +102,18 @@ export async function POST(req: NextRequest) {
         }
 
         const userId = await ensureUser(session.user as any);
+
+        // Rate limit check
+        const rl = checkRateLimit(`msg:${userId}`, RATE_LIMITS.write);
+        if (!rl.success) {
+            return NextResponse.json(
+                { error: "Too many messages. Please wait." },
+                { status: 429, headers: { "Retry-After": String(rl.retryAfter) } }
+            );
+        }
+
         const body = await req.json();
-        const { channelId, content, attachments } = body;
+        const { channelId, content, attachments, parentId } = body;
 
         if (!channelId || !content?.trim()) {
             return NextResponse.json({ error: "channelId and content are required" }, { status: 400 });
@@ -88,6 +136,7 @@ export async function POST(req: NextRequest) {
                 channelId,
                 authorId: userId,
                 attachments: attachments ?? undefined,
+                parentId: parentId || null,
             },
             include: {
                 author: {
@@ -101,14 +150,42 @@ export async function POST(req: NextRequest) {
             },
         });
 
+        // If this is a reply, increment the parent's reply count
+        if (parentId) {
+            await prisma.message.update({
+                where: { id: parentId },
+                data: { replyCount: { increment: 1 } },
+            });
+
+            // Emit thread-reply event so thread viewers get the update
+            emitToChannel(channelId, "thread-reply", {
+                ...message,
+                parentId,
+            });
+
+            // Also emit a reply-count-update so the main chat shows updated count
+            const parent = await prisma.message.findUnique({
+                where: { id: parentId },
+                select: { replyCount: true },
+            });
+            emitToChannel(channelId, "reply-count-update", {
+                messageId: parentId,
+                replyCount: parent?.replyCount || 1,
+                latestReply: {
+                    author: message.author,
+                    createdAt: message.createdAt,
+                },
+            });
+        } else {
+            // Emit normal new-message event for top-level messages
+            emitToChannel(channelId, "new-message", message);
+        }
+
         // Update channel's updatedAt
         await prisma.channel.update({
             where: { id: channelId },
             data: { updatedAt: new Date() },
         });
-
-        // Emit via Socket.io for real-time update
-        emitToChannel(channelId, "new-message", message);
 
         return NextResponse.json(message);
     } catch (error) {

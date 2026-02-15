@@ -20,7 +20,8 @@ export async function POST(
         const { slug } = await params;
         const id = slug; // Treat as ID/Slug
         const userId = (session.user as { id: string }).id;
-        const { inviteCode } = await request.json();
+        // Parse body (inviteCode support can be added later)
+        await request.json().catch(() => ({}));
 
         // 1. Find workspace (by ID or Slug)
         const isCuid = id.length === 25 && /^[a-z0-9]+$/.test(id);
