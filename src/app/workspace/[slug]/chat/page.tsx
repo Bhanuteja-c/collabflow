@@ -4,7 +4,8 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSession } from "next-auth/react";
-import { useParams } from "next/navigation";
+import { toast } from "sonner";
+import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -27,11 +28,12 @@ import {
   Paperclip,
   RefreshCw,
   Reply,
-  ArrowLeft,
   Pin,
   PinOff,
   ChevronDown,
   ChevronUp,
+  Video,
+  ListTodo,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { AttachmentPreview } from "@/components/chat/AttachmentPreview";
@@ -42,6 +44,19 @@ interface User {
   image: string | null;
 }
 
+interface Reaction {
+  emoji: string;
+  userId: string;
+  user?: { id: string; name: string | null };
+}
+
+interface Attachment {
+  type: "image" | "pdf";
+  url: string;
+  name: string;
+  size?: number;
+}
+
 interface Message {
   id: string;
   content: string;
@@ -50,8 +65,8 @@ interface Message {
   parentId?: string | null;
   createdAt: string;
   author: User;
-  reactions?: any[];
-  attachments?: any;
+  reactions?: Reaction[];
+  attachments?: Attachment[];
   isEdited?: boolean;
   editedAt?: string;
   isDeleted?: boolean;
@@ -122,12 +137,14 @@ export default function ChatPage() {
   const [fetchedMessages, setFetchedMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [sending, _setSending] = useState(false);
   const [showNewChannel, setShowNewChannel] = useState(false);
   const [newChannelName, setNewChannelName] = useState("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [workspaceMembers, setWorkspaceMembers] = useState<
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [workspaceMembers, _setWorkspaceMembers] = useState<
     { id: string; name: string; image?: string }[]
   >([]);
   const [workspace, setWorkspace] = useState<{
@@ -143,6 +160,7 @@ export default function ChatPage() {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const params = useParams();
+  const router = useRouter();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -168,8 +186,10 @@ export default function ChatPage() {
   // Current user for presence
   const currentUser = useMemo(() => {
     if (!session?.user?.id) return undefined;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const userId = (session.user as any).id as string;
     return {
-      id: (session.user as any).id,
+      id: userId,
       name: session.user.name || "Anonymous",
       image: session.user.image || undefined,
     };
@@ -190,8 +210,15 @@ export default function ChatPage() {
     currentUser,
   });
 
-  // Combine fetched messages with socket messages
-  const allMessages = [...fetchedMessages, ...socketMessages];
+  // Combine fetched messages with socket messages (deduplicated)
+  const allMessages = useMemo(() => {
+    const combined = [...fetchedMessages, ...socketMessages];
+    const uniqueMap = new Map();
+    combined.forEach((msg) => uniqueMap.set(msg.id, msg));
+    return Array.from(uniqueMap.values()).sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+  }, [fetchedMessages, socketMessages]);
 
   // Fetch workspace first, then channels
   useEffect(() => {
@@ -311,6 +338,7 @@ export default function ChatPage() {
       });
       if (res.ok) {
         const data = await res.json();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const userId = (session?.user as any)?.id;
         // Update local reactions
         const updateReactions = (msg: Message) => {
@@ -320,7 +348,7 @@ export default function ChatPage() {
             reactions.push({
               emoji,
               userId,
-              user: { id: userId, name: session?.user?.name },
+              user: { id: userId, name: session?.user?.name ?? null },
             });
           } else {
             reactions = reactions.filter(
@@ -362,6 +390,31 @@ export default function ChatPage() {
     } catch (error) {
       console.error("Error saving description:", error);
     }
+  };
+
+  // Start a video huddle
+  const startHuddle = async () => {
+    if (!workspace || !selectedChannel) return;
+    // Create a unique room ID for this channel's huddle
+    // We append a timestamp to ensure fresh rooms if needed, or we could just use channelId to have a persistent channel room
+    // Let's use channelId so it's a persistent "channel huddle"
+    const roomId = `${workspace.slug}-${selectedChannel.id}-huddle`;
+
+    // Post a message to the channel so others can join
+    try {
+      await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          channelId: selectedChannel.id,
+          content: `🎥 I started a huddle! Click to join: #huddle:${roomId}`,
+        }),
+      });
+    } catch (error) {
+      console.error("Failed to post huddle message:", error);
+    }
+
+    router.push(`/workspace/${workspace.slug}/video/${roomId}`);
   };
 
   const createChannel = async () => {
@@ -450,6 +503,64 @@ export default function ChatPage() {
     }
   };
 
+  // Create a Kanban task from a message
+  const handleCreateTask = async (message: Message) => {
+    if (!workspace) return;
+    try {
+      // 1. Fetch boards
+      const boardsRes = await fetch(`/api/boards?workspaceId=${workspace.id}`);
+      if (!boardsRes.ok) throw new Error("Failed to fetch boards");
+      const boards = await boardsRes.json();
+
+      let targetBoard = boards[0];
+      if (!targetBoard) {
+        // Create default board if none
+        const createRes = await fetch("/api/boards", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: "Tasks", workspaceId: workspace.id }),
+        });
+        if (!createRes.ok) throw new Error("Failed to create board");
+        targetBoard = await createRes.json();
+      }
+
+      // 2. Get first column
+      let targetColumn = targetBoard.columns?.[0];
+      if (!targetColumn) {
+        // Create default column if none
+        const colRes = await fetch(`/api/boards/${targetBoard.id}/columns`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: "To Do" }),
+        });
+        if (!colRes.ok) throw new Error("Failed to create column");
+        targetColumn = await colRes.json();
+      }
+
+      // 3. Create card
+      const cardRes = await fetch("/api/cards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title:
+            message.content.substring(0, 50) +
+            (message.content.length > 50 ? "..." : ""),
+          description: message.content,
+          columnId: targetColumn.id,
+        }),
+      });
+
+      if (cardRes.ok) {
+        toast.success("Task created from message");
+      } else {
+        throw new Error("Failed to create card");
+      }
+    } catch (e) {
+      console.error("Could not create task", e);
+      toast.error("Failed to create task");
+    }
+  };
+
   // Retry a failed message
   const retryMessage = async (failedMsg: Message) => {
     updateMessage(failedMsg.id, { status: "pending" } as Partial<Message>);
@@ -521,6 +632,7 @@ export default function ChatPage() {
 
   const handleTyping = () => {
     if (session?.user) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       sendTyping((session.user as any).id || "", session.user.name || "");
     }
   };
@@ -852,6 +964,16 @@ export default function ChatPage() {
                   </Button>
                 </div>
               )}
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="hidden sm:flex items-center gap-2 ml-2 border-emerald-500/20 hover:bg-emerald-500/10 hover:text-emerald-500"
+                onClick={startHuddle}
+              >
+                <Video className="w-4 h-4" />
+                <span>Start Huddle</span>
+              </Button>
             </div>
 
             {/* Channel Description */}
@@ -987,6 +1109,7 @@ export default function ChatPage() {
                     const showAvatar =
                       i === 0 || prevMessage?.author.id !== message.author.id;
                     const isOwnMessage =
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
                       message.author.id === (session?.user as any)?.id;
                     const isEditing = editingMessageId === message.id;
 
@@ -1056,7 +1179,7 @@ export default function ChatPage() {
                           ) : (
                             <div className="flex-1">
                               <div className="flex items-start gap-2">
-                                <p
+                                <div
                                   className={`text-sm leading-relaxed break-words flex-1 ${message.isDeleted ? "italic text-muted-foreground" : ""}`}
                                 >
                                   {message.isDeleted ? (
@@ -1067,13 +1190,13 @@ export default function ChatPage() {
                                       workspaceMembers={workspaceMembers}
                                     />
                                   )}
-                                </p>
+                                </div>
                               </div>
 
                               {/* Attachments */}
                               {message.attachments && (
                                 <AttachmentPreview
-                                  attachments={message.attachments as any}
+                                  attachments={message.attachments}
                                 />
                               )}
 
@@ -1164,16 +1287,54 @@ export default function ChatPage() {
                                   >
                                     <Reply className="w-3 h-3" />
                                   </Button>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-6 w-6"
+                                    onClick={() => handleCreateTask(message)}
+                                    title="Create Task"
+                                  >
+                                    <ListTodo className="w-3 h-3" />
+                                  </Button>
                                 </div>
                               )}
 
                               {/* Reaction counts display */}
                               {(message.reactions?.length ?? 0) > 0 && (
                                 <div className="flex flex-wrap gap-1 mt-1">
-                                  {Object.entries(
-                                    (message.reactions || []).reduce(
-                                      (
-                                        acc: Record<
+                                  {(
+                                    Object.entries(
+                                      (message.reactions || []).reduce(
+                                        (
+                                          acc: Record<
+                                            string,
+                                            {
+                                              count: number;
+                                              users: string[];
+                                              hasOwn: boolean;
+                                            }
+                                          >,
+                                          r: Reaction,
+                                        ) => {
+                                          if (!acc[r.emoji])
+                                            acc[r.emoji] = {
+                                              count: 0,
+                                              users: [],
+                                              hasOwn: false,
+                                            };
+                                          acc[r.emoji].count++;
+                                          acc[r.emoji].users.push(
+                                            r.user?.name || "Unknown",
+                                          );
+                                          if (
+                                            r.userId ===
+                                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                            (session?.user as any)?.id
+                                          )
+                                            acc[r.emoji].hasOwn = true;
+                                          return acc;
+                                        },
+                                        {} as Record<
                                           string,
                                           {
                                             count: number;
@@ -1181,34 +1342,15 @@ export default function ChatPage() {
                                             hasOwn: boolean;
                                           }
                                         >,
-                                        r: any,
-                                      ) => {
-                                        if (!acc[r.emoji])
-                                          acc[r.emoji] = {
-                                            count: 0,
-                                            users: [],
-                                            hasOwn: false,
-                                          };
-                                        acc[r.emoji].count++;
-                                        acc[r.emoji].users.push(
-                                          r.user?.name || "Unknown",
-                                        );
-                                        if (
-                                          r.userId ===
-                                          (session?.user as any)?.id
-                                        )
-                                          acc[r.emoji].hasOwn = true;
-                                        return acc;
+                                      ),
+                                    ) as [
+                                      string,
+                                      {
+                                        count: number;
+                                        users: string[];
+                                        hasOwn: boolean;
                                       },
-                                      {} as Record<
-                                        string,
-                                        {
-                                          count: number;
-                                          users: string[];
-                                          hasOwn: boolean;
-                                        }
-                                      >,
-                                    ),
+                                    ][]
                                   ).map(([emoji, data]) => (
                                     <button
                                       key={emoji}
@@ -1450,20 +1592,13 @@ export default function ChatPage() {
               {/* Parent message */}
               <div className="px-4 py-3 border-b bg-muted/30">
                 <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
-                    {activeThread.author.image ? (
-                      <img
-                        src={activeThread.author.image}
-                        alt=""
-                        className="w-8 h-8 rounded-full"
-                      />
-                    ) : (
-                      <span className="text-xs font-medium text-primary">
-                        {activeThread.author.name?.charAt(0).toUpperCase()}
-                      </span>
-                    )}
-                  </div>
-                  <div className="min-w-0">
+                  <Avatar className="h-8 w-8 flex-shrink-0">
+                    <AvatarImage src={activeThread.author.image || ""} />
+                    <AvatarFallback className="text-xs">
+                      {activeThread.author.name?.[0]?.toUpperCase() || "?"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-sm">
                         {activeThread.author.name}
@@ -1472,9 +1607,20 @@ export default function ChatPage() {
                         {formatTime(activeThread.createdAt)}
                       </span>
                     </div>
-                    <p className="text-sm mt-0.5 break-words">
-                      {activeThread.content}
-                    </p>
+
+                    <div className="mt-0.5">
+                      <MessageContent
+                        content={activeThread.content}
+                        workspaceMembers={workspaceMembers}
+                      />
+                      {activeThread.attachments && (
+                        <div className="mt-2">
+                          <AttachmentPreview
+                            attachments={activeThread.attachments}
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
@@ -1497,20 +1643,13 @@ export default function ChatPage() {
                   ) : (
                     threadReplies.map((reply) => (
                       <div key={reply.id} className="flex items-start gap-2">
-                        <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                          {reply.author.image ? (
-                            <img
-                              src={reply.author.image}
-                              alt=""
-                              className="w-6 h-6 rounded-full"
-                            />
-                          ) : (
-                            <span className="text-[10px] font-medium text-primary">
-                              {reply.author.name?.charAt(0).toUpperCase()}
-                            </span>
-                          )}
-                        </div>
-                        <div className="min-w-0">
+                        <Avatar className="h-6 w-6 flex-shrink-0 mt-0.5">
+                          <AvatarImage src={reply.author.image || ""} />
+                          <AvatarFallback className="text-[10px]">
+                            {reply.author.name?.[0]?.toUpperCase() || "?"}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
                             <span className="font-medium text-xs">
                               {reply.author.name}
@@ -1519,7 +1658,20 @@ export default function ChatPage() {
                               {formatTime(reply.createdAt)}
                             </span>
                           </div>
-                          <p className="text-sm break-words">{reply.content}</p>
+
+                          <div className="text-sm">
+                            <MessageContent
+                              content={reply.content}
+                              workspaceMembers={workspaceMembers}
+                            />
+                            {reply.attachments && (
+                              <div className="mt-1">
+                                <AttachmentPreview
+                                  attachments={reply.attachments}
+                                />
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))

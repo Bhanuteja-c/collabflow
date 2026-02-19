@@ -6,6 +6,7 @@ import { WorkspaceSidebar, MobileSidebar } from "@/components/WorkspaceSidebar";
 import { WorkspaceHeader } from "@/components/WorkspaceHeader";
 import { KeyboardShortcutsDialog } from "@/components/KeyboardShortcutsDialog";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import { SocketProvider } from "@/components/providers/SocketProvider";
 
 interface WorkspaceShellProps {
     workspaceSlug: string;
@@ -27,30 +28,32 @@ export function WorkspaceShell({ workspaceSlug, children }: WorkspaceShellProps)
     ]);
 
     return (
-        <div className="flex h-screen bg-background">
-            {/* Desktop Sidebar */}
-            <WorkspaceSidebar workspaceSlug={workspaceSlug} />
+        <SocketProvider>
+            <div className="flex h-screen bg-background">
+                {/* Desktop Sidebar */}
+                <WorkspaceSidebar workspaceSlug={workspaceSlug} />
 
-            {/* Mobile Sidebar */}
-            <MobileSidebar
-                workspaceSlug={workspaceSlug}
-                isOpen={isMobileSidebarOpen}
-                onClose={() => setIsMobileSidebarOpen(false)}
-            />
-
-            {/* Main Content */}
-            <main className="flex-1 flex flex-col overflow-hidden min-w-0">
-                <WorkspaceHeader
-                    onMenuClick={() => setIsMobileSidebarOpen(true)}
+                {/* Mobile Sidebar */}
+                <MobileSidebar
                     workspaceSlug={workspaceSlug}
+                    isOpen={isMobileSidebarOpen}
+                    onClose={() => setIsMobileSidebarOpen(false)}
                 />
-                <div className="flex-1 overflow-auto">
-                    {children}
-                </div>
-            </main>
 
-            {/* Keyboard shortcuts help (Shift+?) */}
-            <KeyboardShortcutsDialog />
-        </div>
+                {/* Main Content */}
+                <main className="flex-1 flex flex-col overflow-hidden min-w-0">
+                    <WorkspaceHeader
+                        onMenuClick={() => setIsMobileSidebarOpen(true)}
+                        workspaceSlug={workspaceSlug}
+                    />
+                    <div className="flex-1 overflow-auto">
+                        {children}
+                    </div>
+                </main>
+
+                {/* Keyboard shortcuts help (Shift+?) */}
+                <KeyboardShortcutsDialog />
+            </div>
+        </SocketProvider>
     );
 }

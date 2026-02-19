@@ -13,7 +13,7 @@ export async function GET(
         const session = await auth();
         const { id } = await params;
 
-        console.log("[API/documents/id] GET - id:", id, "user:", session?.user?.id);
+
 
         if (!session?.user?.id) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -91,7 +91,7 @@ export async function PUT(
         const session = await auth();
         const { id } = await params;
 
-        console.log("[API/documents/id] PUT - id:", id, "user:", session?.user?.id);
+
 
         if (!session?.user?.id) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -181,7 +181,7 @@ export async function DELETE(
         const session = await auth();
         const { id } = await params;
 
-        console.log("[API/documents/id] DELETE - id:", id, "user:", session?.user?.id);
+
 
         if (!session?.user?.id) {
             return NextResponse.json({ error: "Unauthorized - please sign out and sign in again" }, { status: 401 });
@@ -195,7 +195,7 @@ export async function DELETE(
             where: { id, authorId: userId },
         });
 
-        console.log("[API/documents/id] DELETE - existing:", existing?.id);
+
 
         if (!existing) {
             return NextResponse.json({ error: "Document not found or not authorized" }, { status: 404 });
@@ -207,7 +207,7 @@ export async function DELETE(
         // Then delete document
         await prisma.document.delete({ where: { id } });
 
-        console.log("[API/documents/id] DELETE - success");
+
         return NextResponse.json({ success: true });
     } catch (error) {
         console.error("[API/documents/id] DELETE Error:", error);

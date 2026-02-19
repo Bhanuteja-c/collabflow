@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ensureUser } from "@/lib/ensureUser";
+import { generateKeyBetween } from "fractional-indexing";
 
 // Helper to verify board access
 async function checkBoardAccess(boardId: string, userId: string) {
@@ -52,17 +53,21 @@ export async function POST(
         const body = await req.json();
         const { title } = body;
 
-        // Get the highest order
+        // Get the last column for both integer order and fractional orderKey
         const lastColumn = await prisma.column.findFirst({
             where: { boardId },
-            orderBy: { order: "desc" },
+            orderBy: { orderKey: "desc" },
         });
+
+        // Generate fractional key after the last column
+        const newOrderKey = generateKeyBetween(lastColumn?.orderKey ?? null, null);
 
         const column = await prisma.column.create({
             data: {
                 title: title || "New Column",
                 boardId,
                 order: (lastColumn?.order ?? -1) + 1,
+                orderKey: newOrderKey,
             },
         });
 

@@ -1,9 +1,10 @@
 // src/hooks/useKanbanSync.ts
-// Real-time kanban board synchronization using Socket.io
+// Real-time kanban board synchronization — uses shared socket from SocketProvider
+// Previously created its own socket connection; now consumes SocketProvider's single connection
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { io, Socket } from "socket.io-client";
+import { useSharedSocket } from "@/components/providers/SocketProvider";
 
 interface User {
     id: string;
@@ -66,190 +67,169 @@ export function useKanbanSync({
     onCommentDeleted,
     onChecklistToggled,
 }: UseKanbanSyncOptions): UseKanbanSyncReturn {
-    const [connected, setConnected] = useState(false);
+    const { socket, connected } = useSharedSocket();
     const [viewers, setViewers] = useState<BoardViewer[]>([]);
-    const socketRef = useRef<Socket | null>(null);
 
+    // Store callbacks in refs to avoid event re-registration on every render
+    const callbacksRef = useRef({
+        onCardMoved,
+        onCardCreated,
+        onCardUpdated,
+        onCardDeleted,
+        onCommentAdded,
+        onCommentDeleted,
+        onChecklistToggled,
+    });
+
+    // Keep refs up to date without triggering effect re-runs
     useEffect(() => {
-        if (!boardId) return;
+        callbacksRef.current = {
+            onCardMoved,
+            onCardCreated,
+            onCardUpdated,
+            onCardDeleted,
+            onCommentAdded,
+            onCommentDeleted,
+            onChecklistToggled,
+        };
+    });
 
-        // Initialize socket connection
-        const socket = io({
-            path: "/api/socketio",
-            transports: ["websocket", "polling"],
-            reconnection: true,
-            reconnectionAttempts: 10,
-            reconnectionDelay: 1000,
-        });
-
-        socketRef.current = socket;
-
-        socket.on("connect", () => {
-            console.log("[KanbanSync] Connected:", socket.id);
-            setConnected(true);
-
-            // Join with user info for presence
-            if (currentUser) {
-                socket.emit("join-board", { boardId, user: currentUser });
-            } else {
-                socket.emit("join-board", boardId);
-            }
-        });
-
-        socket.on("disconnect", () => {
-            console.log("[KanbanSync] Disconnected");
-            setConnected(false);
-            setViewers([]);
-        });
-
-        socket.on("reconnect", () => {
-            console.log("[KanbanSync] Reconnected");
-            if (currentUser) {
-                socket.emit("join-board", { boardId, user: currentUser });
-            } else {
-                socket.emit("join-board", boardId);
-            }
-        });
+    // Register board-related event listeners on the shared socket
+    useEffect(() => {
+        if (!socket || !boardId) return;
 
         // Presence events
-        socket.on("board-viewers", (existingViewers: BoardViewer[]) => {
-            console.log("[KanbanSync] Existing viewers:", existingViewers);
-            setViewers(existingViewers);
-        });
-
-        socket.on("board-viewer-joined", (data: BoardViewer) => {
-            console.log("[KanbanSync] Viewer joined:", data.user.name);
+        const handleViewers = (existingViewers: BoardViewer[]) => setViewers(existingViewers);
+        const handleViewerJoined = (data: BoardViewer) => {
             setViewers(prev => [...prev.filter(v => v.socketId !== data.socketId), data]);
-        });
-
-        socket.on("board-viewer-left", (data: { socketId: string }) => {
-            console.log("[KanbanSync] Viewer left:", data.socketId);
+        };
+        const handleViewerLeft = (data: { socketId: string }) => {
             setViewers(prev => prev.filter(v => v.socketId !== data.socketId));
-        });
+        };
 
-        // Card events
-        socket.on("card-moved", (data: { cardId: string; fromColumnId: string; toColumnId: string; newOrder: number }) => {
-            console.log("[KanbanSync] Card moved:", data);
-            onCardMoved?.(data);
-        });
+        // Card events — use refs to always call the latest callback
+        const handleCardMoved = (data: { cardId: string; fromColumnId: string; toColumnId: string; newOrder: number }) => {
+            callbacksRef.current.onCardMoved?.(data);
+        };
+        const handleCardCreated = (data: { columnId: string; card: Card }) => {
+            callbacksRef.current.onCardCreated?.(data);
+        };
+        const handleCardUpdated = (data: { cardId: string; updates: Partial<Card> }) => {
+            callbacksRef.current.onCardUpdated?.(data);
+        };
+        const handleCardDeleted = (data: { cardId: string }) => {
+            callbacksRef.current.onCardDeleted?.(data);
+        };
+        const handleCommentAdded = (data: { cardId: string; comment: Comment }) => {
+            callbacksRef.current.onCommentAdded?.(data);
+        };
+        const handleCommentDeleted = (data: { cardId: string; commentId: string }) => {
+            callbacksRef.current.onCommentDeleted?.(data);
+        };
+        const handleChecklistToggled = (data: { cardId: string; itemId: string; completed: boolean }) => {
+            callbacksRef.current.onChecklistToggled?.(data);
+        };
 
-        socket.on("card-created", (data: { columnId: string; card: Card }) => {
-            console.log("[KanbanSync] Card created:", data);
-            onCardCreated?.(data);
-        });
+        socket.on("board-viewers", handleViewers);
+        socket.on("board-viewer-joined", handleViewerJoined);
+        socket.on("board-viewer-left", handleViewerLeft);
+        socket.on("card-moved", handleCardMoved);
+        socket.on("card-created", handleCardCreated);
+        socket.on("card-updated", handleCardUpdated);
+        socket.on("card-deleted", handleCardDeleted);
+        socket.on("card-comment-added", handleCommentAdded);
+        socket.on("card-comment-deleted", handleCommentDeleted);
+        socket.on("checklist-item-toggled", handleChecklistToggled);
 
-        socket.on("card-updated", (data: { cardId: string; updates: Partial<Card> }) => {
-            console.log("[KanbanSync] Card updated:", data);
-            onCardUpdated?.(data);
-        });
+        return () => {
+            socket.off("board-viewers", handleViewers);
+            socket.off("board-viewer-joined", handleViewerJoined);
+            socket.off("board-viewer-left", handleViewerLeft);
+            socket.off("card-moved", handleCardMoved);
+            socket.off("card-created", handleCardCreated);
+            socket.off("card-updated", handleCardUpdated);
+            socket.off("card-deleted", handleCardDeleted);
+            socket.off("card-comment-added", handleCommentAdded);
+            socket.off("card-comment-deleted", handleCommentDeleted);
+            socket.off("checklist-item-toggled", handleChecklistToggled);
+        };
+    }, [socket, boardId]);
 
-        socket.on("card-deleted", (data: { cardId: string }) => {
-            console.log("[KanbanSync] Card deleted:", data);
-            onCardDeleted?.(data);
-        });
+    // Join/leave board when boardId changes or on reconnect
+    useEffect(() => {
+        if (!socket || !connected || !boardId) return;
 
-        // Comment events
-        socket.on("card-comment-added", (data: { cardId: string; comment: Comment }) => {
-            console.log("[KanbanSync] Comment added:", data);
-            onCommentAdded?.(data);
-        });
-
-        socket.on("card-comment-deleted", (data: { cardId: string; commentId: string }) => {
-            console.log("[KanbanSync] Comment deleted:", data);
-            onCommentDeleted?.(data);
-        });
-
-        // Checklist events
-        socket.on("checklist-item-toggled", (data: { cardId: string; itemId: string; completed: boolean }) => {
-            console.log("[KanbanSync] Checklist toggled:", data);
-            onChecklistToggled?.(data);
-        });
+        // Join with user info for presence
+        if (currentUser) {
+            socket.emit("join-board", { boardId, user: currentUser });
+        } else {
+            socket.emit("join-board", boardId);
+        }
 
         return () => {
             socket.emit("leave-board", boardId);
-            socket.disconnect();
-            socketRef.current = null;
+            setViewers([]);
         };
-    }, [boardId, currentUser, onCardMoved, onCardCreated, onCardUpdated, onCardDeleted, onCommentAdded, onCommentDeleted, onChecklistToggled]);
+    }, [socket, connected, boardId, currentUser]);
 
-    // Emit card moved event
+    // Rejoin board on reconnect
+    useEffect(() => {
+        if (!socket || !boardId) return;
+
+        const handleReconnect = () => {
+            if (currentUser) {
+                socket.emit("join-board", { boardId, user: currentUser });
+            } else {
+                socket.emit("join-board", boardId);
+            }
+        };
+
+        socket.on("reconnect", handleReconnect);
+        return () => { socket.off("reconnect", handleReconnect); };
+    }, [socket, boardId, currentUser]);
+
+    // Emit helpers — all use the shared socket
     const emitCardMoved = useCallback((cardId: string, fromColumnId: string, toColumnId: string, newOrder: number) => {
-        if (socketRef.current?.connected && boardId) {
-            socketRef.current.emit("card-moved", {
-                boardId,
-                cardId,
-                fromColumnId,
-                toColumnId,
-                newOrder,
-            });
+        if (socket?.connected && boardId) {
+            socket.emit("card-moved", { boardId, cardId, fromColumnId, toColumnId, newOrder });
         }
-    }, [boardId]);
+    }, [socket, boardId]);
 
-    // Emit card created event
     const emitCardCreated = useCallback((columnId: string, card: Card) => {
-        if (socketRef.current?.connected && boardId) {
-            socketRef.current.emit("card-created", {
-                boardId,
-                columnId,
-                card,
-            });
+        if (socket?.connected && boardId) {
+            socket.emit("card-created", { boardId, columnId, card });
         }
-    }, [boardId]);
+    }, [socket, boardId]);
 
-    // Emit card updated event
     const emitCardUpdated = useCallback((cardId: string, updates: Partial<Card>) => {
-        if (socketRef.current?.connected && boardId) {
-            socketRef.current.emit("card-updated", {
-                boardId,
-                cardId,
-                updates,
-            });
+        if (socket?.connected && boardId) {
+            socket.emit("card-updated", { boardId, cardId, updates });
         }
-    }, [boardId]);
+    }, [socket, boardId]);
 
-    // Emit card deleted event
     const emitCardDeleted = useCallback((cardId: string) => {
-        if (socketRef.current?.connected && boardId) {
-            socketRef.current.emit("card-deleted", {
-                boardId,
-                cardId,
-            });
+        if (socket?.connected && boardId) {
+            socket.emit("card-deleted", { boardId, cardId });
         }
-    }, [boardId]);
+    }, [socket, boardId]);
 
-    // Emit comment added event
     const emitCommentAdded = useCallback((cardId: string, comment: Comment) => {
-        if (socketRef.current?.connected && boardId) {
-            socketRef.current.emit("card-comment-added", {
-                boardId,
-                cardId,
-                comment,
-            });
+        if (socket?.connected && boardId) {
+            socket.emit("card-comment-added", { boardId, cardId, comment });
         }
-    }, [boardId]);
+    }, [socket, boardId]);
 
-    // Emit comment deleted event
     const emitCommentDeleted = useCallback((cardId: string, commentId: string) => {
-        if (socketRef.current?.connected && boardId) {
-            socketRef.current.emit("card-comment-deleted", {
-                boardId,
-                cardId,
-                commentId,
-            });
+        if (socket?.connected && boardId) {
+            socket.emit("card-comment-deleted", { boardId, cardId, commentId });
         }
-    }, [boardId]);
+    }, [socket, boardId]);
 
-    // Emit checklist item toggled event
     const emitChecklistToggled = useCallback((cardId: string, itemId: string, completed: boolean) => {
-        if (socketRef.current?.connected && boardId) {
-            socketRef.current.emit("checklist-item-toggled", {
-                boardId,
-                cardId,
-                itemId,
-                completed,
-            });
+        if (socket?.connected && boardId) {
+            socket.emit("checklist-item-toggled", { boardId, cardId, itemId, completed });
         }
-    }, [boardId]);
+    }, [socket, boardId]);
 
     return {
         connected,

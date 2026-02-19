@@ -3,6 +3,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+// Helper to resolve slug/cuid to workspace ID
+async function resolveWorkspaceId(slugOrId: string): Promise<string | null> {
+    // CUIDs are typically 25 characters, slugs are usually shorter
+    const isCuid = slugOrId.length === 25 && /^[a-z0-9]+$/.test(slugOrId);
+    const workspace = await prisma.workspace.findFirst({
+        where: isCuid ? { id: slugOrId } : { slug: slugOrId },
+        select: { id: true },
+    });
+    return workspace?.id ?? null;
+}
+
 // Helper to check workspace access
 async function checkWorkspaceAccess(workspaceId: string, userId: string) {
     const membership = await prisma.workspaceMember.findUnique({
@@ -25,15 +36,13 @@ export async function GET(
         }
 
         const { slug } = await params;
-        const id = slug; // Treat the param as the ID/Slug
         const userId = (session.user as { id: string }).id;
 
         // Support both id (cuid) and slug lookup
-        // CUIDs are typically 25 characters, slugs are usually shorter and may have different characters
-        const isCuid = id.length === 25 && /^[a-z0-9]+$/.test(id);
+        const isCuid = slug.length === 25 && /^[a-z0-9]+$/.test(slug);
 
         const workspace = await prisma.workspace.findFirst({
-            where: isCuid ? { id } : { slug: id },
+            where: isCuid ? { id: slug } : { slug },
             include: {
                 owner: {
                     select: { id: true, name: true, image: true, email: true },
@@ -81,18 +90,23 @@ export async function PUT(
         }
 
         const { slug } = await params;
-        const id = slug;
         const userId = (session.user as { id: string }).id;
-        const body = await request.json();
+
+        // Resolve slug to actual workspace ID
+        const workspaceId = await resolveWorkspaceId(slug);
+        if (!workspaceId) {
+            return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
+        }
 
         // Check admin/owner access
-        const membership = await checkWorkspaceAccess(id, userId);
+        const membership = await checkWorkspaceAccess(workspaceId, userId);
         if (!membership || !["owner", "admin"].includes(membership.role)) {
             return NextResponse.json({ error: "Permission denied" }, { status: 403 });
         }
 
+        const body = await request.json();
         const { name, description, image, isPublic } = body;
-        const updateData: any = {};
+        const updateData: Record<string, unknown> = {};
 
         if (name) updateData.name = name.trim();
         if (description !== undefined) updateData.description = description?.trim() || null;
@@ -100,7 +114,7 @@ export async function PUT(
         if (isPublic !== undefined) updateData.isPublic = Boolean(isPublic);
 
         const workspace = await prisma.workspace.update({
-            where: { id },
+            where: { id: workspaceId },
             data: updateData,
         });
 
@@ -123,12 +137,17 @@ export async function DELETE(
         }
 
         const { slug } = await params;
-        const id = slug;
         const userId = (session.user as { id: string }).id;
+
+        // Resolve slug to actual workspace ID
+        const workspaceId = await resolveWorkspaceId(slug);
+        if (!workspaceId) {
+            return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
+        }
 
         // Only owner can delete
         const workspace = await prisma.workspace.findUnique({
-            where: { id },
+            where: { id: workspaceId },
             select: { ownerId: true },
         });
 
@@ -136,7 +155,7 @@ export async function DELETE(
             return NextResponse.json({ error: "Only the owner can delete workspace" }, { status: 403 });
         }
 
-        await prisma.workspace.delete({ where: { id } });
+        await prisma.workspace.delete({ where: { id: workspaceId } });
 
         return NextResponse.json({ success: true });
     } catch (error) {
@@ -144,3 +163,4 @@ export async function DELETE(
         return NextResponse.json({ error: "Failed to delete workspace" }, { status: 500 });
     }
 }
+

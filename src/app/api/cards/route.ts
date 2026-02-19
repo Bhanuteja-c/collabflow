@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { ensureUser } from "@/lib/ensureUser";
 import { Activity } from "@/lib/activity";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rateLimit";
+import { generateKeyBetween } from "fractional-indexing";
 
 // POST /api/cards - Create a new card
 export async function POST(req: NextRequest) {
@@ -29,11 +30,14 @@ export async function POST(req: NextRequest) {
         const body = await req.json();
         const { title, description, columnId } = body;
 
-        // Get the highest order in the column
+        // Get the last card for both integer order and fractional orderKey
         const lastCard = await prisma.card.findFirst({
             where: { columnId },
-            orderBy: { order: "desc" },
+            orderBy: { orderKey: "desc" },
         });
+
+        // Generate fractional key after the last card
+        const newOrderKey = generateKeyBetween(lastCard?.orderKey ?? null, null);
 
         // Get column and board info for activity logging
         const column = await prisma.column.findUnique({
@@ -51,6 +55,7 @@ export async function POST(req: NextRequest) {
                 description,
                 columnId,
                 order: (lastCard?.order ?? -1) + 1,
+                orderKey: newOrderKey,
             },
         });
 
@@ -77,7 +82,7 @@ export async function PUT(req: NextRequest) {
 
         const userId = await ensureUser(session.user as any);
         const body = await req.json();
-        const { cardId, columnId, order } = body;
+        const { cardId, columnId, order, orderKey } = body;
 
         // Get current card state before update
         const oldCard = await prisma.card.findUnique({
@@ -93,7 +98,11 @@ export async function PUT(req: NextRequest) {
 
         const card = await prisma.card.update({
             where: { id: cardId },
-            data: { columnId, order },
+            data: {
+                columnId,
+                order,
+                ...(orderKey && { orderKey }),
+            },
             include: {
                 column: { select: { title: true } }
             }

@@ -23,7 +23,33 @@ export async function PUT(
         });
 
         if (!membership) {
-            return NextResponse.json({ error: "Not a channel member" }, { status: 403 });
+            // Auto-join if public
+            const ch = await prisma.channel.findUnique({
+                where: { id },
+                include: {
+                    workspace: {
+                        select: {
+                            members: {
+                                where: { userId },
+                                select: { id: true }
+                            }
+                        }
+                    }
+                }
+            });
+
+            if (ch?.type === "public" && ch.workspace?.members.length) {
+                // Create membership
+                await prisma.channelMember.create({
+                    data: {
+                        channelId: id,
+                        userId,
+                        role: "member",
+                    },
+                });
+            } else {
+                 return NextResponse.json({ error: "Not a channel member" }, { status: 403 });
+            }
         }
 
         const body = await req.json();

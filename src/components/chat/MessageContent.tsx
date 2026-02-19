@@ -3,8 +3,8 @@
 "use client";
 
 import React, { useMemo } from "react";
-import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
+import { Video } from "lucide-react";
 import { CardLinkPreview } from "./CardLinkPreview";
 import { DocLinkPreview } from "./DocLinkPreview";
 import { CodeBlock } from "./CodeBlock";
@@ -16,7 +16,7 @@ interface MessageContentProps {
 }
 
 interface ContentPart {
-    type: 'text' | 'mention' | 'card' | 'doc' | 'code' | 'inline_code';
+    type: 'text' | 'mention' | 'card' | 'doc' | 'code' | 'inline_code' | 'huddle';
     content: string;
     id?: string;
     language?: string;
@@ -61,8 +61,8 @@ function parseInlineElements(content: string): ContentPart[] {
     const parts: ContentPart[] = [];
     let lastIndex = 0;
 
-    // Combined regex to match all inline patterns including `code`
-    const combinedRegex = /(@\w+|#card:\w+|#doc:\w+|`[^`]+`)/g;
+    // Combined regex to match all inline patterns including `code` and #huddle:
+    const combinedRegex = /(@\w+|#card:\w+|#doc:\w+|#huddle:[\w-]+|`[^`]+`)/g;
     let match;
 
     while ((match = combinedRegex.exec(content)) !== null) {
@@ -94,6 +94,12 @@ function parseInlineElements(content: string): ContentPart[] {
                 content: matched,
                 id: matched.slice(5),
             });
+        } else if (matched.startsWith('#huddle:')) {
+            parts.push({
+                type: 'huddle',
+                content: matched,
+                id: matched.slice(8),
+            });
         } else if (matched.startsWith('`') && matched.endsWith('`')) {
             parts.push({
                 type: 'inline_code',
@@ -117,7 +123,9 @@ function parseInlineElements(content: string): ContentPart[] {
 
 export function MessageContent({ content, workspaceMembers, onMentionClick }: MessageContentProps) {
     const params = useParams();
-    const workspaceSlug = params?.slug as string;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const _workspaceSlug = params?.slug as string;
+    const router = useRouter();
 
     const parts = useMemo(() => parseContent(content), [content]);
 
@@ -170,6 +178,18 @@ export function MessageContent({ content, workspaceMembers, onMentionClick }: Me
                     case 'doc':
                         return (
                             <DocLinkPreview key={i} docId={part.id || ''} />
+                        );
+
+                    case 'huddle':
+                        return (
+                            <button
+                                key={i}
+                                onClick={() => router.push(`/workspace/${_workspaceSlug}/video/${part.id}`)}
+                                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition-colors border border-emerald-500/20 font-medium my-1"
+                            >
+                                <Video className="w-4 h-4" />
+                                <span>Join Huddle</span>
+                            </button>
                         );
 
                     case 'inline_code':

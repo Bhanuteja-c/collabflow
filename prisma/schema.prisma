@@ -158,9 +158,10 @@ model VerificationToken {
 
 // CollabFlow specific models
 model Document {
-  id      String  @id @default(cuid())
-  title   String  @default("Untitled Document")
-  content String? @db.Text // HTML content
+  id       String  @id @default(cuid())
+  title    String  @default("Untitled Document")
+  content  String? @db.Text // HTML content
+  yjsState Bytes?  // Persisted Yjs CRDT state for crash recovery & late-join sync
 
   authorId String
   author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
@@ -241,9 +242,10 @@ model Board {
 }
 
 model Column {
-  id    String @id @default(cuid())
-  title String
-  order Int    @default(0)
+  id       String @id @default(cuid())
+  title    String
+  order    Int    @default(0)
+  orderKey String @default("a0") // Fractional index for concurrent-safe ordering
 
   boardId String
   board   Board  @relation(fields: [boardId], references: [id], onDelete: Cascade)
@@ -258,6 +260,7 @@ model Card {
   title       String
   description String? @db.Text
   order       Int     @default(0)
+  orderKey    String  @default("a0") // Fractional index for concurrent-safe ordering
 
   // Enhanced fields for Kanban improvements
   priority  String    @default("medium") // "low" | "medium" | "high"
@@ -307,6 +310,7 @@ model ChecklistItem {
   content   String
   completed Boolean @default(false)
   order     Int     @default(0)
+  orderKey  String  @default("a0") // Fractional index for concurrent-safe ordering
 
   cardId String
   card   Card   @relation(fields: [cardId], references: [id], onDelete: Cascade)

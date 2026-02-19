@@ -55,6 +55,7 @@ export function useVideoCall({ roomId, userId, userName, userImage, localStream 
     const [connected, setConnected] = useState(false);
     const [peers, setPeers] = useState<Peer[]>([]);
     const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+    const [roomFull, setRoomFull] = useState(false);
     const socketRef = useRef<Socket | null>(null);
     const peersRef = useRef<Map<string, Peer>>(new Map());
     const localStreamRef = useRef<MediaStream | null>(localStream);
@@ -280,7 +281,7 @@ export function useVideoCall({ roomId, userId, userName, userImage, localStream 
         }
 
         return pc;
-    }, [userId, userName, userImage, performIceRestart, updatePeerQuality, getConnectionQuality]);
+    }, [performIceRestart, updatePeerQuality, getConnectionQuality]);
 
     // Remove peer
     const removePeer = useCallback((socketId: string) => {
@@ -336,6 +337,12 @@ export function useVideoCall({ roomId, userId, userName, userImage, localStream 
             socket.emit("join-room", { roomId, userId, userName, userImage });
         });
 
+        // TASK 6: Handle room full — server rejects join above 6 participants
+        socket.on("room-full", (data: { max: number }) => {
+            console.warn(`[Socket.io] Room is full (max ${data.max} participants)`);
+            setRoomFull(true);
+        });
+
         // Handle existing users
         socket.on("existing-users", (users: Array<{ socketId: string; id: string; name: string; image: string }>) => {
             console.log("[Socket.io] Existing users:", users);
@@ -363,7 +370,7 @@ export function useVideoCall({ roomId, userId, userName, userImage, localStream 
             let peer = peersRef.current.get(data.fromSocketId);
 
             if (!peer) {
-                const pc = createPeerConnection(data.fromSocketId, data.userData, false);
+                createPeerConnection(data.fromSocketId, data.userData, false);
                 peer = peersRef.current.get(data.fromSocketId)!;
             }
 
@@ -471,9 +478,14 @@ export function useVideoCall({ roomId, userId, userName, userImage, localStream 
 
         return () => {
             socket.emit("leave-room", roomId);
+            // These refs hold stable Map instances — safe to access in cleanup
+             
             peersRef.current.forEach((peer) => peer.connection.close());
+            // eslint-disable-next-line react-hooks/exhaustive-deps
             peersRef.current.clear();
+             
             iceRestartTimeoutRef.current.forEach(timeout => clearTimeout(timeout));
+            // eslint-disable-next-line react-hooks/exhaustive-deps
             iceRestartTimeoutRef.current.clear();
             socket.disconnect();
             socketRef.current = null;
@@ -484,6 +496,7 @@ export function useVideoCall({ roomId, userId, userName, userImage, localStream 
         connected,
         peers,
         chatMessages,
+        roomFull,
         sendChatMessage,
         replaceVideoTrack,
         replaceAudioTrack,

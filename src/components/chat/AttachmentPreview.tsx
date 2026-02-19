@@ -4,7 +4,6 @@
 
 import Image from "next/image";
 import { FileText, Download } from "lucide-react";
-import { Button } from "@/components/ui/button";
 
 interface Attachment {
     type: "image" | "pdf";

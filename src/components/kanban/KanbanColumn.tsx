@@ -1,10 +1,10 @@
 // src/components/kanban/KanbanColumn.tsx
+// Premium Kanban column with top accent strip, custom scrollbar, and polished interactions
 "use client";
 
 import { useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -14,7 +14,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, MoreHorizontal, X, Pencil, Trash2 } from "lucide-react";
+import { Plus, MoreHorizontal, X, Pencil, Trash2, Inbox } from "lucide-react";
 import KanbanCard from "./KanbanCard";
 
 interface User {
@@ -55,15 +55,15 @@ interface ColumnProps {
     canDelete?: boolean;
 }
 
-// Color coding for columns
-const columnColors: Record<string, { bg: string; text: string; dot: string }> = {
-    "To Do": { bg: "bg-slate-500/10", text: "text-slate-600 dark:text-slate-400", dot: "bg-slate-500" },
-    "In Progress": { bg: "bg-blue-500/10", text: "text-blue-600 dark:text-blue-400", dot: "bg-blue-500" },
-    "Review": { bg: "bg-amber-500/10", text: "text-amber-600 dark:text-amber-400", dot: "bg-amber-500" },
-    "Done": { bg: "bg-emerald-500/10", text: "text-emerald-600 dark:text-emerald-400", dot: "bg-emerald-500" },
+// Column accent color config — gradient strip + dot
+const columnAccents: Record<string, { gradient: string; dot: string; glow: string }> = {
+    "To Do":       { gradient: "from-slate-400 to-slate-500",   dot: "bg-slate-500",   glow: "ring-slate-500/20 bg-slate-500/5" },
+    "In Progress": { gradient: "from-blue-400 to-blue-600",     dot: "bg-blue-500",    glow: "ring-blue-500/20 bg-blue-500/5" },
+    "Review":      { gradient: "from-amber-400 to-amber-500",   dot: "bg-amber-500",   glow: "ring-amber-500/20 bg-amber-500/5" },
+    "Done":        { gradient: "from-emerald-400 to-emerald-600", dot: "bg-emerald-500", glow: "ring-emerald-500/20 bg-emerald-500/5" },
 };
 
-const defaultColors = { bg: "bg-violet-500/10", text: "text-violet-600 dark:text-violet-400", dot: "bg-violet-500" };
+const defaultAccent = { gradient: "from-violet-400 to-violet-600", dot: "bg-violet-500", glow: "ring-violet-500/20 bg-violet-500/5" };
 
 export default function KanbanColumn({
     column,
@@ -84,7 +84,7 @@ export default function KanbanColumn({
         id: column.id,
     });
 
-    const colors = columnColors[column.title] || defaultColors;
+    const accent = columnAccents[column.title] || defaultAccent;
 
     const handleAddCard = () => {
         if (newCardTitle.trim()) {
@@ -116,17 +116,23 @@ export default function KanbanColumn({
     };
 
     return (
-        <div className="w-72 sm:w-80 flex-shrink-0">
-            <Card
+        <div className="w-[21rem] flex-shrink-0">
+            <div
                 ref={setNodeRef}
                 className={`
-                    bg-muted/30 border shadow-sm h-[calc(100vh-11rem)] sm:h-[calc(100vh-12rem)] flex flex-col
-                    transition-all duration-200
-                    ${isOver ? "ring-2 ring-accent bg-accent/5" : ""}
+                    relative overflow-hidden rounded-xl
+                    bg-muted/20 border border-border/50
+                    h-[calc(100vh-11rem)] sm:h-[calc(100vh-12rem)]
+                    flex flex-col
+                    transition-all duration-300
+                    ${isOver ? `ring-2 ${accent.glow}` : ""}
                 `}
             >
+                {/* Top accent gradient strip */}
+                <div className={`h-[3px] w-full bg-gradient-to-r ${accent.gradient}`} />
+
                 {/* Column Header */}
-                <CardHeader className={`p-3 pb-2 rounded-t-lg ${colors.bg}`}>
+                <div className="px-3.5 pt-3 pb-2">
                     <div className="flex items-center justify-between">
                         {isRenaming ? (
                             <Input
@@ -141,17 +147,19 @@ export default function KanbanColumn({
                                 className="text-sm font-semibold h-7 w-full"
                             />
                         ) : (
-                            <CardTitle className={`text-sm font-semibold flex items-center gap-2 ${colors.text}`}>
-                                <div className={`w-2.5 h-2.5 rounded-full ${colors.dot}`} />
-                                <span className="text-foreground">{column.title}</span>
-                                <span className="text-xs font-normal bg-background/80 text-muted-foreground px-2 py-0.5 rounded-full">
+                            <div className="flex items-center gap-2.5">
+                                <div className={`w-2 h-2 rounded-full ${accent.dot} shadow-sm`} />
+                                <h3 className="text-sm font-semibold text-foreground tracking-tight">
+                                    {column.title}
+                                </h3>
+                                <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[11px] font-medium rounded-full bg-muted/80 text-muted-foreground">
                                     {column.cards.length}
                                 </span>
-                            </CardTitle>
+                            </div>
                         )}
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground">
+                                <Button variant="ghost" size="icon" className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground">
                                     <MoreHorizontal className="w-4 h-4" />
                                 </Button>
                             </DropdownMenuTrigger>
@@ -179,17 +187,18 @@ export default function KanbanColumn({
                             </DropdownMenuContent>
                         </DropdownMenu>
                     </div>
-                </CardHeader>
+                </div>
 
-                {/* Cards */}
-                <CardContent className="flex-1 overflow-y-auto p-2 pt-2 space-y-2">
+                {/* Cards — scrollable with custom scrollbar */}
+                <div className="flex-1 overflow-y-auto px-2.5 pb-2 space-y-2 kanban-scroll">
                     <SortableContext
                         items={column.cards.map((c) => c.id)}
                         strategy={verticalListSortingStrategy}
                     >
                         {column.cards.length === 0 && !isAdding ? (
-                            <div className="flex items-center justify-center h-24 border-2 border-dashed border-border/50 rounded-lg text-muted-foreground text-sm">
-                                Drop cards here
+                            <div className="flex flex-col items-center justify-center h-28 border-2 border-dashed border-border/30 rounded-xl text-muted-foreground/60 gap-2">
+                                <Inbox className="w-5 h-5" />
+                                <span className="text-xs font-medium">Drop cards here</span>
                             </div>
                         ) : (
                             column.cards.map((card) => (
@@ -206,29 +215,28 @@ export default function KanbanColumn({
 
                     {/* Inline Add Card */}
                     {isAdding ? (
-                        <div className="space-y-2">
-                            <Card className="shadow-sm">
-                                <CardContent className="p-2">
-                                    <Input
-                                        placeholder="Enter card title..."
-                                        value={newCardTitle}
-                                        onChange={(e) => setNewCardTitle(e.target.value)}
-                                        onKeyDown={handleKeyDown}
-                                        autoFocus
-                                        className="text-sm"
-                                    />
-                                </CardContent>
-                            </Card>
+                        <div className="space-y-2 pt-1">
+                            <div className="rounded-xl border border-border/60 bg-card/80 backdrop-blur-sm p-2.5 shadow-sm">
+                                <Input
+                                    placeholder="Enter card title..."
+                                    value={newCardTitle}
+                                    onChange={(e) => setNewCardTitle(e.target.value)}
+                                    onKeyDown={handleKeyDown}
+                                    autoFocus
+                                    className="text-sm border-0 bg-transparent p-0 h-7 focus-visible:ring-0 shadow-none"
+                                />
+                            </div>
                             <div className="flex gap-2">
-                                <Button size="sm" onClick={handleAddCard} className="btn-glow">
+                                <Button size="sm" onClick={handleAddCard} className="rounded-lg text-xs h-7 px-3">
                                     Add Card
                                 </Button>
                                 <Button
                                     size="sm"
                                     variant="ghost"
                                     onClick={() => { setIsAdding(false); setNewCardTitle(""); }}
+                                    className="rounded-lg h-7 w-7 p-0"
                                 >
-                                    <X className="w-4 h-4" />
+                                    <X className="w-3.5 h-3.5" />
                                 </Button>
                             </div>
                         </div>
@@ -236,15 +244,15 @@ export default function KanbanColumn({
                         <Button
                             variant="ghost"
                             size="sm"
-                            className="w-full justify-start text-muted-foreground hover:text-foreground hover:bg-background/50"
+                            className="w-full justify-start text-muted-foreground/70 hover:text-foreground hover:bg-muted/40 rounded-lg text-xs h-8 mt-1"
                             onClick={() => setIsAdding(true)}
                         >
-                            <Plus className="w-4 h-4 mr-2" />
+                            <Plus className="w-3.5 h-3.5 mr-1.5" />
                             Add a card
                         </Button>
                     )}
-                </CardContent>
-            </Card>
+                </div>
+            </div>
         </div>
     );
 }

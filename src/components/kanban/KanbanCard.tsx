@@ -1,12 +1,11 @@
 // src/components/kanban/KanbanCard.tsx
+// Premium Kanban card with glassmorphism, priority strip, progress bar, and hover animations
 "use client";
 
 import { useState, useRef, useEffect } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -15,9 +14,8 @@ import {
     GripVertical,
     Calendar,
     MessageSquare,
-    Flag,
     CheckSquare,
-    AlertCircle
+    AlertCircle,
 } from "lucide-react";
 import { format, isBefore, addDays } from "date-fns";
 
@@ -53,18 +51,18 @@ interface CardProps {
 }
 
 const priorityConfig = {
-    low: { color: "bg-emerald-500", textColor: "text-emerald-500 dark:text-emerald-400", label: "Low" },
-    medium: { color: "bg-amber-500", textColor: "text-amber-500 dark:text-amber-400", label: "Medium" },
-    high: { color: "bg-red-500", textColor: "text-red-500 dark:text-red-400", label: "High" },
+    low: { color: "bg-emerald-500", strip: "from-emerald-400 to-emerald-600", textColor: "text-emerald-600 dark:text-emerald-400", label: "Low" },
+    medium: { color: "bg-amber-500", strip: "from-amber-400 to-amber-500", textColor: "text-amber-600 dark:text-amber-400", label: "Medium" },
+    high: { color: "bg-red-500", strip: "from-red-400 to-rose-600", textColor: "text-red-600 dark:text-red-400", label: "High" },
 };
 
 const labelColors = [
-    "bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/20",
-    "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/20",
-    "bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/20",
-    "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/20",
-    "bg-pink-500/15 text-pink-700 dark:text-pink-300 border-pink-500/20",
-    "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-500/20",
+    { dot: "bg-blue-500", text: "text-blue-700 dark:text-blue-300" },
+    { dot: "bg-emerald-500", text: "text-emerald-700 dark:text-emerald-300" },
+    { dot: "bg-violet-500", text: "text-violet-700 dark:text-violet-300" },
+    { dot: "bg-amber-500", text: "text-amber-700 dark:text-amber-300" },
+    { dot: "bg-pink-500", text: "text-pink-700 dark:text-pink-300" },
+    { dot: "bg-cyan-500", text: "text-cyan-700 dark:text-cyan-300" },
 ];
 
 export default function KanbanCard({
@@ -72,7 +70,7 @@ export default function KanbanCard({
     isDragging,
     onUpdate,
     onDelete,
-    onOpenDetail
+    onOpenDetail,
 }: CardProps) {
     const [isEditing, setIsEditing] = useState(false);
     const [editTitle, setEditTitle] = useState(card.title);
@@ -131,37 +129,54 @@ export default function KanbanCard({
     const isOverdue = card.dueDate && isBefore(new Date(card.dueDate), new Date());
     const isDueSoon = card.dueDate && !isOverdue && isBefore(new Date(card.dueDate), addDays(new Date(), 2));
     const priority = card.priority && priorityConfig[card.priority];
+    const checklistProgress = card.checklistTotal && card.checklistTotal > 0
+        ? Math.round((card.checklistCompleted || 0) / card.checklistTotal * 100)
+        : null;
 
     return (
         <div
             ref={setNodeRef}
             style={style}
-            className={`group ${isDragging || isSortableDragging ? "opacity-50" : ""}`}
+            className={`group ${isDragging || isSortableDragging ? "opacity-40 scale-[0.98]" : ""}`}
             onMouseEnter={() => setShowActions(true)}
             onMouseLeave={() => setShowActions(false)}
         >
-            <Card
+            <div
                 className={`
-                    shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer
-                    border hover:border-accent/50
-                    ${isOverdue ? "border-red-500/40 ring-1 ring-red-500/20" : ""}
-                    ${isDragging ? "shadow-lg rotate-2 scale-105" : ""}
+                    relative overflow-hidden rounded-xl
+                    bg-card/80 backdrop-blur-sm
+                    border border-border/60 
+                    shadow-sm
+                    transition-all duration-200 ease-out
+                    hover:-translate-y-0.5 hover:shadow-md hover:border-border
+                    cursor-pointer
+                    ${isOverdue ? "ring-1 ring-red-500/30" : ""}
+                    ${isDragging ? "shadow-2xl rotate-2 scale-105 border-primary/30" : ""}
                     ${card.status === "completed" ? "opacity-60" : ""}
                 `}
                 onClick={handleCardClick}
             >
-                <CardContent className="p-3 space-y-2">
+                {/* Priority strip — left edge */}
+                {priority && (
+                    <div className={`absolute left-0 top-0 bottom-0 w-[3px] bg-gradient-to-b ${priority.strip}`} />
+                )}
+
+                <div className={`p-3 space-y-2.5 ${priority ? "pl-3.5" : ""}`}>
                     {/* Labels */}
                     {card.labels && card.labels.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                            {card.labels.map((label, i) => (
-                                <span
-                                    key={i}
-                                    className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${labelColors[i % labelColors.length]}`}
-                                >
-                                    {label}
-                                </span>
-                            ))}
+                        <div className="flex flex-wrap gap-1.5">
+                            {card.labels.map((label, i) => {
+                                const lc = labelColors[i % labelColors.length];
+                                return (
+                                    <span
+                                        key={i}
+                                        className={`inline-flex items-center gap-1 text-[10px] font-medium ${lc.text}`}
+                                    >
+                                        <span className={`w-1.5 h-1.5 rounded-full ${lc.dot}`} />
+                                        {label}
+                                    </span>
+                                );
+                            })}
                         </div>
                     )}
 
@@ -180,13 +195,13 @@ export default function KanbanCard({
                         ) : (
                             <div className="flex items-start gap-1.5 min-w-0 flex-1">
                                 <div
-                                    className="mt-1 cursor-grab active:cursor-grabbing flex-shrink-0 opacity-0 group-hover:opacity-50 hover:!opacity-100 transition-opacity"
+                                    className="mt-0.5 cursor-grab active:cursor-grabbing flex-shrink-0 opacity-0 group-hover:opacity-40 hover:!opacity-100 transition-opacity"
                                     {...attributes}
                                     {...listeners}
                                 >
                                     <GripVertical className="w-3.5 h-3.5 text-muted-foreground" />
                                 </div>
-                                <span className={`text-sm leading-snug ${card.status === "completed" ? "line-through text-muted-foreground" : ""}`}>
+                                <span className={`text-[13px] font-medium leading-snug ${card.status === "completed" ? "line-through text-muted-foreground" : "text-foreground"}`}>
                                     {card.title}
                                 </span>
                             </div>
@@ -198,7 +213,7 @@ export default function KanbanCard({
                                 <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-6 w-6"
+                                    className="h-6 w-6 rounded-lg opacity-60 hover:opacity-100"
                                     onClick={(e) => { e.stopPropagation(); setIsEditing(true); }}
                                 >
                                     <Pencil className="w-3 h-3" />
@@ -206,7 +221,7 @@ export default function KanbanCard({
                                 <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-6 w-6 text-red-500 hover:text-red-600"
+                                    className="h-6 w-6 rounded-lg text-red-500 hover:text-red-600 opacity-60 hover:opacity-100"
                                     onClick={(e) => { e.stopPropagation(); onDelete?.(card.id); }}
                                 >
                                     <Trash2 className="w-3 h-3" />
@@ -217,24 +232,14 @@ export default function KanbanCard({
 
                     {/* Meta row */}
                     <div className="flex items-center gap-2 flex-wrap">
-                        {/* Priority */}
-                        {priority && (
-                            <div className="flex items-center gap-1">
-                                <Flag className={`w-3 h-3 ${priority.textColor}`} />
-                                <span className={`text-[10px] font-medium ${priority.textColor}`}>
-                                    {priority.label}
-                                </span>
-                            </div>
-                        )}
-
                         {/* Due date */}
                         {card.dueDate && (
-                            <div className={`flex items-center gap-1 text-[10px] font-medium rounded-full px-1.5 py-0.5 ${
+                            <div className={`inline-flex items-center gap-1 text-[11px] font-medium rounded-md px-1.5 py-0.5 ${
                                 isOverdue
                                     ? "bg-red-500/10 text-red-600 dark:text-red-400"
                                     : isDueSoon
                                         ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
-                                        : "text-muted-foreground"
+                                        : "bg-muted/80 text-muted-foreground"
                             }`}>
                                 {isOverdue && <AlertCircle className="w-3 h-3" />}
                                 <Calendar className="w-3 h-3" />
@@ -242,11 +247,11 @@ export default function KanbanCard({
                             </div>
                         )}
 
-                        {/* Checklist progress */}
+                        {/* Checklist count */}
                         {card.checklistTotal != null && card.checklistTotal > 0 && (
-                            <div className={`flex items-center gap-1 text-[10px] font-medium ${
+                            <div className={`inline-flex items-center gap-1 text-[11px] font-medium ${
                                 card.checklistCompleted === card.checklistTotal
-                                    ? "text-emerald-500"
+                                    ? "text-emerald-600 dark:text-emerald-400"
                                     : "text-muted-foreground"
                             }`}>
                                 <CheckSquare className="w-3 h-3" />
@@ -256,7 +261,7 @@ export default function KanbanCard({
 
                         {/* Comments */}
                         {card.commentsCount != null && card.commentsCount > 0 && (
-                            <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                            <div className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
                                 <MessageSquare className="w-3 h-3" />
                                 {card.commentsCount}
                             </div>
@@ -265,16 +270,30 @@ export default function KanbanCard({
                         {/* Spacer + Assignee */}
                         <div className="flex-1" />
                         {card.assignee && (
-                            <Avatar className="w-5 h-5" title={card.assignee.name || "Assigned"}>
+                            <Avatar className="w-6 h-6 ring-2 ring-background" title={card.assignee.name || "Assigned"}>
                                 <AvatarImage src={card.assignee.image || undefined} />
-                                <AvatarFallback className="text-[8px]">
+                                <AvatarFallback className="text-[9px] font-semibold bg-primary/10 text-primary">
                                     {card.assignee.name?.[0] || "?"}
                                 </AvatarFallback>
                             </Avatar>
                         )}
                     </div>
-                </CardContent>
-            </Card>
+                </div>
+
+                {/* Checklist progress bar — bottom edge */}
+                {checklistProgress !== null && (
+                    <div className="h-[2px] bg-muted/50">
+                        <div
+                            className={`h-full transition-all duration-500 ${
+                                checklistProgress === 100
+                                    ? "bg-emerald-500"
+                                    : "bg-primary/60"
+                            }`}
+                            style={{ width: `${checklistProgress}%` }}
+                        />
+                    </div>
+                )}
+            </div>
         </div>
     );
 }

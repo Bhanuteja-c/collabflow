@@ -1,5 +1,5 @@
 // src/components/kanban/CardDetailModal.tsx
-// Full card detail view with description, assignee, due date, priority, comments, and checklist
+// Polished card detail view with progress ring, section dividers, and consistent design
 "use client";
 
 import { useState, useEffect, useRef } from "react";
@@ -16,7 +16,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Progress } from "@/components/ui/progress";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -107,6 +106,40 @@ const labelColorMap: Record<string, string> = {
     Backend: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
     Frontend: "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300",
 };
+
+// SVG Progress Ring component
+function ProgressRing({ progress, size = 28, strokeWidth = 3 }: { progress: number; size?: number; strokeWidth?: number }) {
+    const radius = (size - strokeWidth) / 2;
+    const circumference = 2 * Math.PI * radius;
+    const offset = circumference - (progress / 100) * circumference;
+    const isComplete = progress === 100;
+
+    return (
+        <svg width={size} height={size} className="transform -rotate-90">
+            <circle
+                cx={size / 2}
+                cy={size / 2}
+                r={radius}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={strokeWidth}
+                className="text-muted/40"
+            />
+            <circle
+                cx={size / 2}
+                cy={size / 2}
+                r={radius}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={strokeWidth}
+                strokeDasharray={circumference}
+                strokeDashoffset={offset}
+                strokeLinecap="round"
+                className={`transition-all duration-500 ${isComplete ? "text-emerald-500" : "text-primary"}`}
+            />
+        </svg>
+    );
+}
 
 export default function CardDetailModal({
     card,
@@ -331,8 +364,9 @@ export default function CardDetailModal({
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
-                <DialogHeader className="flex-shrink-0">
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
+                {/* Header */}
+                <div className="flex-shrink-0 px-6 pt-6 pb-4 border-b border-border/50">
                     <div className="flex items-start justify-between gap-4">
                         <div className="flex-1 min-w-0">
                             <Input
@@ -344,23 +378,21 @@ export default function CardDetailModal({
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
                             {isSaving && (
-                                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                <span className="text-[11px] text-muted-foreground flex items-center gap-1 bg-muted/50 px-2 py-0.5 rounded-full">
                                     <Loader2 className="w-3 h-3 animate-spin" />
-                                    Saving...
+                                    Saving
                                 </span>
                             )}
                         </div>
                     </div>
-                </DialogHeader>
 
-                <div className="flex-1 overflow-y-auto space-y-6 pr-2">
-                    {/* Metadata Row */}
-                    <div className="flex flex-wrap gap-3">
+                    {/* Metadata pills row */}
+                    <div className="flex flex-wrap gap-2 mt-3">
                         {/* Priority */}
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button variant="outline" size="sm" className="gap-2">
-                                    <Flag className={`w-4 h-4 ${priorityConfig[priority].textColor}`} />
+                                <Button variant="outline" size="sm" className="gap-1.5 h-8 rounded-lg text-xs">
+                                    <Flag className={`w-3.5 h-3.5 ${priorityConfig[priority].textColor}`} />
                                     {priorityConfig[priority].label}
                                 </Button>
                             </DropdownMenuTrigger>
@@ -379,35 +411,50 @@ export default function CardDetailModal({
                         </DropdownMenu>
 
                         {/* Due Date */}
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
+                            <div className={`inline-flex items-center rounded-lg border h-8 px-2 text-xs font-medium ${
+                                isOverdue
+                                    ? "border-red-500/50 text-red-600 dark:text-red-400 bg-red-500/5"
+                                    : isDueSoon
+                                        ? "border-amber-500/50 text-amber-600 dark:text-amber-400 bg-amber-500/5"
+                                        : "border-border"
+                            }`}>
+                                <Calendar className="w-3.5 h-3.5 mr-1.5 text-muted-foreground" />
+                                <Input
+                                    type="date"
+                                    value={dueDate}
+                                    onChange={(e) => handleDueDateChange(e.target.value)}
+                                    className="border-0 bg-transparent p-0 h-auto text-xs w-[110px] focus-visible:ring-0 shadow-none"
+                                />
+                            </div>
+                            {isOverdue && (
+                                <span className="text-[10px] font-semibold text-red-600 dark:text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded">
+                                    Overdue
+                                </span>
+                            )}
+                        </div>
+
+                        {/* Start Date */}
+                        <div className="inline-flex items-center rounded-lg border border-border h-8 px-2 text-xs">
+                            <Clock className="w-3.5 h-3.5 mr-1.5 text-muted-foreground" />
                             <Input
                                 type="date"
-                                value={dueDate}
-                                onChange={(e) => handleDueDateChange(e.target.value)}
-                                className={`w-auto h-9 ${isOverdue
-                                    ? "border-red-500 text-red-600"
-                                    : isDueSoon
-                                        ? "border-amber-500 text-amber-600"
-                                        : ""
-                                    }`}
+                                value={startDate}
+                                onChange={(e) => handleStartDateChange(e.target.value)}
+                                className="border-0 bg-transparent p-0 h-auto text-xs w-[110px] focus-visible:ring-0 shadow-none"
+                                title="Start date"
                             />
-                            {isOverdue && (
-                                <Badge variant="destructive" className="text-xs">
-                                    <AlertCircle className="w-3 h-3 mr-1" />
-                                    Overdue
-                                </Badge>
-                            )}
                         </div>
 
                         {/* Assignee */}
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button variant="outline" size="sm" className="gap-2">
+                                <Button variant="outline" size="sm" className="gap-1.5 h-8 rounded-lg text-xs">
                                     {selectedAssignee ? (
                                         <>
-                                            <Avatar className="w-5 h-5">
+                                            <Avatar className="w-4 h-4">
                                                 <AvatarImage src={selectedAssignee.image || undefined} />
-                                                <AvatarFallback className="text-xs">
+                                                <AvatarFallback className="text-[8px]">
                                                     {selectedAssignee.name?.[0] || "?"}
                                                 </AvatarFallback>
                                             </Avatar>
@@ -415,7 +462,7 @@ export default function CardDetailModal({
                                         </>
                                     ) : (
                                         <>
-                                            <User className="w-4 h-4" />
+                                            <User className="w-3.5 h-3.5" />
                                             Assign
                                         </>
                                     )}
@@ -443,34 +490,26 @@ export default function CardDetailModal({
                                 ))}
                             </DropdownMenuContent>
                         </DropdownMenu>
-                        {/* Start Date */}
-                        <div className="flex items-center gap-2">
-                            <Clock className="w-4 h-4 text-muted-foreground" />
-                            <Input
-                                type="date"
-                                value={startDate}
-                                onChange={(e) => handleStartDateChange(e.target.value)}
-                                className="w-auto h-9"
-                                title="Start date"
-                            />
-                        </div>
 
                         {/* Status toggle */}
                         <Button
                             variant={status === "completed" ? "default" : "outline"}
                             size="sm"
                             onClick={handleStatusToggle}
-                            className={`gap-2 ${status === "completed" ? "bg-emerald-600 hover:bg-emerald-700" : ""}`}
+                            className={`gap-1.5 h-8 rounded-lg text-xs ${status === "completed" ? "bg-emerald-600 hover:bg-emerald-700" : ""}`}
                         >
-                            <CircleCheck className="w-4 h-4" />
+                            <CircleCheck className="w-3.5 h-3.5" />
                             {status === "completed" ? "Completed" : "Mark Done"}
                         </Button>
                     </div>
+                </div>
 
+                {/* Scrollable content */}
+                <div className="flex-1 overflow-y-auto">
                     {/* Labels */}
-                    <div className="space-y-2">
-                        <h4 className="font-medium text-sm text-muted-foreground flex items-center gap-2">
-                            <Tag className="w-4 h-4" />
+                    <div className="px-6 py-4 border-b border-border/30">
+                        <h4 className="font-medium text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-2 mb-2.5">
+                            <Tag className="w-3.5 h-3.5" />
                             Labels
                         </h4>
                         <div className="flex flex-wrap gap-1.5">
@@ -478,10 +517,10 @@ export default function CardDetailModal({
                                 <button
                                     key={label}
                                     onClick={() => handleLabelToggle(label)}
-                                    className={`text-xs font-medium px-2.5 py-1 rounded-full border transition-all ${
+                                    className={`text-xs font-medium px-2.5 py-1 rounded-lg border transition-all ${
                                         labels.includes(label)
                                             ? `${labelColorMap[label] || "bg-violet-500/15 text-violet-700"} border-current/20 ring-1 ring-current/20`
-                                            : "bg-muted/50 text-muted-foreground border-border hover:bg-muted"
+                                            : "bg-muted/30 text-muted-foreground border-border/50 hover:bg-muted/60"
                                     }`}
                                 >
                                     {label}
@@ -491,34 +530,34 @@ export default function CardDetailModal({
                     </div>
 
                     {/* Description */}
-                    <div className="space-y-2">
-                        <h4 className="font-medium text-sm text-muted-foreground">Description</h4>
+                    <div className="px-6 py-4 border-b border-border/30">
+                        <h4 className="font-medium text-xs uppercase tracking-wider text-muted-foreground mb-2.5">Description</h4>
                         <Textarea
                             value={description}
                             onChange={(e) => handleDescriptionChange(e.target.value)}
                             placeholder="Add a more detailed description..."
-                            className="min-h-[100px] resize-none"
+                            className="min-h-[80px] resize-none text-sm bg-muted/20 border-border/50 rounded-xl"
                         />
                     </div>
 
                     {/* Checklist */}
-                    <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                            <h4 className="font-medium text-sm flex items-center gap-2">
-                                <CheckSquare className="w-4 h-4" />
+                    <div className="px-6 py-4 border-b border-border/30">
+                        <div className="flex items-center justify-between mb-3">
+                            <h4 className="font-medium text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                                <CheckSquare className="w-3.5 h-3.5" />
                                 Checklist
                                 {totalItems > 0 && (
-                                    <span className="text-muted-foreground">
-                                        ({completedItems}/{totalItems})
+                                    <span className="normal-case tracking-normal text-[11px]">
+                                        {completedItems}/{totalItems}
                                     </span>
                                 )}
                             </h4>
                             {totalItems > 0 && (
-                                <Progress value={checklistProgress} className="w-24 h-2" />
+                                <ProgressRing progress={checklistProgress} />
                             )}
                         </div>
 
-                        <div className="space-y-2">
+                        <div className="space-y-1.5">
                             <AnimatePresence>
                                 {checklist.map((item) => (
                                     <motion.div
@@ -526,7 +565,7 @@ export default function CardDetailModal({
                                         initial={{ opacity: 0, height: 0 }}
                                         animate={{ opacity: 1, height: "auto" }}
                                         exit={{ opacity: 0, height: 0 }}
-                                        className="flex items-center gap-2 group"
+                                        className="flex items-center gap-2.5 group py-1 px-2 -mx-2 rounded-lg hover:bg-muted/30 transition-colors"
                                     >
                                         <Checkbox
                                             checked={item.completed}
@@ -541,7 +580,7 @@ export default function CardDetailModal({
                                         <Button
                                             variant="ghost"
                                             size="icon"
-                                            className="h-6 w-6 opacity-0 group-hover:opacity-100"
+                                            className="h-6 w-6 rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
                                             onClick={() => deleteChecklistItem(item.id)}
                                         >
                                             <X className="w-3 h-3" />
@@ -550,19 +589,20 @@ export default function CardDetailModal({
                                 ))}
                             </AnimatePresence>
 
-                            <div className="flex gap-2">
+                            <div className="flex gap-2 pt-1">
                                 <Input
                                     value={newChecklistItem}
                                     onChange={(e) => setNewChecklistItem(e.target.value)}
                                     onKeyDown={(e) => e.key === "Enter" && addChecklistItem()}
                                     placeholder="Add an item..."
-                                    className="h-8 text-sm"
+                                    className="h-8 text-sm rounded-lg"
                                 />
                                 <Button
                                     size="sm"
                                     variant="ghost"
                                     onClick={addChecklistItem}
                                     disabled={!newChecklistItem.trim()}
+                                    className="rounded-lg h-8 w-8 p-0"
                                 >
                                     <Plus className="w-4 h-4" />
                                 </Button>
@@ -571,21 +611,21 @@ export default function CardDetailModal({
                     </div>
 
                     {/* Comments */}
-                    <div className="space-y-3">
-                        <h4 className="font-medium text-sm flex items-center gap-2">
-                            <MessageSquare className="w-4 h-4" />
+                    <div className="px-6 py-4">
+                        <h4 className="font-medium text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-2 mb-3">
+                            <MessageSquare className="w-3.5 h-3.5" />
                             Comments
                             {comments.length > 0 && (
-                                <span className="text-muted-foreground">({comments.length})</span>
+                                <span className="normal-case tracking-normal text-[11px]">({comments.length})</span>
                             )}
                         </h4>
 
                         {isLoadingComments ? (
-                            <div className="flex items-center justify-center py-4">
+                            <div className="flex items-center justify-center py-6">
                                 <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
                             </div>
                         ) : (
-                            <div className="space-y-3 max-h-48 overflow-y-auto">
+                            <div className="space-y-3 max-h-48 overflow-y-auto kanban-scroll mb-3">
                                 <AnimatePresence>
                                     {comments.map((comment) => (
                                         <motion.div
@@ -593,11 +633,11 @@ export default function CardDetailModal({
                                             initial={{ opacity: 0, y: 10 }}
                                             animate={{ opacity: 1, y: 0 }}
                                             exit={{ opacity: 0, y: -10 }}
-                                            className="flex gap-3 group"
+                                            className="flex gap-3 group p-2.5 -mx-2 rounded-xl hover:bg-muted/20 transition-colors"
                                         >
-                                            <Avatar className="w-7 h-7 flex-shrink-0">
+                                            <Avatar className="w-7 h-7 flex-shrink-0 ring-1 ring-border/30">
                                                 <AvatarImage src={comment.author.image || undefined} />
-                                                <AvatarFallback className="text-xs">
+                                                <AvatarFallback className="text-[10px] font-semibold">
                                                     {comment.author.name?.[0] || "?"}
                                                 </AvatarFallback>
                                             </Avatar>
@@ -606,21 +646,21 @@ export default function CardDetailModal({
                                                     <span className="font-medium text-sm">
                                                         {comment.author.name}
                                                     </span>
-                                                    <span className="text-xs text-muted-foreground">
+                                                    <span className="text-[11px] text-muted-foreground">
                                                         {format(new Date(comment.createdAt), "MMM d, h:mm a")}
                                                     </span>
                                                     {comment.authorId === currentUserId && (
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
-                                                            className="h-5 w-5 opacity-0 group-hover:opacity-100"
+                                                            className="h-5 w-5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity ml-auto"
                                                             onClick={() => deleteComment(comment.id)}
                                                         >
                                                             <Trash2 className="w-3 h-3 text-destructive" />
                                                         </Button>
                                                     )}
                                                 </div>
-                                                <p className="text-sm text-muted-foreground mt-0.5">
+                                                <p className="text-sm text-muted-foreground mt-0.5 leading-relaxed">
                                                     {comment.content}
                                                 </p>
                                             </div>
@@ -637,9 +677,14 @@ export default function CardDetailModal({
                                 onChange={(e) => setNewComment(e.target.value)}
                                 onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && addComment()}
                                 placeholder="Write a comment..."
-                                className="flex-1"
+                                className="flex-1 rounded-lg text-sm"
                             />
-                            <Button onClick={addComment} disabled={!newComment.trim()}>
+                            <Button
+                                onClick={addComment}
+                                disabled={!newComment.trim()}
+                                size="sm"
+                                className="rounded-lg h-9 px-3"
+                            >
                                 <Send className="w-4 h-4" />
                             </Button>
                         </div>
