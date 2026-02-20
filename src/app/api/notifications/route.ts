@@ -24,7 +24,22 @@ export async function GET() {
             where: { userId, isRead: false },
         });
 
-        return NextResponse.json({ notifications, unreadCount });
+        // Enqueue sender profiles
+        const senderIds = Array.from(new Set(notifications.map(n => n.senderId).filter(Boolean))) as string[];
+        const senders = await prisma.user.findMany({
+            where: { id: { in: senderIds } },
+            select: { id: true, name: true, image: true }
+        });
+
+        const senderMap = new Map();
+        senders.forEach(s => senderMap.set(s.id, s));
+
+        const enrichedNotifications = notifications.map(n => ({
+            ...n,
+            sender: n.senderId ? senderMap.get(n.senderId) : null
+        }));
+
+        return NextResponse.json({ notifications: enrichedNotifications, unreadCount });
     } catch (error) {
         console.error("Get notifications error:", error);
         return NextResponse.json({ error: "Failed to fetch notifications" }, { status: 500 });

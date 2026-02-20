@@ -38,18 +38,31 @@ export async function POST(
         }
 
         // Toggle pin
-        const updated = await prisma.message.update({
-            where: { id },
-            data: {
-                isPinned: !message.isPinned,
-                pinnedAt: message.isPinned ? null : new Date(),
-            },
-            include: {
-                author: { select: { id: true, name: true, image: true } },
-            },
+        // Check if already pinned
+        const existingPin = await prisma.pinnedMessage.findUnique({
+            where: { messageId: id },
         });
 
-        return NextResponse.json(updated);
+        const isPinned = !existingPin; // Determine the target state (true for pin, false for unpin)
+
+        if (isPinned) {
+            if (!existingPin) { // If it should be pinned and isn't already
+                await prisma.pinnedMessage.create({
+                    data: {
+                        messageId: id,
+                        pinnedBy: userId,
+                    },
+                });
+            }
+        } else { // If it should be unpinned
+            if (existingPin) { // If it should be unpinned and is currently pinned
+                await prisma.pinnedMessage.delete({
+                     where: { messageId: id }
+                });
+            }
+        }
+
+        return NextResponse.json({ success: true, pinned: isPinned });
     } catch (error) {
         console.error("Pin toggle error:", error);
         return NextResponse.json({ error: "Failed to toggle pin" }, { status: 500 });

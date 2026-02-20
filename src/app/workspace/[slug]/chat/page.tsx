@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useSocket } from "@/hooks/useSocket";
+import { useWorkspacePresence } from "@/hooks/useWorkspacePresence";
 import { MessageContent } from "@/components/chat/MessageContent";
 import {
   Plus,
@@ -92,9 +93,18 @@ interface Channel {
 
 const EMOJI_LIST = ["👍", "❤️", "😂", "🎉", "🔥", "👀", "💯", "✅"];
 
-function ThreadReplyInput({ onSend }: { onSend: (content: string) => void }) {
+function ThreadReplyInput({ 
+  onSend, 
+  workspaceMembers 
+}: { 
+  onSend: (content: string) => void,
+  workspaceMembers: { id: string; name: string; image?: string; email?: string }[]
+}) {
   const [value, setValue] = useState("");
   const [sending, setSending] = useState(false);
+  const [showMentionMenu, setShowMentionMenu] = useState(false);
+  const [mentionSearch, setMentionSearch] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const handleSend = async () => {
     if (!value.trim() || sending) return;
@@ -106,12 +116,68 @@ function ThreadReplyInput({ onSend }: { onSend: (content: string) => void }) {
   };
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 relative">
+      {/* Mention autocomplete menu */}
+      {showMentionMenu && (
+        <div className="absolute bottom-10 left-0 w-64 bg-popover border rounded-lg shadow-lg py-1 z-50">
+          <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground border-b uppercase">
+            Members
+          </div>
+          {workspaceMembers
+            .filter((m) =>
+              (m.name || "").toLowerCase().includes(mentionSearch),
+            )
+            .slice(0, 5)
+            .map((member) => (
+              <button
+                key={member.id}
+                onClick={() => {
+                  const words = value.split(/(?<=\s)/);
+                  const lastWordIndex = words.length - 1;
+                  const mentionAlias = (member.name || "").replace(/\s+/g, "");
+                  words[lastWordIndex] = `@${mentionAlias} `;
+                  setValue(words.join(""));
+                  setShowMentionMenu(false);
+                  inputRef.current?.focus();
+                }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left"
+              >
+                <Avatar className="h-4 w-4">
+                  <AvatarImage src={member.image || ""} />
+                  <AvatarFallback className="text-[8px]">
+                    {member.name?.[0] || "?"}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="truncate">{member.name}</span>
+              </button>
+            ))}
+        </div>
+      )}
       <Input
+        ref={inputRef}
         placeholder="Reply..."
         value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
+        onChange={(e) => {
+          const val = e.target.value;
+          setValue(val);
+          const lastWord = val.split(" ").pop();
+          if (lastWord?.startsWith("@")) {
+            setShowMentionMenu(true);
+            setMentionSearch(lastWord.slice(1).toLowerCase());
+          } else {
+            setShowMentionMenu(false);
+          }
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            if (showMentionMenu) {
+              setShowMentionMenu(false);
+            } else {
+              handleSend();
+            }
+          }
+        }}
         className="flex-1 h-8 text-sm"
       />
       <Button
@@ -142,10 +208,11 @@ export default function ChatPage() {
   const [showNewChannel, setShowNewChannel] = useState(false);
   const [newChannelName, setNewChannelName] = useState("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showMentionMenu, setShowMentionMenu] = useState(false);
+  const [mentionSearch, setMentionSearch] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [workspaceMembers, _setWorkspaceMembers] = useState<
-    { id: string; name: string; image?: string }[]
+  const [workspaceMembers, setWorkspaceMembers] = useState<
+    { id: string; name: string; image?: string; email?: string }[]
   >([]);
   const [workspace, setWorkspace] = useState<{
     id: string;
@@ -210,17 +277,23 @@ export default function ChatPage() {
     currentUser,
   });
 
+  // Global workspace presence
+  const { onlineUsers: workspaceOnlineUsers } = useWorkspacePresence(
+    workspace?.id,
+  );
+
   // Combine fetched messages with socket messages (deduplicated)
   const allMessages = useMemo(() => {
     const combined = [...fetchedMessages, ...socketMessages];
     const uniqueMap = new Map();
     combined.forEach((msg) => uniqueMap.set(msg.id, msg));
     return Array.from(uniqueMap.values()).sort(
-      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      (a, b) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
     );
   }, [fetchedMessages, socketMessages]);
 
-  // Fetch workspace first, then channels
+  // Fetch workspace first, then channels and members
   useEffect(() => {
     const fetchWorkspaceAndChannels = async () => {
       try {
@@ -244,6 +317,15 @@ export default function ChatPage() {
             setSelectedChannel(data[0]);
           }
         }
+
+        // Fetch workspace members for Direct Messages list
+        const membersRes = await fetch(`/api/workspaces/${slug}/members`);
+        if (membersRes.ok) {
+          const membersData = await membersRes.json();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const mappedMembers = membersData.map((m: any) => m.user);
+          setWorkspaceMembers(mappedMembers);
+        }
       } catch (error) {
         console.error("Error fetching channels:", error);
       } finally {
@@ -252,6 +334,42 @@ export default function ChatPage() {
     };
     fetchWorkspaceAndChannels();
   }, [params.slug]);
+
+  // Handle opening or creating a Direct Message
+  const handleDirectMessage = async (targetUserId: string) => {
+    if (!workspace?.id) return;
+
+    try {
+      const res = await fetch(`/api/channels/direct`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetUserId,
+          workspaceId: workspace.id,
+        }),
+      });
+
+      if (res.ok) {
+        const directChannel = await res.json();
+
+        // Add to channels list if it's not already there
+        setChannels((prev) => {
+          const exists = prev.find((c) => c.id === directChannel.id);
+          if (!exists) return [...prev, directChannel];
+          return prev;
+        });
+
+        setSelectedChannel(directChannel);
+        setSidebarOpen(false);
+        setFetchedMessages(directChannel.messages || []);
+      } else {
+        alert("Failed to start direct message.");
+      }
+    } catch (error) {
+      console.error("Failed to open DM:", error);
+      alert("Failed to start direct message.");
+    }
+  };
 
   // Fetch messages when channel changes
   useEffect(() => {
@@ -446,9 +564,10 @@ export default function ChatPage() {
     if (!newMessage.trim() || !selectedChannel || sending) return;
 
     // Optimistic: immediately show the message in the UI
-    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const clientId = crypto.randomUUID();
     const optimisticMsg: Message = {
-      id: tempId,
+      id: clientId, // Use clientId as temp ID for simplicity, or keep temp-ID
+      clientId, // Critical for deduping
       content: newMessage.trim(),
       channelId: selectedChannel.id,
       authorId: currentUser?.id || "",
@@ -485,22 +604,46 @@ export default function ChatPage() {
           content: savedContent,
           attachments: savedAttachment ? [savedAttachment] : undefined,
           parentId: replyingTo?.id || undefined,
+          clientId, // Send clientId
         }),
       });
 
-      if (res.ok) {
-        // Remove the optimistic message — the real one arrives via socket
-        removeMessage(tempId);
-      } else {
+      if (!res.ok) {
         // Mark as failed so user can retry
-        updateMessage(tempId, { status: "failed" } as Partial<Message>);
+        updateMessage(clientId, { status: "failed" } as Partial<Message>);
       }
+      // If OK, rely on socket "new-message" to replace/confirm logic in useSocket
     } catch (error) {
       console.error("Error sending message:", error);
-      updateMessage(tempId, { status: "failed" } as Partial<Message>);
+      updateMessage(clientId, { status: "failed" } as Partial<Message>);
     } finally {
       setReplyingTo(null);
     }
+  };
+
+  // ... (Create Task) ...
+
+  // ... (Retry Message) ...
+
+  // ... (Thread Logic) ...
+
+  // Typing Indicator Component
+  const TypingIndicator = () => {
+    const typers = typingUsers.filter((u) => u.userId !== currentUser?.id);
+    if (typers.length === 0) return null;
+
+    const text =
+      typers.length === 1
+        ? `${typers[0].name} is typing...`
+        : typers.length === 2
+          ? `${typers[0].name} and ${typers[1].name} are typing...`
+          : `${typers.length} people are typing...`;
+
+    return (
+      <div className="text-xs text-muted-foreground italic px-4 py-1 h-6 animate-pulse">
+        {text}
+      </div>
+    );
   };
 
   // Create a Kanban task from a message
@@ -776,6 +919,23 @@ export default function ChatPage() {
     );
   }
 
+  // Compute active target details for Direct Messages to render name/avatar
+  const isDirectMessage = selectedChannel?.type === "direct";
+  const targetUser = isDirectMessage
+    ? workspaceMembers.find(
+        (m) =>
+          m.id !== currentUser?.id &&
+          selectedChannel.members?.some(
+            (mem: any) => mem.userId === m.id || mem.user?.id === m.id,
+          ),
+      )
+    : null;
+
+  const displayName = isDirectMessage
+    ? targetUser?.name || "Unknown User"
+    : selectedChannel?.name || "";
+  const displayAvatar = isDirectMessage ? targetUser?.image : null;
+
   return (
     <div className="flex h-[calc(100vh-3.5rem)] bg-background">
       {/* Mobile sidebar overlay */}
@@ -851,7 +1011,7 @@ export default function ChatPage() {
 
         <ScrollArea className="flex-1">
           <div className="p-2 space-y-1">
-            {channels.length === 0 ? (
+            {channels.filter((c) => c.type !== "direct").length === 0 ? (
               <div className="text-center py-8 px-4">
                 <MessageSquare className="w-10 h-10 mx-auto text-muted-foreground mb-2" />
                 <p className="text-sm text-muted-foreground">No channels yet</p>
@@ -865,43 +1025,104 @@ export default function ChatPage() {
                 </Button>
               </div>
             ) : (
-              channels.map((channel) => (
-                <button
-                  key={channel.id}
-                  onClick={() => {
-                    setSelectedChannel(channel);
-                    setSidebarOpen(false);
-                    // Clear unread count locally
-                    setChannels((prev) =>
-                      prev.map((ch) =>
-                        ch.id === channel.id ? { ...ch, unreadCount: 0 } : ch,
-                      ),
-                    );
-                  }}
-                  className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-2 transition-all ${
-                    selectedChannel?.id === channel.id
-                      ? "bg-primary text-primary-foreground shadow-sm"
-                      : "hover:bg-muted text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  <Hash className="w-4 h-4 flex-shrink-0" />
-                  <span className="truncate text-sm font-medium flex-1">
-                    {channel.name}
-                  </span>
-                  {(channel.unreadCount ?? 0) > 0 &&
-                    selectedChannel?.id !== channel.id && (
-                      <Badge
-                        variant="destructive"
-                        className="h-5 min-w-5 px-1.5 text-[10px] font-bold"
-                      >
-                        {channel.unreadCount! > 99
-                          ? "99+"
-                          : channel.unreadCount}
-                      </Badge>
-                    )}
-                </button>
-              ))
+              channels
+                .filter((c) => c.type !== "direct")
+                .map((channel) => (
+                  <button
+                    key={channel.id}
+                    onClick={() => {
+                      setSelectedChannel(channel);
+                      setSidebarOpen(false);
+                      // Clear unread count locally
+                      setChannels((prev) =>
+                        prev.map((ch) =>
+                          ch.id === channel.id ? { ...ch, unreadCount: 0 } : ch,
+                        ),
+                      );
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-2 transition-all ${
+                      selectedChannel?.id === channel.id
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "hover:bg-muted text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <Hash className="w-4 h-4 flex-shrink-0" />
+                    <span className="truncate text-sm font-medium flex-1">
+                      {channel.name}
+                    </span>
+                    {(channel.unreadCount ?? 0) > 0 &&
+                      selectedChannel?.id !== channel.id && (
+                        <Badge
+                          variant="destructive"
+                          className="h-5 min-w-5 px-1.5 text-[10px] font-bold"
+                        >
+                          {channel.unreadCount! > 99
+                            ? "99+"
+                            : channel.unreadCount}
+                        </Badge>
+                      )}
+                  </button>
+                ))
             )}
+          </div>
+
+          {/* Direct Messages Section */}
+          <div className="p-4 border-t mt-4">
+            <h2 className="font-semibold text-sm mb-3 text-muted-foreground">
+              Direct Messages
+            </h2>
+            <div className="space-y-1">
+              {workspaceMembers
+                .filter((m) => m.id !== currentUser?.id)
+                .map((member) => {
+                  // Check if there is already an active direct channel loaded for this user to show active state
+                  const activeDmChannel = channels.find(
+                    (c) =>
+                      c.type === "direct" &&
+                      c.members &&
+                      c.members.some(
+                        (mem) =>
+                          (mem as any).userId === member.id ||
+                          (mem as any).user?.id === member.id,
+                      ),
+                  );
+
+                  const isSelected =
+                    selectedChannel?.id === activeDmChannel?.id &&
+                    selectedChannel !== null;
+
+                  const isOnline = workspaceOnlineUsers.some(
+                    (u) => u.user.id === member.id,
+                  );
+
+                  return (
+                    <button
+                      key={member.id}
+                      onClick={() => handleDirectMessage(member.id)}
+                      className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-2 transition-all ${
+                        isSelected
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "hover:bg-muted text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <div className="relative">
+                        <Avatar className="w-5 h-5 flex-shrink-0">
+                          <AvatarImage src={member.image || ""} />
+                          <AvatarFallback className="text-[10px]">
+                            {member.name?.[0] || "?"}
+                          </AvatarFallback>
+                        </Avatar>
+                        {isOnline && (
+                          <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 border border-background"></span>
+                        )}
+                      </div>
+                      <span className="truncate text-sm font-medium flex-1">
+                        {member.name}
+                      </span>
+                    </button>
+                  );
+                })}
+            </div>
           </div>
         </ScrollArea>
       </div>
@@ -910,7 +1131,7 @@ export default function ChatPage() {
       <div className="flex-1 flex flex-col">
         {selectedChannel ? (
           <>
-            {/* Channel Header */}
+            {/* Channel Header (with conditional logic for Direct Messages) */}
             <div className="p-4 border-b flex items-center justify-between bg-background/80 backdrop-blur-sm">
               <div className="flex items-center gap-3">
                 <Button
@@ -921,14 +1142,26 @@ export default function ChatPage() {
                 >
                   <Menu className="w-5 h-5" />
                 </Button>
-                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <Hash className="w-5 h-5 text-primary" />
-                </div>
+
+                {/* Channel Icon or User Avatar */}
+                {isDirectMessage ? (
+                  <Avatar className="w-10 h-10 border">
+                    <AvatarImage src={displayAvatar || ""} />
+                    <AvatarFallback>{displayName[0]}</AvatarFallback>
+                  </Avatar>
+                ) : (
+                  <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <Hash className="w-5 h-5 text-primary" />
+                  </div>
+                )}
+
                 <div>
-                  <h1 className="font-semibold">{selectedChannel.name}</h1>
+                  <h1 className="font-semibold">{displayName}</h1>
                   <p className="text-xs text-muted-foreground">
-                    {selectedChannel.members?.length || 0} members
-                    {onlineUsers.length > 0 && (
+                    {isDirectMessage
+                      ? "Direct Message"
+                      : `${selectedChannel.members?.length || 0} members`}
+                    {!isDirectMessage && onlineUsers.length > 0 && (
                       <span className="ml-2 text-emerald-500">
                         • {onlineUsers.length + 1} online
                       </span>
@@ -937,8 +1170,8 @@ export default function ChatPage() {
                 </div>
               </div>
 
-              {/* Online users avatars */}
-              {onlineUsers.length > 0 && (
+              {/* Online users avatars (Hide for DMs to save space, or just show them) */}
+              {!isDirectMessage && onlineUsers.length > 0 && (
                 <div className="hidden sm:flex items-center gap-2">
                   <div className="flex -space-x-2">
                     {onlineUsers.slice(0, 4).map((viewer) => (
@@ -972,62 +1205,66 @@ export default function ChatPage() {
                 onClick={startHuddle}
               >
                 <Video className="w-4 h-4" />
-                <span>Start Huddle</span>
+                <span>Start Call</span>
               </Button>
             </div>
 
-            {/* Channel Description */}
-            {selectedChannel.description && !editingDescription && (
-              <div
-                className="px-4 py-2 border-b bg-muted/20 cursor-pointer hover:bg-muted/40 transition-colors"
-                onClick={() => {
-                  setEditingDescription(true);
-                  setDescriptionDraft(selectedChannel.description || "");
-                }}
-              >
-                <p className="text-xs text-muted-foreground truncate">
-                  📝 {selectedChannel.description}
-                </p>
-              </div>
-            )}
-            {editingDescription && (
-              <div className="px-4 py-2 border-b bg-muted/20 flex items-center gap-2">
-                <Input
-                  value={descriptionDraft}
-                  onChange={(e) => setDescriptionDraft(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && saveDescription()}
-                  placeholder="Set a channel topic..."
-                  className="h-7 text-xs flex-1"
-                  autoFocus
-                />
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-7 w-7"
-                  onClick={saveDescription}
-                >
-                  <Check className="w-3.5 h-3.5 text-emerald-500" />
-                </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-7 w-7"
-                  onClick={() => setEditingDescription(false)}
-                >
-                  <X className="w-3.5 h-3.5" />
-                </Button>
-              </div>
-            )}
-            {!selectedChannel.description && !editingDescription && (
-              <button
-                className="px-4 py-1.5 border-b text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors w-full text-left"
-                onClick={() => {
-                  setEditingDescription(true);
-                  setDescriptionDraft("");
-                }}
-              >
-                + Add a channel topic
-              </button>
+            {/* Channel Description (Hide for DMs) */}
+            {selectedChannel.type !== "direct" && (
+              <>
+                {selectedChannel.description && !editingDescription && (
+                  <div
+                    className="px-4 py-2 border-b bg-muted/20 cursor-pointer hover:bg-muted/40 transition-colors"
+                    onClick={() => {
+                      setEditingDescription(true);
+                      setDescriptionDraft(selectedChannel.description || "");
+                    }}
+                  >
+                    <p className="text-xs text-muted-foreground truncate">
+                      📝 {selectedChannel.description}
+                    </p>
+                  </div>
+                )}
+                {editingDescription && (
+                  <div className="px-4 py-2 border-b bg-muted/20 flex items-center gap-2">
+                    <Input
+                      value={descriptionDraft}
+                      onChange={(e) => setDescriptionDraft(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && saveDescription()}
+                      placeholder="Set a channel topic..."
+                      className="h-7 text-xs flex-1"
+                      autoFocus
+                    />
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7"
+                      onClick={saveDescription}
+                    >
+                      <Check className="w-3.5 h-3.5 text-emerald-500" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7"
+                      onClick={() => setEditingDescription(false)}
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                )}
+                {!selectedChannel.description && !editingDescription && (
+                  <button
+                    className="px-4 py-1.5 border-b text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors w-full text-left"
+                    onClick={() => {
+                      setEditingDescription(true);
+                      setDescriptionDraft("");
+                    }}
+                  >
+                    + Add a channel topic
+                  </button>
+                )}
+              </>
             )}
 
             {/* Pinned Messages Bar */}
@@ -1090,17 +1327,28 @@ export default function ChatPage() {
 
             {/* Messages */}
             <ScrollArea className="flex-1 p-4">
-              <div className="space-y-1">
+              <div className="space-y-[2px]">
                 {allMessages.length === 0 ? (
                   <div className="text-center py-16">
                     <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                      <MessageSquare className="w-8 h-8 text-primary" />
+                      {selectedChannel.type === "direct" && displayAvatar ? (
+                        <Avatar className="w-12 h-12">
+                          <AvatarImage src={displayAvatar} />
+                          <AvatarFallback>{displayName[0]}</AvatarFallback>
+                        </Avatar>
+                      ) : (
+                        <MessageSquare className="w-8 h-8 text-primary" />
+                      )}
                     </div>
                     <h3 className="font-medium text-lg mb-1">
-                      Welcome to #{selectedChannel.name}
+                      {selectedChannel.type === "direct"
+                        ? `This is the beginning of your direct message history with ${displayName}`
+                        : `Welcome to #${selectedChannel.name}`}
                     </h3>
                     <p className="text-muted-foreground text-sm">
-                      This is the beginning of the channel. Say hi!
+                      {selectedChannel.type === "direct"
+                        ? "Say hi!"
+                        : "This is the beginning of the channel. Say hi!"}
                     </p>
                   </div>
                 ) : (
@@ -1118,7 +1366,7 @@ export default function ChatPage() {
                         key={message.id}
                         initial={{ opacity: 0, y: 5 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className={`flex gap-3 group hover:bg-muted/50 rounded-lg px-2 py-1 -mx-2 ${showAvatar ? "mt-4" : ""} ${message.status === "pending" ? "opacity-60" : ""} ${message.status === "failed" ? "border-l-2 border-red-500" : ""}`}
+                        className={`flex gap-3 group hover:bg-muted/50 rounded-lg px-2 py-0.5 -mx-2 ${showAvatar ? "mt-4 pt-1" : ""} ${message.status === "pending" ? "opacity-60" : ""} ${message.status === "failed" ? "border-l-2 border-red-500" : ""}`}
                       >
                         {showAvatar ? (
                           <Avatar className="h-9 w-9 mt-0.5">
@@ -1427,6 +1675,8 @@ export default function ChatPage() {
               </div>
             </ScrollArea>
 
+            <TypingIndicator />
+
             {/* Reply bar */}
             {replyingTo && (
               <div className="px-4 pt-2 pb-0">
@@ -1518,17 +1768,85 @@ export default function ChatPage() {
                   </div>
                 )}
 
+                {/* Mention autocomplete menu */}
+                {showMentionMenu && (
+                  <div className="absolute bottom-12 left-0 w-64 bg-popover border rounded-lg shadow-lg py-1 z-50">
+                    <div className="px-2 py-1 text-xs font-semibold text-muted-foreground border-b">
+                      Members
+                    </div>
+                    {workspaceMembers
+                      .filter((m) =>
+                        (m.name || "").toLowerCase().includes(mentionSearch),
+                      )
+                      .slice(0, 5)
+                      .map((member) => (
+                        <button
+                          key={member.id}
+                          onClick={() => {
+                            const words = newMessage.split(/(?<=\s)/); // Keep trailing spaces on previous words
+                            const lastWordIndex = words.length - 1;
+                            const mentionAlias = (member.name || "").replace(
+                              /\s+/g,
+                              "",
+                            ); // "John Doe" -> "JohnDoe"
+                            words[lastWordIndex] = `@${mentionAlias} `;
+                            setNewMessage(words.join(""));
+                            setShowMentionMenu(false);
+                            inputRef.current?.focus();
+                          }}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left"
+                        >
+                          <Avatar className="h-5 w-5">
+                            <AvatarImage src={member.image || ""} />
+                            <AvatarFallback className="text-[10px]">
+                              {member.name?.[0] || "?"}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="truncate">{member.name}</span>
+                        </button>
+                      ))}
+                    {workspaceMembers.filter((m) =>
+                      (m.name || "").toLowerCase().includes(mentionSearch),
+                    ).length === 0 && (
+                      <div className="px-3 py-2 text-sm text-muted-foreground">
+                        No matches found
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <Input
                   ref={inputRef}
-                  placeholder={`Message #${selectedChannel.name}`}
+                  placeholder={
+                    isDirectMessage
+                      ? `Message ${displayName}`
+                      : `Message #${selectedChannel.name}`
+                  }
                   value={newMessage}
                   onChange={(e) => {
-                    setNewMessage(e.target.value);
+                    const val = e.target.value;
+                    setNewMessage(val);
                     handleTyping();
+
+                    // Mention detection
+                    const lastWord = val.split(" ").pop();
+                    if (lastWord?.startsWith("@")) {
+                      setShowMentionMenu(true);
+                      setMentionSearch(lastWord.slice(1).toLowerCase());
+                    } else {
+                      setShowMentionMenu(false);
+                    }
                   }}
-                  onKeyDown={(e) =>
-                    e.key === "Enter" && !e.shiftKey && sendMessage()
-                  }
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      if (showMentionMenu) {
+                        setShowMentionMenu(false);
+                      } else {
+                        sendMessage();
+                      }
+                    }
+                  }}
                   className="flex-1"
                 />
 
@@ -1680,8 +1998,11 @@ export default function ChatPage() {
               </ScrollArea>
 
               {/* Thread reply input */}
-              <div className="p-3 border-t">
-                <ThreadReplyInput onSend={sendThreadReply} />
+              <div className="p-3 border-t overflow-visible">
+                <ThreadReplyInput 
+                  onSend={sendThreadReply} 
+                  workspaceMembers={workspaceMembers}
+                />
               </div>
             </div>
           </motion.div>

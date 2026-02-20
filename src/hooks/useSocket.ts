@@ -14,6 +14,7 @@ interface User {
 
 interface Message {
     id: string;
+    clientId?: string; // Added for Idempotency
     content: string;
     createdAt: string;
     author: {
@@ -77,7 +78,19 @@ export function useSocket({ channelId, currentUser }: UseSocketOptions): UseSock
         // Listen for new messages
         const handleNewMessage = (message: Message) => {
             setMessages((prev) => {
+                // Deduplicate by ID
                 if (prev.some(m => m.id === message.id)) return prev;
+
+                // Deduplicate/Replace by clientId (Optimistic -> Real)
+                if (message.clientId) {
+                    const existingIdx = prev.findIndex(m => m.clientId === message.clientId);
+                    if (existingIdx !== -1) {
+                        const newMsgs = [...prev];
+                        newMsgs[existingIdx] = { ...message, status: 'sent' }; // Replace temp with real
+                        return newMsgs;
+                    }
+                }
+
                 return [...prev, { ...message, status: 'sent' }];
             });
         };
@@ -110,7 +123,7 @@ export function useSocket({ channelId, currentUser }: UseSocketOptions): UseSock
                 if (prev.some((u) => u.userId === data.userId)) return prev;
                 return [...prev, data];
             });
-            // Auto-remove after 3 seconds
+            // Auto-remove after 3 seconds as backup safety
             setTimeout(() => {
                 setTypingUsers((prev) => prev.filter((u) => u.userId !== data.userId));
             }, 3000);
@@ -157,7 +170,17 @@ export function useSocket({ channelId, currentUser }: UseSocketOptions): UseSock
         // Listen for new thread replies
         const handleThreadReply = (message: Message) => {
             setMessages((prev) => {
+                // Also check clientId here for thread replies if they appear in main list
                 if (prev.some(m => m.id === message.id)) return prev;
+                if (message.clientId) {
+                    const existingIdx = prev.findIndex(m => m.clientId === message.clientId);
+                    if (existingIdx !== -1) {
+                         // Only replace if it's the same logical message (though replying in thread usually doesn't show in main list unless it's also sent to channel, which isn't the case here, but good safety)
+                         // Actually, thread replies don't usually appear in main channel list unless explicitly shared. 
+                         // But if we are viewing the thread, we might need this. 
+                         // For now, simple append is fine.
+                    }
+                }
                 return [...prev, { ...message, status: 'sent' }];
             });
         };
@@ -242,11 +265,19 @@ export function useSocket({ channelId, currentUser }: UseSocketOptions): UseSock
     // Send typing indicator (debounced)
     const sendTyping = useCallback(
         (userId: string, name: string) => {
-            if (!socket || !channelId || typingTimeoutRef.current) return;
+            if (!socket || !channelId) return;
 
-            socket.emit("typing", { channelId, userId, name });
+            // Clear existing timeout to reset debounce
+            if (typingTimeoutRef.current) {
+                clearTimeout(typingTimeoutRef.current);
+            } else {
+                // Only emit start typing if not already typing
+                 socket.emit("typing", { channelId, userId, name });
+            }
 
+            // Set timeout to stop typing
             typingTimeoutRef.current = setTimeout(() => {
+                socket.emit("stop-typing", { channelId, userId });
                 typingTimeoutRef.current = null;
             }, 2000);
         },

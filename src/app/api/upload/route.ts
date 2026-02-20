@@ -1,10 +1,9 @@
 // src/app/api/upload/route.ts
-// File upload endpoint for chat attachments
+// File upload endpoint for chat attachments using Azure Blob Storage
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { ensureUser } from "@/lib/ensureUser";
-import { writeFile, mkdir } from "fs/promises";
-import path from "path";
+import { BlobServiceClient } from "@azure/storage-blob";
 import { v4 as uuidv4 } from "uuid";
 
 // Allowed file types
@@ -50,28 +49,38 @@ export async function POST(req: NextRequest) {
             );
         }
 
+        const AZURE_STORAGE_CONNECTION_STRING = process.env.AZURE_STORAGE_CONNECTION_STRING;
+        if (!AZURE_STORAGE_CONNECTION_STRING) {
+            console.error("AZURE_STORAGE_CONNECTION_STRING is not set.");
+            return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
+        }
+
         // Generate unique filename
         const ext = file.name.split(".").pop()?.toLowerCase() || "bin";
         const filename = `${uuidv4()}.${ext}`;
 
-        // Ensure uploads directory exists
-        const uploadsDir = path.join(process.cwd(), "public", "uploads");
-        await mkdir(uploadsDir, { recursive: true });
+        // Initialize Azure Blob Client
+        const blobServiceClient = BlobServiceClient.fromConnectionString(AZURE_STORAGE_CONNECTION_STRING);
+        const containerClient = blobServiceClient.getContainerClient("uploads");
 
-        // Save file
+        // Convert file to buffer
         const bytes = await file.arrayBuffer();
         const buffer = Buffer.from(bytes);
-        const filepath = path.join(uploadsDir, filename);
-        await writeFile(filepath, buffer);
+
+        // Upload to Azure
+        const blockBlobClient = containerClient.getBlockBlobClient(filename);
+        await blockBlobClient.uploadData(buffer, {
+            blobHTTPHeaders: { blobContentType: file.type }
+        });
 
         // Determine file type
         const isImage = file.type.startsWith("image/");
         const type = isImage ? "image" : "pdf";
 
-        // Return file info
+        // Return file info including the public Azure URL
         const attachment = {
             type,
-            url: `/uploads/${filename}`,
+            url: blockBlobClient.url,
             name: file.name,
             size: file.size,
             mimeType: file.type,

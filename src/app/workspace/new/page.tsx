@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Logo } from "@/components/ui/Logo";
 import { Loader2, ArrowRight, Building2, Users, FileText, Sparkles, UserPlus, Plus } from "lucide-react";
+import Link from "next/link";
 
 export default function CreateWorkspacePage() {
     const router = useRouter();
@@ -263,7 +264,10 @@ export default function CreateWorkspacePage() {
                                 autoFocus
                             />
                             <p className="text-xs text-muted-foreground">
-                                Ask your team admin for the workspace invite code
+                                Ask your team admin for the workspace invite code, or{" "}
+                                <Link href="/explore" className="text-primary hover:underline">
+                                    browse public workspaces
+                                </Link>
                             </p>
                         </div>
 

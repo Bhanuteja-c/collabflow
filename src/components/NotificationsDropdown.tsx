@@ -11,16 +11,7 @@ import {
 import { Bell, Check, Users, FileText, MessageSquare, UserPlus, CheckCheck, Filter } from "lucide-react";
 import { formatDistanceToNow, isToday, isYesterday, isThisWeek } from "date-fns";
 import { useRouter } from "next/navigation";
-
-interface Notification {
-    id: string;
-    type: string;
-    title: string;
-    message: string | null;
-    link: string | null;
-    isRead: boolean;
-    createdAt: string;
-}
+import { useNotifications, AppNotification as Notification } from "@/hooks/useNotifications";
 
 type FilterType = "all" | "unread" | "mentions" | "invites";
 
@@ -41,29 +32,9 @@ function getTimeGroup(dateStr: string): string {
 
 export function NotificationsDropdown() {
     const router = useRouter();
-    const [notifications, setNotifications] = useState<Notification[]>([]);
-    const [unreadCount, setUnreadCount] = useState(0);
+    const { notifications, unreadCount, markAsRead } = useNotifications();
     const [open, setOpen] = useState(false);
     const [filter, setFilter] = useState<FilterType>("all");
-
-    const fetchNotifications = async () => {
-        try {
-            const res = await fetch("/api/notifications");
-            if (res.ok) {
-                const data = await res.json();
-                setNotifications(data.notifications);
-                setUnreadCount(data.unreadCount);
-            }
-        } catch (error) {
-            console.error("Failed to fetch notifications:", error);
-        }
-    };
-
-    useEffect(() => {
-        fetchNotifications();
-        const interval = setInterval(fetchNotifications, 30000);
-        return () => clearInterval(interval);
-    }, []);
 
     // Filter notifications
     const filtered = useMemo(() => {
@@ -94,41 +65,13 @@ export function NotificationsDropdown() {
         return order.filter((g) => groups[g]?.length).map((g) => ({ label: g, items: groups[g] }));
     }, [filtered]);
 
-    const markAsRead = async (notificationIds: string[]) => {
-        try {
-            await fetch("/api/notifications", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ notificationIds }),
-            });
-            setNotifications((prev) =>
-                prev.map((n) =>
-                    notificationIds.includes(n.id) ? { ...n, isRead: true } : n
-                )
-            );
-            setUnreadCount((prev) => Math.max(0, prev - notificationIds.length));
-        } catch (error) {
-            console.error("Failed to mark as read:", error);
-        }
+    const handleMarkAllAsRead = async () => {
+        await markAsRead();
     };
 
-    const markAllAsRead = async () => {
-        try {
-            await fetch("/api/notifications", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ markAllRead: true }),
-            });
-            setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-            setUnreadCount(0);
-        } catch (error) {
-            console.error("Failed to mark all as read:", error);
-        }
-    };
-
-    const handleNotificationClick = (notification: Notification) => {
+    const handleNotificationClick = async (notification: Notification) => {
         if (!notification.isRead) {
-            markAsRead([notification.id]);
+            await markAsRead(notification.id);
         }
         if (notification.link) {
             router.push(notification.link);
@@ -174,7 +117,7 @@ export function NotificationsDropdown() {
                             variant="ghost"
                             size="sm"
                             className="h-7 text-xs hover:text-primary"
-                            onClick={markAllAsRead}
+                            onClick={handleMarkAllAsRead}
                         >
                             <CheckCheck className="h-3 w-3 mr-1" />
                             Mark all read

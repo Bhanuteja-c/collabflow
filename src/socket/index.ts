@@ -25,6 +25,9 @@ export function registerSocketHandlers(io: SocketIOServer) {
     io.on("connection", (socket) => {
         console.log(`[Socket.io] Client connected: ${socket.id} (user: ${socket.data.userId})`);
 
+        // Join a personal room for this user to receive direct global events (like notifications)
+        socket.join(`user:${socket.data.userId}`);
+
         // Register all feature handlers
         registerWorkspaceHandlers(io, socket);
         registerChatHandlers(io, socket);

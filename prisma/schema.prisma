@@ -48,8 +48,63 @@ model User {
   // Activity tracking
   activities Activity[]
 
+  // Presence
+  lastSeenAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ... (skipping unchanged models)
+
+model Message {
+  id          String @id @default(cuid())
+  
+  // Idempotency key (optional to allow migration of old messages, or backfill)
+  // Making it unique but optional for existing data compatibility, or enforce?
+  // User wants production grade. Let's make it optional for migration safe, but code will enforce.
+  // Actually, @unique requires unique values. Nulls are unique in Postgres? Yes.
+  clientId    String? @unique 
+  
+  content     String @db.Text
+  attachments Json? // Array of { type: 'image', url: '...' }
+
+  // Edit/Delete tracking
+  isEdited  Boolean   @default(false)
+  editedAt  DateTime?
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+
+  // Pinned - REMOVED (moved to PinnedMessage)
+  // isPinned Boolean @default(false)
+  // pinnedAt DateTime?
+  // We keep it temporarily if migration fails, but plan says REMOVE.
+  // I will comment it out or remove it.
+  
+  // Threading support
+  parentId    String?
+  rootId      String? // Top-level message ID for flat threading
+  
+  parent      Message?   @relation("MessageThread", fields: [parentId], references: [id], onDelete: SetNull)
+  replies     Message[]  @relation("MessageThread")
+  replyCount  Int        @default(0)
+
+  channelId String
+  channel   Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  reactions Reaction[]
+  pinnedMessage PinnedMessage?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt // Added updatedAt for consistency
+
+  @@index([channelId])
+  @@index([authorId])
+  @@index([parentId])
+  @@index([rootId])
 }
 
 // Notification system
@@ -360,41 +415,7 @@ model ChannelMember {
   @@index([userId])
 }
 
-model Message {
-  id          String @id @default(cuid())
-  content     String @db.Text
-  attachments Json? // Array of { type: 'image', url: '...' }
 
-  // Edit/Delete tracking
-  isEdited  Boolean   @default(false)
-  editedAt  DateTime?
-  isDeleted Boolean   @default(false)
-  deletedAt DateTime?
-
-  // Pinning
-  isPinned Boolean   @default(false)
-  pinnedAt DateTime?
-
-  // Threading support
-  parentId    String?
-  parent      Message?   @relation("MessageThread", fields: [parentId], references: [id], onDelete: SetNull)
-  replies     Message[]  @relation("MessageThread")
-  replyCount  Int        @default(0)
-
-  channelId String
-  channel   Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
-
-  authorId String
-  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
-
-  reactions Reaction[]
-
-  createdAt DateTime @default(now())
-
-  @@index([channelId])
-  @@index([authorId])
-  @@index([parentId])
-}
 
 model Reaction {
   id    String @id @default(cuid())
@@ -428,6 +449,19 @@ model DocumentStar {
   @@unique([documentId, userId])
   @@index([userId])
   @@index([documentId])
+}
+
+// Check Pinned Messages
+model PinnedMessage {
+  id        String   @id @default(cuid())
+  messageId String   @unique
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  pinnedBy  String   // User ID who pinned it
+  pinnedAt  DateTime @default(now())
+
+  // Denormalize channelId for easier filtering if needed, or rely on message
+  // Let's rely on message.channelId for now to avoid sync issues.
 }
 
 // Activity Feed - tracks team actions for dashboard

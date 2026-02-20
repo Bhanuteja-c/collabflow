@@ -129,11 +129,14 @@ export function MessageContent({ content, workspaceMembers, onMentionClick }: Me
 
     const parts = useMemo(() => parseContent(content), [content]);
 
-    // Check if mentioned user exists
+    // Check if mentioned user exists (matching logic similar to backend)
     const getMemberByName = (name: string) => {
-        return workspaceMembers?.find(m =>
-            m.name?.toLowerCase() === name.toLowerCase()
-        );
+        return workspaceMembers?.find(m => {
+            const nameParts = (m.name || "").toLowerCase().split(" ");
+            const fullNameNoSpaces = (m.name || "").toLowerCase().replace(/\s+/g, '');
+            const searchName = name.toLowerCase();
+            return nameParts.includes(searchName) || fullNameNoSpaces === searchName;
+        });
     };
 
     return (

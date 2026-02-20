@@ -34,6 +34,14 @@ app.prepare().then(() => {
         try {
             const pubClient = new Redis(process.env.REDIS_URL);
             const subClient = pubClient.duplicate();
+            
+            pubClient.on("error", (err) => {
+                console.error("Redis Pub Client Error:", err.message);
+            });
+            subClient.on("error", (err) => {
+               console.error("Redis Sub Client Error:", err.message);
+            });
+
             adapter = createAdapter(pubClient, subClient);
         } catch (e) {
             console.error("Failed to initialize Redis adapter:", e);
