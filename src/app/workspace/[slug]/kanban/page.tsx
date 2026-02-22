@@ -766,7 +766,7 @@ export default function WorkspaceKanbanPage() {
                 {/* Subtle shimmer sweeping across the column */}
                 <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/5 to-transparent z-10 pointer-events-none" />
                 
-                {Array.from({ length: Math.floor(Math.random() * 3) + 2 }).map((_, j) => (
+                {Array.from({ length: [3, 2, 4, 2][i - 1] ?? 3 }).map((_, j) => (
                   <div key={j} className="h-[104px] bg-card/60 backdrop-blur-sm border border-border/50 rounded-xl p-3 flex flex-col justify-between shadow-sm">
                      <div className="space-y-2">
                         <div className="h-4 w-[80%] bg-muted/60 rounded animate-pulse" />

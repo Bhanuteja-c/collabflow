@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useSession, signOut } from "next-auth/react";
 import { Logo } from "@/components/ui/Logo";
 import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
 import { useWorkspacePresence } from "@/hooks/useWorkspacePresence";
@@ -21,7 +22,9 @@ import {
     Settings,
     Users,
     Video,
+    LogOut,
 } from "lucide-react";
+import { avatarFallbackClass } from "@/lib/avatar-colors";
 
 interface WorkspaceSidebarProps {
     workspaceSlug: string;
@@ -42,6 +45,7 @@ const navItems = [
 
 function SidebarContent({ workspaceSlug, onItemClick }: { workspaceSlug: string; onItemClick?: () => void }) {
     const pathname = usePathname();
+    const { data: session } = useSession();
     const baseUrl = `/workspace/${workspaceSlug}`;
     const [workspaceId, setWorkspaceId] = useState<string | undefined>();
     const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(true);
@@ -139,9 +143,28 @@ function SidebarContent({ workspaceSlug, onItemClick }: { workspaceSlug: string;
                 </div>
             )}
 
-            {/* Footer */}
-            <div className="p-4 border-t text-xs text-muted-foreground text-center">
-                CollabFlow v1.0
+            {/* User Profile + Sign Out */}
+            <div className="border-t p-3">
+                <div className="flex items-center gap-2.5">
+                    <Avatar className="h-8 w-8 flex-shrink-0">
+                        <AvatarImage src={session?.user?.image || ""} />
+                        <AvatarFallback className={avatarFallbackClass(session?.user?.name, "text-xs font-semibold")}>
+                            {session?.user?.name?.[0]?.toUpperCase() || "?"}
+                        </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium truncate">{session?.user?.name}</p>
+                        <p className="text-[10px] text-muted-foreground truncate">{session?.user?.email}</p>
+                    </div>
+                    <button
+                        onClick={() => signOut({ callbackUrl: "/" })}
+                        className="flex-shrink-0 p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                        title="Sign out"
+                    >
+                        <LogOut className="w-3.5 h-3.5" />
+                    </button>
+                </div>
+                <p className="text-[10px] text-muted-foreground/50 text-center mt-2">CollabFlow v1.0</p>
             </div>
         </>
     );
