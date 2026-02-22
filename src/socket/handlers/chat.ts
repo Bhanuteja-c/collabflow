@@ -160,6 +160,18 @@ export function registerChatHandlers(io: Server, socket: Socket<any, any, any, S
                 });
             } else {
                 socket.to(makeRoomId(ROOM_PREFIX.CHANNEL, channelId)).emit("new-message", message);
+
+                // Emit lightweight event to workspace room so all members can increment unread badges
+                const channelMeta = await prisma.channel.findUnique({
+                    where: { id: channelId },
+                    select: { workspaceId: true },
+                });
+                if (channelMeta?.workspaceId) {
+                    io.to(makeRoomId(ROOM_PREFIX.WORKSPACE, channelMeta.workspaceId)).emit("channel-new-message", {
+                        channelId,
+                        authorId: userId,
+                    });
+                }
             }
 
             // 5. Update Unread (Backend Only)

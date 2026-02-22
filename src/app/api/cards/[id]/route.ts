@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { ensureUser } from "@/lib/ensureUser";
 import { Activity } from "@/lib/activity";
 import { CrossNotifier } from "@/lib/crossNotifier";
+import { createNotification } from "@/lib/notifications";
 
 // Helper to check workspace access via card -> column -> board -> workspace
 async function checkCardAccess(cardId: string, userId: string) {
@@ -16,7 +17,9 @@ async function checkCardAccess(cardId: string, userId: string) {
                     board: {
                         include: {
                             workspace: {
-                                include: {
+                                select: {
+                                    id: true,
+                                    slug: true,
                                     members: {
                                         where: { userId },
                                         select: { id: true }
@@ -101,6 +104,17 @@ export async function PUT(
                         userId,
                         cardTitle: card.title,
                         assigneeName: assignee.name || "someone",
+                    });
+                    // Personal notification to the assignee
+                    const boardSlug = existing.column.board.workspace?.slug ?? workspaceId;
+                    await createNotification({
+                        userId: assignee.id,
+                        senderId: userId,
+                        type: "task_assigned",
+                        title: "Task Assigned",
+                        message: `You were assigned to "${card.title}"`,
+                        workspaceId,
+                        link: `/workspace/${boardSlug}/kanban`,
                     });
                 }
             }

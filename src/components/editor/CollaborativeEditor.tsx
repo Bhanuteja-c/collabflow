@@ -142,7 +142,30 @@ export default function CollaborativeEditor({
         }
     }, [editor]);
 
-    if (!editor) return null;
+    if (!editor) {
+        return (
+            <div className="flex flex-col flex-1 h-full bg-secondary/30">
+                {/* Skeleton Toolbar */}
+                <div className="w-full bg-background/95 border-b flex justify-center py-2 px-4 z-10 h-[53px]">
+                    <div className="w-[500px] h-8 bg-muted/60 rounded-md animate-pulse" />
+                </div>
+                {/* Skeleton Page */}
+                <div className="flex-1 overflow-auto p-8 sm:py-12 sm:px-8 flex justify-center">
+                    <div className="bg-background w-full max-w-[850px] min-h-[1100px] shadow-sm border rounded-sm p-12 sm:p-16 flex flex-col gap-6">
+                        <div className="h-10 w-2/3 bg-muted/30 rounded-lg animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-muted/40 to-transparent" />
+                        <div className="h-4 w-full bg-muted/20 rounded animate-[shimmer_2.5s_infinite]" />
+                        <div className="h-4 w-[90%] bg-muted/20 rounded animate-[shimmer_2.5s_infinite]" />
+                        <div className="h-4 w-[95%] bg-muted/20 rounded animate-[shimmer_2.5s_infinite]" />
+                        <div className="h-4 w-[60%] bg-muted/20 rounded animate-[shimmer_2.5s_infinite] mb-4" />
+                        
+                        <div className="h-4 w-full bg-muted/20 rounded animate-[shimmer_3s_infinite]" />
+                        <div className="h-4 w-[85%] bg-muted/20 rounded animate-[shimmer_3s_infinite]" />
+                        <div className="h-4 w-[70%] bg-muted/20 rounded animate-[shimmer_3s_infinite]" />
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-col flex-1 h-full bg-secondary/30">

@@ -40,6 +40,7 @@ interface Message {
 interface TypingUser {
     userId: string;
     name: string;
+    image?: string;
 }
 
 interface OnlineUser {
@@ -58,6 +59,7 @@ interface UseSocketReturn {
     messages: Message[];
     typingUsers: TypingUser[];
     onlineUsers: OnlineUser[];
+    readTimestamps: Record<string, string>; // userId -> ISO readAt
     sendTyping: (userId: string, name: string) => void;
     addMessage: (message: Message) => void;
     updateMessage: (messageId: string, updates: Partial<Message>) => void;
@@ -69,6 +71,7 @@ export function useSocket({ channelId, currentUser }: UseSocketOptions): UseSock
     const [messages, setMessages] = useState<Message[]>([]);
     const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
     const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
+    const [readTimestamps, setReadTimestamps] = useState<Record<string, string>>({});
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     // Register all chat-related event listeners on the shared socket
@@ -198,6 +201,11 @@ export function useSocket({ channelId, currentUser }: UseSocketOptions): UseSock
             setOnlineUsers(prev => prev.filter(u => u.socketId !== data.socketId));
         };
 
+        // Listen for read receipts (for blue ticks on sender's messages)
+        const handleMessagesRead = (data: { userId: string; readAt: string }) => {
+            setReadTimestamps(prev => ({ ...prev, [data.userId]: data.readAt }));
+        };
+
         socket.on("new-message", handleNewMessage);
         socket.on("message-edited", handleMessageEdited);
         socket.on("message-deleted", handleMessageDeleted);
@@ -209,6 +217,7 @@ export function useSocket({ channelId, currentUser }: UseSocketOptions): UseSock
         socket.on("channel-presence", handleChannelPresence);
         socket.on("channel-user-joined", handleChannelUserJoined);
         socket.on("channel-user-left", handleChannelUserLeft);
+        socket.on("messages-read", handleMessagesRead);
 
         return () => {
             socket.off("new-message", handleNewMessage);
@@ -222,6 +231,7 @@ export function useSocket({ channelId, currentUser }: UseSocketOptions): UseSock
             socket.off("channel-presence", handleChannelPresence);
             socket.off("channel-user-joined", handleChannelUserJoined);
             socket.off("channel-user-left", handleChannelUserLeft);
+            socket.off("messages-read", handleMessagesRead);
         };
     }, [socket]);
 
@@ -233,6 +243,7 @@ export function useSocket({ channelId, currentUser }: UseSocketOptions): UseSock
         setMessages([]);
         setTypingUsers([]);
         setOnlineUsers([]);
+        setReadTimestamps({});
 
         // Join with user info for presence if available
         if (currentUser) {
@@ -312,6 +323,7 @@ export function useSocket({ channelId, currentUser }: UseSocketOptions): UseSock
         messages,
         typingUsers,
         onlineUsers,
+        readTimestamps,
         sendTyping,
         addMessage,
         updateMessage,

@@ -62,7 +62,7 @@ export async function POST(
             }
         }
 
-        return NextResponse.json({ success: true, pinned: isPinned });
+        return NextResponse.json({ success: true, isPinned });
     } catch (error) {
         console.error("Pin toggle error:", error);
         return NextResponse.json({ error: "Failed to toggle pin" }, { status: 500 });

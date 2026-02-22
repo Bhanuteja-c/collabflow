@@ -730,24 +730,56 @@ export default function WorkspaceKanbanPage() {
 
   if (loading) {
     return (
-      <div className="h-[calc(100vh-3.5rem)] flex flex-col bg-background">
+      <div className="h-[calc(100vh-3.5rem)] flex flex-col bg-background overflow-hidden relative">
         {/* Skeleton header */}
-        <div className="p-4 sm:p-5 border-b border-border/50">
+        <div className="p-4 sm:p-5 border-b border-border/50 bg-background/80 backdrop-blur-sm z-10">
           <div className="flex items-center gap-4">
-            <div className="h-7 w-48 bg-muted/60 rounded-lg shimmer" />
-            <div className="h-5 w-20 bg-muted/40 rounded-full shimmer" />
+            <div className="h-7 w-48 bg-muted/60 rounded-lg animate-pulse" />
+            <div className="h-5 w-20 bg-muted/40 rounded-full animate-pulse" />
             <div className="flex-1" />
-            <div className="h-8 w-20 bg-muted/40 rounded-lg shimmer" />
+            <div className="hidden md:flex gap-2">
+               <div className="h-8 w-20 bg-muted/40 rounded-lg animate-pulse" />
+               <div className="h-8 w-8 rounded-full bg-muted/40 animate-pulse" />
+               <div className="h-8 w-8 rounded-full bg-muted/40 animate-pulse" />
+            </div>
           </div>
         </div>
+        
         {/* Skeleton columns */}
-        <div className="flex-1 p-4 flex gap-4">
+        <div className="flex-1 p-4 flex gap-4 overflow-hidden relative">
+          {/* Ambient background glow to match the premium theme */}
+          <div className="absolute top-0 right-[20%] w-[500px] h-[500px] bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
+          
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="w-[21rem] flex-shrink-0">
-              <div className="h-full rounded-xl border border-border/30 bg-muted/10 p-3 space-y-3">
-                <div className="h-4 w-24 bg-muted/50 rounded shimmer" />
-                {Array.from({ length: 3 - Math.floor(i / 2) }).map((_, j) => (
-                  <div key={j} className="h-20 bg-muted/30 rounded-xl shimmer" />
+            <div key={i} className="w-[21rem] flex-shrink-0 flex flex-col gap-3">
+              {/* Column Header */}
+              <div className="h-10 px-3 bg-muted/20 border border-border/30 rounded-xl flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                   <div className="h-4 w-4 bg-muted/50 rounded-sm animate-pulse" />
+                   <div className="h-4 w-24 bg-muted/50 rounded animate-pulse" />
+                </div>
+                <div className="h-5 w-8 bg-muted/40 rounded-md animate-pulse" />
+              </div>
+              
+              {/* Cards in Column */}
+              <div className="flex flex-col gap-3 rounded-xl border border-border/30 bg-muted/10 p-2 flex-1 relative overflow-hidden">
+                {/* Subtle shimmer sweeping across the column */}
+                <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/5 to-transparent z-10 pointer-events-none" />
+                
+                {Array.from({ length: Math.floor(Math.random() * 3) + 2 }).map((_, j) => (
+                  <div key={j} className="h-[104px] bg-card/60 backdrop-blur-sm border border-border/50 rounded-xl p-3 flex flex-col justify-between shadow-sm">
+                     <div className="space-y-2">
+                        <div className="h-4 w-[80%] bg-muted/60 rounded animate-pulse" />
+                        <div className="h-3 w-[40%] bg-muted/40 rounded animate-pulse" />
+                     </div>
+                     <div className="flex justify-between items-center mt-2">
+                        <div className="h-5 w-16 bg-muted/40 rounded-full animate-pulse" />
+                        <div className="flex -space-x-1">
+                           <div className="h-6 w-6 rounded-full bg-muted/60 border-2 border-background animate-pulse" />
+                           {j % 2 === 0 && <div className="h-6 w-6 rounded-full bg-muted/50 border-2 border-background animate-pulse" />}
+                        </div>
+                     </div>
+                  </div>
                 ))}
               </div>
             </div>

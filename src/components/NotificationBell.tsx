@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell } from "lucide-react";
+import { Bell, Volume2, VolumeX } from "lucide-react";
 import { Button } from "./ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { useNotifications, AppNotification } from "@/hooks/useNotifications";
@@ -17,7 +17,7 @@ function getRelativeTime(dateStr: string) {
 }
 
 export function NotificationBell() {
-    const { notifications, unreadCount, markAsRead } = useNotifications();
+    const { notifications, unreadCount, markAsRead, soundEnabled, toggleSound } = useNotifications();
     const router = useRouter();
 
     const handleNotificationClick = async (notif: AppNotification) => {
@@ -44,16 +44,29 @@ export function NotificationBell() {
             <PopoverContent className="w-80 p-0 shadow-xl" align="end" sideOffset={8}>
                 <div className="flex items-center justify-between p-3 border-b bg-muted/20">
                     <h4 className="font-semibold text-sm">Notifications</h4>
-                    {unreadCount > 0 && (
-                        <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={(e) => { e.stopPropagation(); markAsRead(); }} 
-                            className="h-auto p-1 px-2 text-xs text-muted-foreground hover:text-primary"
+                    <div className="flex items-center gap-1">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => { e.stopPropagation(); toggleSound(); }}
+                            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                            title={soundEnabled ? "Mute notification sounds" : "Unmute notification sounds"}
                         >
-                            Mark all as read
+                            {soundEnabled
+                                ? <Volume2 className="h-3.5 w-3.5" />
+                                : <VolumeX className="h-3.5 w-3.5 text-destructive" />}
                         </Button>
-                    )}
+                        {unreadCount > 0 && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => { e.stopPropagation(); markAsRead(); }}
+                                className="h-auto p-1 px-2 text-xs text-muted-foreground hover:text-primary"
+                            >
+                                Mark all as read
+                            </Button>
+                        )}
+                    </div>
                 </div>
                 <ScrollArea className="max-h-[350px]">
                     {notifications.length === 0 ? (

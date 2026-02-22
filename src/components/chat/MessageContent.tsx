@@ -159,15 +159,15 @@ export function MessageContent({ content, workspaceMembers, onMentionClick }: Me
                                 <button
                                     key={i}
                                     onClick={() => onMentionClick?.(member.id)}
-                                    className="text-primary font-medium hover:underline bg-primary/10 rounded px-1 -mx-0.5"
+                                    className="inline-flex items-center font-semibold text-[13px] bg-amber-400/20 text-amber-800 dark:text-amber-300 hover:bg-amber-400/30 rounded px-0.5 -mx-0.5 py-0 transition-colors cursor-pointer"
                                 >
                                     {part.content}
                                 </button>
                             );
                         }
-                        // Unknown mention - still highlight
+                        // Unknown mention - still highlight but subtler
                         return (
-                            <span key={i} className="text-primary font-medium">
+                            <span key={i} className="inline-flex items-center font-semibold text-[13px] bg-muted text-muted-foreground rounded-[4px] px-1 -mx-0.5">
                                 {part.content}
                             </span>
                         );

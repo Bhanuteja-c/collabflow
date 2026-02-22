@@ -11,8 +11,10 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useSocket } from "@/hooks/useSocket";
+import { useSharedSocket } from "@/components/providers/SocketProvider";
 import { useWorkspacePresence } from "@/hooks/useWorkspacePresence";
 import { MessageContent } from "@/components/chat/MessageContent";
+import { MessageTicks } from "@/components/chat/MessageTicks";
 import {
   Plus,
   Send,
@@ -35,9 +37,13 @@ import {
   ChevronUp,
   Video,
   ListTodo,
+  ArrowDown,
+  MoreVertical,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { AttachmentPreview } from "@/components/chat/AttachmentPreview";
+import { MainChatInput } from "@/components/chat/MainChatInput";
+import { avatarFallbackClass } from "@/lib/avatar-colors";
 
 interface User {
   id: string;
@@ -196,20 +202,25 @@ function ThreadReplyInput({
   );
 }
 
+// Format a date for the separator label
+function formatDateSeparator(dateStr: string): string {
+  const date = new Date(dateStr);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (date.toDateString() === today.toDateString()) return "Today";
+  if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
+  return date.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+}
+
 export default function ChatPage() {
   const { data: session } = useSession();
   const [channels, setChannels] = useState<Channel[]>([]);
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
   const [fetchedMessages, setFetchedMessages] = useState<Message[]>([]);
-  const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [sending, _setSending] = useState(false);
   const [showNewChannel, setShowNewChannel] = useState(false);
   const [newChannelName, setNewChannelName] = useState("");
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [showMentionMenu, setShowMentionMenu] = useState(false);
-  const [mentionSearch, setMentionSearch] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [workspaceMembers, setWorkspaceMembers] = useState<
     { id: string; name: string; image?: string; email?: string }[]
@@ -218,19 +229,12 @@ export default function ChatPage() {
     id: string;
     slug: string;
   } | null>(null);
-  const [pendingAttachment, setPendingAttachment] = useState<{
-    type: string;
-    url: string;
-    name: string;
-    size: number;
-  } | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const params = useParams();
   const router = useRouter();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const [scrolledUp, setScrolledUp] = useState(false);
 
   // Edit state
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -243,7 +247,6 @@ export default function ChatPage() {
   const [editContent, setEditContent] = useState("");
 
   // Pinned messages state
-  const [pinnedMessages, setPinnedMessages] = useState<Message[]>([]);
   const [showPinnedBar, setShowPinnedBar] = useState(false);
 
   // Channel description state
@@ -268,6 +271,7 @@ export default function ChatPage() {
     messages: socketMessages,
     typingUsers,
     onlineUsers,
+    readTimestamps,
     sendTyping,
     addMessage,
     updateMessage,
@@ -292,6 +296,52 @@ export default function ChatPage() {
         new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
     );
   }, [fetchedMessages, socketMessages]);
+
+  // Derive pinned messages from the live allMessages list — no separate fetch needed
+  const pinnedMessages = useMemo(
+    () => allMessages.filter((m) => m.isPinned),
+    [allMessages]
+  );
+
+  // Listen for new messages in background channels and increment their unread badge
+  const { socket } = useSharedSocket();
+  useEffect(() => {
+    if (!socket) return;
+    const handleChannelNewMessage = (data: { channelId: string; authorId: string }) => {
+      // Only increment if it's not the currently open channel
+      if (data.channelId === selectedChannel?.id) return;
+      // Don't increment if the message was sent by the current user
+      if (data.authorId === currentUser?.id) return;
+      setChannels((prev) =>
+        prev.map((ch) =>
+          ch.id === data.channelId
+            ? { ...ch, unreadCount: (ch.unreadCount ?? 0) + 1 }
+            : ch
+        )
+      );
+    };
+    socket.on("channel-new-message", handleChannelNewMessage);
+    return () => { socket.off("channel-new-message", handleChannelNewMessage); };
+  }, [socket, selectedChannel?.id, currentUser?.id]);
+
+  // Live-update the open thread panel when new replies arrive via socket
+  useEffect(() => {
+    if (!socket) return;
+    const handleThreadReply = (reply: Message) => {
+      // Only update if the panel is open for the same parent
+      if (!activeThread || reply.parentId !== activeThread.id) return;
+      setThreadReplies((prev) => {
+        if (prev.some((r) => r.id === reply.id)) return prev; // deduplicate
+        return [...prev, reply];
+      });
+      // Also bump the reply count shown in the panel header
+      setActiveThread((prev) =>
+        prev ? { ...prev, replyCount: (prev.replyCount ?? 0) + 1 } : prev
+      );
+    };
+    socket.on("thread-reply", handleThreadReply);
+    return () => { socket.off("thread-reply", handleThreadReply); };
+  }, [socket, activeThread?.id]);
 
   // Fetch workspace first, then channels and members
   useEffect(() => {
@@ -391,24 +441,7 @@ export default function ChatPage() {
     fetchMessages();
   }, [selectedChannel]);
 
-  // Fetch pinned messages when channel changes
-  useEffect(() => {
-    if (!selectedChannel) return;
-    const fetchPinned = async () => {
-      try {
-        const res = await fetch(
-          `/api/messages?channelId=${selectedChannel.id}`,
-        );
-        if (res.ok) {
-          const data = await res.json();
-          setPinnedMessages(data.filter((m: Message) => m.isPinned));
-        }
-      } catch (e) {
-        console.error("Error fetching pinned messages:", e);
-      }
-    };
-    fetchPinned();
-  }, [selectedChannel]);
+  // (pinnedMessages is now derived via useMemo from allMessages)
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -423,23 +456,11 @@ export default function ChatPage() {
       });
       if (res.ok) {
         const updated = await res.json();
-        // Update local state
+        // Update local fetched messages — isPinned drives pinnedMessages via useMemo
         const updateMsg = (msg: Message) =>
           msg.id === messageId ? { ...msg, isPinned: updated.isPinned } : msg;
         setFetchedMessages((prev) => prev.map(updateMsg));
-        updateMessage(messageId, {
-          isPinned: updated.isPinned,
-        } as Partial<Message>);
-
-        // Refresh pinned list
-        if (updated.isPinned) {
-          setPinnedMessages((prev) => [
-            ...prev,
-            { ...updated, channelId: selectedChannel?.id },
-          ]);
-        } else {
-          setPinnedMessages((prev) => prev.filter((m) => m.id !== messageId));
-        }
+        updateMessage(messageId, { isPinned: updated.isPinned } as Partial<Message>);
       }
     } catch (error) {
       console.error("Error toggling pin:", error);
@@ -560,15 +581,14 @@ export default function ChatPage() {
     }
   };
 
-  const sendMessage = async () => {
-    if (!newMessage.trim() || !selectedChannel || sending) return;
+  const sendMessage = async (content: string, attachment: any | null, clientId: string) => {
+    if (!content.trim() || !selectedChannel) return;
 
     // Optimistic: immediately show the message in the UI
-    const clientId = crypto.randomUUID();
     const optimisticMsg: Message = {
       id: clientId, // Use clientId as temp ID for simplicity, or keep temp-ID
       clientId, // Critical for deduping
-      content: newMessage.trim(),
+      content: content.trim(),
       channelId: selectedChannel.id,
       authorId: currentUser?.id || "",
       author: {
@@ -580,19 +600,11 @@ export default function ChatPage() {
       isEdited: false,
       isDeleted: false,
       reactions: [],
-      attachments: pendingAttachment ? [pendingAttachment] : undefined,
+      attachments: attachment ? [attachment] : undefined,
       status: "pending",
     } as Message;
 
     addMessage(optimisticMsg);
-
-    // Clear input immediately — feels instant
-    const savedContent = newMessage.trim();
-    const savedAttachment = pendingAttachment;
-    setNewMessage("");
-    setShowEmojiPicker(false);
-    setPendingAttachment(null);
-    inputRef.current?.focus();
 
     // Send to server in background
     try {
@@ -601,8 +613,8 @@ export default function ChatPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           channelId: selectedChannel.id,
-          content: savedContent,
-          attachments: savedAttachment ? [savedAttachment] : undefined,
+          content: content.trim(),
+          attachments: attachment ? [attachment] : undefined,
           parentId: replyingTo?.id || undefined,
           clientId, // Send clientId
         }),
@@ -798,46 +810,6 @@ export default function ChatPage() {
     );
   };
 
-  const addEmoji = (emoji: string) => {
-    setNewMessage((prev) => prev + emoji);
-    setShowEmojiPicker(false);
-    inputRef.current?.focus();
-  };
-
-  // Handle file upload
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const res = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (res.ok) {
-        const attachment = await res.json();
-        setPendingAttachment(attachment);
-      } else {
-        const error = await res.json();
-        alert(error.error || "Upload failed");
-      }
-    } catch (error) {
-      console.error("Upload error:", error);
-      alert("Upload failed");
-    } finally {
-      setUploading(false);
-      // Reset input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-    }
-  };
-
   // Edit message
   const startEditing = (message: Message) => {
     setEditingMessageId(message.id);
@@ -910,10 +882,50 @@ export default function ChatPage() {
 
   if (loading) {
     return (
-      <div className="flex h-[calc(100vh-3.5rem)] bg-background items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-2" />
-          <p className="text-sm text-muted-foreground">Loading chat...</p>
+      <div className="flex h-[calc(100vh-3.5rem)] bg-background">
+        {/* Skeleton Sidebar */}
+        <div className="hidden md:flex w-64 border-r flex-col bg-muted/10">
+          <div className="p-4 border-b flex justify-between items-center">
+            <div className="h-6 w-24 bg-muted animate-pulse rounded-md" />
+            <div className="h-8 w-8 bg-muted animate-pulse rounded-md" />
+          </div>
+          <div className="p-4 space-y-2">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-9 w-full bg-muted/50 animate-pulse rounded-md" />
+            ))}
+            <div className="h-4 w-28 bg-muted animate-pulse rounded mt-8 mb-4" />
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="flex items-center gap-3 py-1.5">
+                <div className="h-6 w-6 rounded-full bg-muted/60 animate-pulse flex-shrink-0" />
+                <div className="h-4 w-32 bg-muted/60 animate-pulse rounded" />
+              </div>
+            ))}
+          </div>
+        </div>
+        
+        {/* Skeleton Main Chat Area */}
+        <div className="flex-1 flex flex-col">
+          <div className="p-4 border-b flex items-center gap-3">
+            <div className="h-10 w-10 bg-muted animate-pulse rounded-lg" />
+            <div>
+              <div className="h-5 w-40 bg-muted animate-pulse rounded mb-2" />
+              <div className="h-3 w-24 bg-muted animate-pulse rounded" />
+            </div>
+          </div>
+          <div className="flex-1 p-6 flex flex-col justify-end gap-6 overflow-hidden">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex gap-4">
+                <div className="h-10 w-10 bg-muted animate-pulse rounded-full flex-shrink-0" />
+                <div className="space-y-2 flex-1 pt-1">
+                  <div className="h-4 w-24 bg-muted animate-pulse rounded" />
+                  <div className={`h-16 bg-muted/40 animate-pulse rounded-lg ${i % 2 === 0 ? "w-3/4" : "w-1/2"}`} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="p-4">
+            <div className="h-14 w-full bg-muted/60 animate-pulse rounded-xl border" />
+          </div>
         </div>
       </div>
     );
@@ -937,7 +949,7 @@ export default function ChatPage() {
   const displayAvatar = isDirectMessage ? targetUser?.image : null;
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] bg-background">
+    <div className="flex h-[calc(100vh-3.5rem)] bg-background overflow-hidden">
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div
@@ -950,33 +962,34 @@ export default function ChatPage() {
       <div
         className={`
                 fixed md:relative inset-y-0 left-0 z-50 md:z-auto
-                w-72 md:w-64 border-r flex flex-col bg-muted/30
+                w-72 md:w-64 border-r flex flex-col flex-shrink-0
+                bg-card
                 transform transition-transform duration-200 ease-in-out
                 ${sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
             `}
       >
-        <div className="p-4 border-b">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <h2 className="font-semibold text-lg">Channels</h2>
-              {connected && (
-                <span
-                  className="w-2 h-2 rounded-full bg-emerald-500"
-                  title="Connected"
-                />
-              )}
+        <div className="px-4 py-3 border-b">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-6 h-6 rounded bg-primary flex items-center justify-center flex-shrink-0">
+                <MessageSquare className="w-3.5 h-3.5 text-primary-foreground" />
+              </div>
+              <div className="min-w-0">
+                <p className="font-semibold text-sm leading-tight truncate">
+                  {workspace?.slug || "Workspace"}
+                </p>
+                <div className="flex items-center gap-1">
+                  {connected ? (
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />
+                  ) : (
+                    <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 flex-shrink-0" />
+                  )}
+                  <span className="text-[10px] text-muted-foreground">{connected ? "Online" : "Offline"}</span>
+                </div>
+              </div>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setShowNewChannel(!showNewChannel)}
-              className="h-8 w-8"
-            >
-              {showNewChannel ? (
-                <X className="w-4 h-4" />
-              ) : (
-                <Plus className="w-4 h-4" />
-              )}
+            <Button variant="ghost" size="icon" onClick={() => setShowNewChannel(!showNewChannel)} className="h-7 w-7 flex-shrink-0">
+              {showNewChannel ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
             </Button>
           </div>
 
@@ -1010,7 +1023,10 @@ export default function ChatPage() {
         </div>
 
         <ScrollArea className="flex-1">
-          <div className="p-2 space-y-1">
+          <div className="py-2">
+            {/* Channels section */}
+            <div className="px-3 pb-1">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 px-1 mb-1">Channels</p>
             {channels.filter((c) => c.type !== "direct").length === 0 ? (
               <div className="text-center py-8 px-4">
                 <MessageSquare className="w-10 h-10 mx-auto text-muted-foreground mb-2" />
@@ -1040,21 +1056,29 @@ export default function ChatPage() {
                         ),
                       );
                     }}
-                    className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-2 transition-all ${
+                    className={`w-full text-left px-3 py-1.5 rounded-md flex items-center gap-2 transition-all relative touch-manipulation active:scale-[0.98] ${
                       selectedChannel?.id === channel.id
-                        ? "bg-primary text-primary-foreground shadow-sm"
-                        : "hover:bg-muted text-muted-foreground hover:text-foreground"
+                        ? "text-primary-foreground font-medium"
+                        : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"
                     }`}
                   >
-                    <Hash className="w-4 h-4 flex-shrink-0" />
-                    <span className="truncate text-sm font-medium flex-1">
+                    {selectedChannel?.id === channel.id && (
+                        <motion.div
+                            layoutId="activeSidebarItem"
+                            className="absolute inset-0 bg-primary/90 shadow-sm rounded-md"
+                            initial={false}
+                            transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                        />
+                    )}
+                    <Hash className="w-4 h-4 flex-shrink-0 relative z-10" />
+                    <span className="truncate text-sm flex-1 relative z-10">
                       {channel.name}
                     </span>
-                    {(channel.unreadCount ?? 0) > 0 &&
+                     {(channel.unreadCount ?? 0) > 0 &&
                       selectedChannel?.id !== channel.id && (
                         <Badge
                           variant="destructive"
-                          className="h-5 min-w-5 px-1.5 text-[10px] font-bold"
+                          className="h-5 min-w-5 px-1.5 text-[10px] font-bold relative z-10 scale-90"
                         >
                           {channel.unreadCount! > 99
                             ? "99+"
@@ -1064,13 +1088,12 @@ export default function ChatPage() {
                   </button>
                 ))
             )}
+            </div>
           </div>
 
           {/* Direct Messages Section */}
-          <div className="p-4 border-t mt-4">
-            <h2 className="font-semibold text-sm mb-3 text-muted-foreground">
-              Direct Messages
-            </h2>
+          <div className="px-3 pt-3 border-t">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 px-1 mb-1">Direct Messages</p>
             <div className="space-y-1">
               {workspaceMembers
                 .filter((m) => m.id !== currentUser?.id)
@@ -1099,24 +1122,32 @@ export default function ChatPage() {
                     <button
                       key={member.id}
                       onClick={() => handleDirectMessage(member.id)}
-                      className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-2 transition-all ${
+                      className={`w-full text-left px-3 py-1.5 rounded-md flex items-center gap-2 transition-all relative touch-manipulation active:scale-[0.98] ${
                         isSelected
-                          ? "bg-primary text-primary-foreground shadow-sm"
-                          : "hover:bg-muted text-muted-foreground hover:text-foreground"
+                          ? "text-primary-foreground font-medium"
+                          : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"
                       }`}
                     >
-                      <div className="relative">
+                      {isSelected && (
+                          <motion.div
+                              layoutId="activeSidebarItem"
+                              className="absolute inset-0 bg-primary/90 shadow-sm rounded-md"
+                              initial={false}
+                              transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                          />
+                      )}
+                      <div className="relative z-10">
                         <Avatar className="w-5 h-5 flex-shrink-0">
                           <AvatarImage src={member.image || ""} />
-                          <AvatarFallback className="text-[10px]">
-                            {member.name?.[0] || "?"}
+                          <AvatarFallback className={avatarFallbackClass(member.name, "text-[10px] font-semibold")}>
+                            {member.name?.[0]?.toUpperCase() || "?"}
                           </AvatarFallback>
                         </Avatar>
                         {isOnline && (
                           <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 border border-background"></span>
                         )}
                       </div>
-                      <span className="truncate text-sm font-medium flex-1">
+                      <span className="truncate text-sm flex-1 relative z-10">
                         {member.name}
                       </span>
                     </button>
@@ -1128,140 +1159,91 @@ export default function ChatPage() {
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {selectedChannel ? (
-          <>
-            {/* Channel Header (with conditional logic for Direct Messages) */}
-            <div className="p-4 border-b flex items-center justify-between bg-background/80 backdrop-blur-sm">
-              <div className="flex items-center gap-3">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="md:hidden h-9 w-9"
-                  onClick={() => setSidebarOpen(true)}
-                >
+          <div className="flex-1 flex flex-col min-h-0">
+              {/* Channel header */}
+            <div className="px-4 py-3 border-b flex items-center justify-between bg-background/95 backdrop-blur-sm">
+              <div className="flex items-center gap-3 min-w-0">
+                <Button variant="ghost" size="icon" className="md:hidden h-9 w-9 flex-shrink-0" onClick={() => setSidebarOpen(true)}>
                   <Menu className="w-5 h-5" />
                 </Button>
 
                 {/* Channel Icon or User Avatar */}
                 {isDirectMessage ? (
-                  <Avatar className="w-10 h-10 border">
-                    <AvatarImage src={displayAvatar || ""} />
-                    <AvatarFallback>{displayName[0]}</AvatarFallback>
-                  </Avatar>
+                  <div className="relative flex-shrink-0">
+                    <Avatar className="w-9 h-9 border">
+                      <AvatarImage src={displayAvatar || ""} />
+                      <AvatarFallback className={avatarFallbackClass(displayName, "text-sm font-semibold")}>{displayName[0]}</AvatarFallback>
+                    </Avatar>
+                    {workspaceOnlineUsers.some((u) => u.user.id === targetUser?.id) && (
+                      <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-background" />
+                    )}
+                  </div>
                 ) : (
-                  <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <Hash className="w-5 h-5 text-primary" />
+                  <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <Hash className="w-4.5 h-4.5 text-primary" />
                   </div>
                 )}
 
-                <div>
-                  <h1 className="font-semibold">{displayName}</h1>
-                  <p className="text-xs text-muted-foreground">
+                <div className="min-w-0">
+                  <h1 className="font-bold text-sm leading-tight truncate">{displayName}</h1>
+                  <p className="text-[11px] text-muted-foreground leading-tight">
                     {isDirectMessage
-                      ? "Direct Message"
+                      ? workspaceOnlineUsers.some((u) => u.user.id === targetUser?.id) ? "Active now" : "Offline"
                       : `${selectedChannel.members?.length || 0} members`}
                     {!isDirectMessage && onlineUsers.length > 0 && (
-                      <span className="ml-2 text-emerald-500">
-                        • {onlineUsers.length + 1} online
-                      </span>
+                      <span className="text-emerald-500 ml-1">· {onlineUsers.length + 1} online</span>
                     )}
                   </p>
                 </div>
               </div>
 
-              {/* Online users avatars (Hide for DMs to save space, or just show them) */}
-              {!isDirectMessage && onlineUsers.length > 0 && (
-                <div className="hidden sm:flex items-center gap-2">
-                  <div className="flex -space-x-2">
-                    {onlineUsers.slice(0, 4).map((viewer) => (
-                      <Avatar
-                        key={viewer.socketId}
-                        className="w-7 h-7 border-2 border-background ring-2 ring-emerald-500/30"
-                        title={viewer.user.name}
-                      >
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {/* Online user avatars */}
+                {!isDirectMessage && onlineUsers.length > 0 && (
+                  <div className="hidden sm:flex -space-x-1.5">
+                    {onlineUsers.slice(0, 3).map((viewer) => (
+                      <Avatar key={viewer.socketId} className="w-6 h-6 border-2 border-background ring-1 ring-emerald-500/40" title={viewer.user.name}>
                         <AvatarImage src={viewer.user.image} />
-                        <AvatarFallback className="text-[10px]">
-                          {viewer.user.name?.[0] || "?"}
-                        </AvatarFallback>
+                        <AvatarFallback className="text-[9px]">{viewer.user.name?.[0] || "?"}</AvatarFallback>
                       </Avatar>
                     ))}
-                    {onlineUsers.length > 4 && (
-                      <div className="w-7 h-7 rounded-full bg-muted border-2 border-background flex items-center justify-center text-[10px] font-medium">
-                        +{onlineUsers.length - 4}
-                      </div>
+                    {onlineUsers.length > 3 && (
+                      <div className="w-6 h-6 rounded-full bg-muted border-2 border-background flex items-center justify-center text-[9px] font-medium">+{onlineUsers.length - 3}</div>
                     )}
                   </div>
-                  <Button variant="ghost" size="icon" className="h-9 w-9">
-                    <Users className="w-4 h-4" />
-                  </Button>
-                </div>
-              )}
-
-              <Button
-                variant="outline"
-                size="sm"
-                className="hidden sm:flex items-center gap-2 ml-2 border-emerald-500/20 hover:bg-emerald-500/10 hover:text-emerald-500"
-                onClick={startHuddle}
-              >
-                <Video className="w-4 h-4" />
-                <span>Start Call</span>
-              </Button>
+                )}
+                <Button variant="outline" size="sm" className="hidden sm:flex items-center gap-1.5 h-8 px-3 text-xs border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10 hover:border-emerald-500/50" onClick={startHuddle}>
+                  <Video className="w-3.5 h-3.5" />
+                  Start Call
+                </Button>
+              </div>
             </div>
 
-            {/* Channel Description (Hide for DMs) */}
+            {/* Channel topic/description bar */}
             {selectedChannel.type !== "direct" && (
               <>
                 {selectedChannel.description && !editingDescription && (
                   <div
-                    className="px-4 py-2 border-b bg-muted/20 cursor-pointer hover:bg-muted/40 transition-colors"
-                    onClick={() => {
-                      setEditingDescription(true);
-                      setDescriptionDraft(selectedChannel.description || "");
-                    }}
+                    className="px-4 py-1.5 border-b bg-muted/20 cursor-pointer hover:bg-muted/40 transition-colors flex items-center gap-2"
+                    onClick={() => { setEditingDescription(true); setDescriptionDraft(selectedChannel.description || ""); }}
                   >
-                    <p className="text-xs text-muted-foreground truncate">
-                      📝 {selectedChannel.description}
-                    </p>
+                    <span className="text-[11px] text-muted-foreground/70">📌</span>
+                    <p className="text-xs text-muted-foreground truncate flex-1">{selectedChannel.description}</p>
+                    <Pencil className="w-3 h-3 text-muted-foreground/50 flex-shrink-0" />
                   </div>
                 )}
                 {editingDescription && (
                   <div className="px-4 py-2 border-b bg-muted/20 flex items-center gap-2">
-                    <Input
-                      value={descriptionDraft}
-                      onChange={(e) => setDescriptionDraft(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && saveDescription()}
-                      placeholder="Set a channel topic..."
-                      className="h-7 text-xs flex-1"
-                      autoFocus
-                    />
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7"
-                      onClick={saveDescription}
-                    >
-                      <Check className="w-3.5 h-3.5 text-emerald-500" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7"
-                      onClick={() => setEditingDescription(false)}
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </Button>
+                    <Input value={descriptionDraft} onChange={(e) => setDescriptionDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && saveDescription()} placeholder="Set a channel topic..." className="h-7 text-xs flex-1" autoFocus />
+                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={saveDescription}><Check className="w-3.5 h-3.5 text-emerald-500" /></Button>
+                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingDescription(false)}><X className="w-3.5 h-3.5" /></Button>
                   </div>
                 )}
                 {!selectedChannel.description && !editingDescription && (
-                  <button
-                    className="px-4 py-1.5 border-b text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors w-full text-left"
-                    onClick={() => {
-                      setEditingDescription(true);
-                      setDescriptionDraft("");
-                    }}
-                  >
-                    + Add a channel topic
+                  <button className="px-4 py-1 border-b text-[11px] text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/20 transition-colors w-full text-left flex items-center gap-1.5" onClick={() => { setEditingDescription(true); setDescriptionDraft(""); }}>
+                    <Plus className="w-2.5 h-2.5" /> Add a topic
                   </button>
                 )}
               </>
@@ -1326,7 +1308,15 @@ export default function ChatPage() {
             )}
 
             {/* Messages */}
-            <ScrollArea className="flex-1 p-4">
+            <div
+              className="flex-1 min-h-0 overflow-y-auto p-4"
+              ref={scrollAreaRef}
+              onScroll={(e) => {
+                const el = e.currentTarget;
+                const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+                setScrolledUp(distFromBottom > 200);
+              }}
+            >
               <div className="space-y-[2px]">
                 {allMessages.length === 0 ? (
                   <div className="text-center py-16">
@@ -1361,321 +1351,209 @@ export default function ChatPage() {
                       message.author.id === (session?.user as any)?.id;
                     const isEditing = editingMessageId === message.id;
 
+                    // Date separator logic
+                    const showDateSep = i === 0 || (
+                      new Date(message.createdAt).toDateString() !==
+                      new Date(allMessages[i - 1].createdAt).toDateString()
+                    );
+
                     return (
+                      <div key={message.id}>
+                        {/* Date separator */}
+                        {showDateSep && (
+                          <div className="sticky top-0 z-20 flex justify-center my-2 pointer-events-none">
+                            <span className="pointer-events-auto text-[11px] font-semibold text-foreground bg-background border shadow-sm rounded-full px-3 py-0.5 cursor-pointer hover:shadow-md transition-shadow">
+                              {formatDateSeparator(message.createdAt)} ▾
+                            </span>
+                          </div>
+                        )}
                       <motion.div
-                        key={message.id}
-                        initial={{ opacity: 0, y: 5 }}
+                        initial={{ opacity: 0, y: 3 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className={`flex gap-3 group hover:bg-muted/50 rounded-lg px-2 py-0.5 -mx-2 ${showAvatar ? "mt-4 pt-1" : ""} ${message.status === "pending" ? "opacity-60" : ""} ${message.status === "failed" ? "border-l-2 border-red-500" : ""}`}
+                        className={`relative group flex items-start gap-2 px-4 -mx-4 py-0.5 hover:bg-muted/30 transition-colors ${showAvatar ? "mt-2" : ""} ${message.status === "pending" ? "opacity-50" : ""} ${message.status === "failed" ? "bg-red-500/5" : ""}`}
                       >
+                        {/* Avatar gutter */}
                         {showAvatar ? (
-                          <Avatar className="h-9 w-9 mt-0.5">
+                          <Avatar className="h-8 w-8 mt-0.5 flex-shrink-0">
                             <AvatarImage src={message.author.image || ""} />
-                            <AvatarFallback className="text-xs">
+                            <AvatarFallback className={avatarFallbackClass(message.author.name, "text-[11px] font-semibold")}>
                               {message.author.name?.[0]?.toUpperCase() || "?"}
                             </AvatarFallback>
                           </Avatar>
                         ) : (
-                          <div className="w-9" />
+                          <div className="w-8 flex-shrink-0 flex items-center justify-center">
+                            <span className="text-[10px] text-muted-foreground/0 group-hover:text-muted-foreground/50 transition-colors tabular-nums">
+                              {new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}
+                            </span>
+                          </div>
                         )}
+
+                        {/* Message body */}
                         <div className="flex-1 min-w-0">
+                          {/* Author + timestamp header (only for first in group) */}
                           {showAvatar && (
-                            <div className="flex items-baseline gap-2 mb-0.5">
-                              <span className="font-semibold text-sm">
+                            <div className="flex items-baseline gap-1.5">
+                              <span className="font-bold text-[13px] hover:underline cursor-pointer">
                                 {message.author.name}
                               </span>
-                              <span className="text-xs text-muted-foreground">
+                              <span className="text-[11px] text-muted-foreground/60 leading-none">
                                 {formatTime(message.createdAt)}
                               </span>
-                              {message.isEdited && (
-                                <span className="text-xs text-muted-foreground">
-                                  (edited)
-                                </span>
-                              )}
+                              {isOwnMessage && (() => {
+                                const msgTime = new Date(message.createdAt).getTime();
+                                const currentUserId = (session?.user as any)?.id;
+                                const isRead = Object.entries(readTimestamps).some(
+                                  ([uid, ts]) => uid !== currentUserId && new Date(ts).getTime() >= msgTime
+                                );
+                                const tickStatus = message.status === "pending" ? "sending" : isRead ? "read" : "sent";
+                                return <MessageTicks status={tickStatus} />;
+                              })()}
+                              {message.isEdited && <span className="text-[10px] text-muted-foreground/50">(edited)</span>}
+                            </div>
+                          )}
+
+                          {/* Reply quote */}
+                          {message.parentMessage && (
+                            <div className="mb-0.5 pl-2 border-l-2 border-primary/30 py-0.5 mt-0.5">
+                              <span className="text-[11px] font-semibold text-primary/60">{message.parentMessage.author?.name}</span>
+                              <span className="text-[11px] text-muted-foreground ml-1.5 truncate">{message.parentMessage.content}</span>
                             </div>
                           )}
 
                           {isEditing ? (
-                            <div className="flex items-center gap-2">
-                              <Input
-                                value={editContent}
-                                onChange={(e) => setEditContent(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") saveEdit();
-                                  if (e.key === "Escape") cancelEditing();
-                                }}
-                                className="flex-1 h-8 text-sm"
-                                autoFocus
-                              />
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-7 w-7"
-                                onClick={saveEdit}
-                              >
-                                <Check className="w-4 h-4 text-emerald-500" />
-                              </Button>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-7 w-7"
-                                onClick={cancelEditing}
-                              >
-                                <X className="w-4 h-4 text-muted-foreground" />
-                              </Button>
+                            <div className="flex items-center gap-2 my-0.5">
+                              <Input value={editContent} onChange={(e) => setEditContent(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") cancelEditing(); }} className="flex-1 h-7 text-sm" autoFocus />
+                              <Button size="icon" variant="ghost" className="h-6 w-6" onClick={saveEdit}><Check className="w-3.5 h-3.5 text-emerald-500" /></Button>
+                              <Button size="icon" variant="ghost" className="h-6 w-6" onClick={cancelEditing}><X className="w-3.5 h-3.5" /></Button>
                             </div>
                           ) : (
-                            <div className="flex-1">
-                              <div className="flex items-start gap-2">
-                                <div
-                                  className={`text-sm leading-relaxed break-words flex-1 ${message.isDeleted ? "italic text-muted-foreground" : ""}`}
-                                >
-                                  {message.isDeleted ? (
-                                    message.content
-                                  ) : (
-                                    <MessageContent
-                                      content={message.content}
-                                      workspaceMembers={workspaceMembers}
-                                    />
-                                  )}
-                                </div>
+                            <>
+                              <div className={`text-[13px] leading-snug break-words ${message.isDeleted ? "italic text-muted-foreground" : ""}`}>
+                                {message.isDeleted ? message.content : (
+                                  <MessageContent content={message.content} workspaceMembers={workspaceMembers} />
+                                )}
                               </div>
 
-                              {/* Attachments */}
-                              {message.attachments && (
-                                <AttachmentPreview
-                                  attachments={message.attachments}
-                                />
-                              )}
+                              {message.attachments && <AttachmentPreview attachments={message.attachments} />}
 
-                              {/* Failed message retry */}
                               {message.status === "failed" && (
-                                <div className="flex items-center gap-2 mt-1">
-                                  <span className="text-xs text-destructive">
-                                    Failed to send
-                                  </span>
-                                  <button
-                                    onClick={() => retryMessage(message)}
-                                    className="text-xs text-accent hover:underline flex items-center gap-1"
-                                  >
-                                    <RefreshCw className="w-3 h-3" /> Retry
-                                  </button>
-                                  <button
-                                    onClick={() => removeMessage(message.id)}
-                                    className="text-xs text-muted-foreground hover:text-foreground"
-                                  >
-                                    Dismiss
-                                  </button>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className="text-[10px] text-destructive">Failed</span>
+                                  <button onClick={() => retryMessage(message)} className="text-[10px] text-accent hover:underline flex items-center gap-0.5"><RefreshCw className="w-2.5 h-2.5" /> Retry</button>
+                                  <button onClick={() => removeMessage(message.id)} className="text-[10px] text-muted-foreground hover:text-foreground">Dismiss</button>
                                 </div>
                               )}
 
-                              {/* Edit/Delete buttons - only for own messages */}
-                              {isOwnMessage &&
-                                !message.isDeleted &&
-                                !message.status && (
-                                  <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 flex-shrink-0">
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      className="h-6 w-6"
-                                      onClick={() => startEditing(message)}
-                                    >
-                                      <Pencil className="w-3 h-3" />
-                                    </Button>
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      className="h-6 w-6 text-destructive hover:text-destructive"
-                                      onClick={() => deleteMessage(message.id)}
-                                    >
-                                      <Trash2 className="w-3 h-3" />
-                                    </Button>
-                                  </div>
-                                )}
-
-                              {/* Pin + Reaction + Reply buttons — visible on hover */}
-                              {!message.isDeleted && !message.status && (
-                                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 flex-shrink-0">
-                                  {/* Quick reactions */}
-                                  {["👍", "❤️", "😂", "🎉", "🔥", "👀"].map(
-                                    (emoji) => (
-                                      <button
-                                        key={emoji}
-                                        onClick={() =>
-                                          toggleReaction(message.id, emoji)
-                                        }
-                                        className="h-6 w-6 flex items-center justify-center rounded hover:bg-muted transition-colors text-sm"
-                                        title={emoji}
-                                      >
-                                        {emoji}
-                                      </button>
-                                    ),
-                                  )}
-                                  {/* Pin button */}
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className={`h-6 w-6 ${message.isPinned ? "text-amber-500" : ""}`}
-                                    onClick={() => togglePin(message.id)}
-                                    title={message.isPinned ? "Unpin" : "Pin"}
-                                  >
-                                    {message.isPinned ? (
-                                      <PinOff className="w-3 h-3" />
-                                    ) : (
-                                      <Pin className="w-3 h-3" />
-                                    )}
-                                  </Button>
-                                  {/* Reply button */}
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-6 w-6"
-                                    onClick={() => setReplyingTo(message)}
-                                    title="Reply"
-                                  >
-                                    <Reply className="w-3 h-3" />
-                                  </Button>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-6 w-6"
-                                    onClick={() => handleCreateTask(message)}
-                                    title="Create Task"
-                                  >
-                                    <ListTodo className="w-3 h-3" />
-                                  </Button>
-                                </div>
-                              )}
-
-                              {/* Reaction counts display */}
+                              {/* Reaction counts — tight to message */}
                               {(message.reactions?.length ?? 0) > 0 && (
-                                <div className="flex flex-wrap gap-1 mt-1">
-                                  {(
-                                    Object.entries(
-                                      (message.reactions || []).reduce(
-                                        (
-                                          acc: Record<
-                                            string,
-                                            {
-                                              count: number;
-                                              users: string[];
-                                              hasOwn: boolean;
-                                            }
-                                          >,
-                                          r: Reaction,
-                                        ) => {
-                                          if (!acc[r.emoji])
-                                            acc[r.emoji] = {
-                                              count: 0,
-                                              users: [],
-                                              hasOwn: false,
-                                            };
-                                          acc[r.emoji].count++;
-                                          acc[r.emoji].users.push(
-                                            r.user?.name || "Unknown",
-                                          );
-                                          if (
-                                            r.userId ===
-                                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                            (session?.user as any)?.id
-                                          )
-                                            acc[r.emoji].hasOwn = true;
-                                          return acc;
-                                        },
-                                        {} as Record<
-                                          string,
-                                          {
-                                            count: number;
-                                            users: string[];
-                                            hasOwn: boolean;
-                                          }
-                                        >,
-                                      ),
-                                    ) as [
-                                      string,
-                                      {
-                                        count: number;
-                                        users: string[];
-                                        hasOwn: boolean;
+                                <div className="flex flex-wrap gap-1 mt-0.5">
+                                  {(Object.entries(
+                                    (message.reactions || []).reduce(
+                                      (acc: Record<string, { count: number; users: string[]; hasOwn: boolean }>, r: Reaction) => {
+                                        if (!acc[r.emoji]) acc[r.emoji] = { count: 0, users: [], hasOwn: false };
+                                        acc[r.emoji].count++;
+                                        acc[r.emoji].users.push(r.user?.name || "Unknown");
+                                        if (r.userId === (session?.user as any)?.id) acc[r.emoji].hasOwn = true;
+                                        return acc;
                                       },
-                                    ][]
-                                  ).map(([emoji, data]) => (
-                                    <button
-                                      key={emoji}
-                                      onClick={() =>
-                                        toggleReaction(message.id, emoji)
-                                      }
-                                      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs border transition-colors ${
-                                        data.hasOwn
-                                          ? "bg-primary/10 border-primary/30 text-primary"
-                                          : "bg-muted/50 border-border hover:bg-muted"
-                                      }`}
+                                      {} as Record<string, { count: number; users: string[]; hasOwn: boolean }>,
+                                    ),
+                                  ) as [string, { count: number; users: string[]; hasOwn: boolean }][]).map(([emoji, data]) => (
+                                    <button key={emoji} onClick={() => toggleReaction(message.id, emoji)}
+                                      className={`inline-flex items-center gap-0.5 h-5 px-1.5 rounded-full text-[11px] border transition-colors ${data.hasOwn ? "bg-primary/10 border-primary/30 text-primary" : "bg-muted/50 border-transparent hover:border-border hover:bg-muted"}`}
                                       title={data.users.join(", ")}
                                     >
-                                      <span>{emoji}</span>
-                                      <span className="font-medium">
-                                        {data.count}
-                                      </span>
+                                      <span className="leading-none">{emoji}</span>
+                                      <span className="font-medium leading-none">{data.count}</span>
                                     </button>
                                   ))}
+                                  <button onClick={() => {}} className="inline-flex items-center justify-center h-5 w-5 rounded-full border border-transparent hover:border-border hover:bg-muted text-muted-foreground/50 hover:text-muted-foreground text-[11px] transition-colors" title="Add reaction">+</button>
                                 </div>
                               )}
 
                               {/* Thread indicator */}
                               {(message.replyCount || 0) > 0 && (
-                                <button
-                                  onClick={() => openThread(message)}
-                                  className="flex items-center gap-1.5 mt-1 text-xs text-primary hover:text-primary/80 hover:underline transition-colors"
-                                >
+                                <button onClick={() => openThread(message)} className="flex items-center gap-1 mt-0.5 text-[11px] text-primary hover:underline font-medium">
                                   <MessageSquare className="w-3 h-3" />
-                                  <span className="font-medium">
-                                    {message.replyCount}{" "}
-                                    {message.replyCount === 1
-                                      ? "reply"
-                                      : "replies"}
-                                  </span>
-                                  {message.replies?.[0] && (
-                                    <span className="text-muted-foreground">
-                                      — Last reply{" "}
-                                      {formatTime(message.replies[0].createdAt)}
-                                    </span>
-                                  )}
+                                  {message.replyCount} {message.replyCount === 1 ? "reply" : "replies"}
                                 </button>
                               )}
-                            </div>
+                            </>
                           )}
                         </div>
+
+                        {/* Hover toolbar — Slack-style with text labels */}
+                        {!message.isDeleted && !message.status && (
+                          <div className="absolute top-0 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-100 z-10 -translate-y-1/2">
+                            <div className="flex items-center bg-popover border rounded-md shadow-sm overflow-hidden">
+                              <button onClick={() => toggleReaction(message.id, "✅")} className="h-7 w-7 flex items-center justify-center hover:bg-muted text-[13px] transition-colors" title="Complete">✅</button>
+                              <button onClick={() => toggleReaction(message.id, "👀")} className="h-7 w-7 flex items-center justify-center hover:bg-muted text-[13px] transition-colors" title="Eyes">👀</button>
+                              <button onClick={() => toggleReaction(message.id, "🙌")} className="h-7 w-7 flex items-center justify-center hover:bg-muted text-[13px] transition-colors" title="Raise hands">🙌</button>
+                              <div className="w-px h-4 bg-border" />
+                              <button onClick={() => toggleReaction(message.id, "")} className="h-7 px-2 flex items-center gap-1 hover:bg-muted text-[11px] text-muted-foreground font-medium transition-colors" title="Add reaction">
+                                <Smile className="w-3.5 h-3.5" /> React
+                              </button>
+                              <div className="w-px h-4 bg-border" />
+                              <button onClick={() => setReplyingTo(message)} className="h-7 px-2 flex items-center gap-1 hover:bg-muted text-[11px] text-muted-foreground font-medium transition-colors" title="Reply in thread">
+                                <MessageSquare className="w-3.5 h-3.5" /> Reply
+                              </button>
+                              <div className="w-px h-4 bg-border" />
+                              <button className="h-7 w-7 flex items-center justify-center hover:bg-muted text-muted-foreground transition-colors" title="More actions">
+                                <MoreVertical className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </motion.div>
+                      </div>
                     );
                   })
                 )}
 
-                {/* Typing indicator */}
+                {/* Typing indicator — avatar + chat bubble */}
                 {typingUsers.length > 0 && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
-                    <div className="flex gap-1">
-                      <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" />
-                      <span
-                        className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"
-                        style={{ animationDelay: "0.1s" }}
-                      />
-                      <span
-                        className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce"
-                        style={{ animationDelay: "0.2s" }}
-                      />
+                  <motion.div
+                    initial={{ opacity: 0, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 4 }}
+                    className="flex items-end gap-2 mt-3 px-1"
+                  >
+                    <Avatar className="h-6 w-6 flex-shrink-0">
+                      <AvatarImage src={typingUsers[0].image || ""} />
+                      <AvatarFallback className={avatarFallbackClass(typingUsers[0].name, "text-[10px] font-semibold")}>{typingUsers[0].name?.[0] || "?"}</AvatarFallback>
+                    </Avatar>
+                    <div className="bg-muted rounded-2xl rounded-bl-sm px-3 py-2 flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 bg-muted-foreground/60 rounded-full animate-bounce" />
+                      <span className="w-1.5 h-1.5 bg-muted-foreground/60 rounded-full animate-bounce" style={{ animationDelay: "0.15s" }} />
+                      <span className="w-1.5 h-1.5 bg-muted-foreground/60 rounded-full animate-bounce" style={{ animationDelay: "0.3s" }} />
                     </div>
-                    <span>
-                      {typingUsers.map((u) => u.name).join(", ")}{" "}
-                      {typingUsers.length === 1 ? "is" : "are"} typing...
+                    <span className="text-xs text-muted-foreground">
+                      {typingUsers.map((u) => u.name).join(", ")} {typingUsers.length === 1 ? "is" : "are"} typing
                     </span>
-                  </div>
+                  </motion.div>
                 )}
 
                 <div ref={messagesEndRef} />
               </div>
-            </ScrollArea>
+            </div>
 
             <TypingIndicator />
+
+            {/* Scroll-to-bottom FAB */}
+            <AnimatePresence>
+              {scrolledUp && (
+                <motion.button
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 8 }}
+                  onClick={() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })}
+                  className="absolute bottom-28 right-6 z-20 flex items-center gap-1.5 bg-primary text-primary-foreground text-xs font-medium px-3 py-1.5 rounded-full shadow-lg hover:bg-primary/90 transition-colors"
+                >
+                  <ArrowDown className="w-3.5 h-3.5" />
+                  New messages
+                </motion.button>
+              )}
+            </AnimatePresence>
 
             {/* Reply bar */}
             {replyingTo && (
@@ -1701,170 +1579,15 @@ export default function ChatPage() {
               </div>
             )}
 
-            {/* Message Input */}
-            <div className="p-4 border-t">
-              <div className="flex items-center gap-2 relative">
-                {/* Hidden file input */}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*,application/pdf"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
-
-                {/* File picker button */}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-9 w-9"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
-                >
-                  {uploading ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <Paperclip className="w-5 h-5" />
-                  )}
-                </Button>
-
-                {/* Emoji picker */}
-                <div className="relative">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-9 w-9"
-                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                  >
-                    <Smile className="w-5 h-5" />
-                  </Button>
-                  {showEmojiPicker && (
-                    <div className="absolute bottom-12 left-0 bg-popover border rounded-lg shadow-lg p-2 flex gap-1 z-50">
-                      {EMOJI_LIST.map((emoji) => (
-                        <button
-                          key={emoji}
-                          onClick={() => addEmoji(emoji)}
-                          className="hover:bg-muted p-1 rounded text-lg"
-                        >
-                          {emoji}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Pending attachment preview */}
-                {pendingAttachment && (
-                  <div className="flex items-center gap-2 px-2 py-1 bg-muted rounded text-sm">
-                    <span className="truncate max-w-24">
-                      {pendingAttachment.name}
-                    </span>
-                    <button
-                      onClick={() => setPendingAttachment(null)}
-                      className="text-muted-foreground hover:text-foreground"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
-
-                {/* Mention autocomplete menu */}
-                {showMentionMenu && (
-                  <div className="absolute bottom-12 left-0 w-64 bg-popover border rounded-lg shadow-lg py-1 z-50">
-                    <div className="px-2 py-1 text-xs font-semibold text-muted-foreground border-b">
-                      Members
-                    </div>
-                    {workspaceMembers
-                      .filter((m) =>
-                        (m.name || "").toLowerCase().includes(mentionSearch),
-                      )
-                      .slice(0, 5)
-                      .map((member) => (
-                        <button
-                          key={member.id}
-                          onClick={() => {
-                            const words = newMessage.split(/(?<=\s)/); // Keep trailing spaces on previous words
-                            const lastWordIndex = words.length - 1;
-                            const mentionAlias = (member.name || "").replace(
-                              /\s+/g,
-                              "",
-                            ); // "John Doe" -> "JohnDoe"
-                            words[lastWordIndex] = `@${mentionAlias} `;
-                            setNewMessage(words.join(""));
-                            setShowMentionMenu(false);
-                            inputRef.current?.focus();
-                          }}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted text-left"
-                        >
-                          <Avatar className="h-5 w-5">
-                            <AvatarImage src={member.image || ""} />
-                            <AvatarFallback className="text-[10px]">
-                              {member.name?.[0] || "?"}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="truncate">{member.name}</span>
-                        </button>
-                      ))}
-                    {workspaceMembers.filter((m) =>
-                      (m.name || "").toLowerCase().includes(mentionSearch),
-                    ).length === 0 && (
-                      <div className="px-3 py-2 text-sm text-muted-foreground">
-                        No matches found
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <Input
-                  ref={inputRef}
-                  placeholder={
-                    isDirectMessage
-                      ? `Message ${displayName}`
-                      : `Message #${selectedChannel.name}`
-                  }
-                  value={newMessage}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setNewMessage(val);
-                    handleTyping();
-
-                    // Mention detection
-                    const lastWord = val.split(" ").pop();
-                    if (lastWord?.startsWith("@")) {
-                      setShowMentionMenu(true);
-                      setMentionSearch(lastWord.slice(1).toLowerCase());
-                    } else {
-                      setShowMentionMenu(false);
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      if (showMentionMenu) {
-                        setShowMentionMenu(false);
-                      } else {
-                        sendMessage();
-                      }
-                    }
-                  }}
-                  className="flex-1"
-                />
-
-                <Button
-                  onClick={sendMessage}
-                  disabled={!newMessage.trim() || sending}
-                  size="icon"
-                  className="h-9 w-9"
-                >
-                  {sending ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Send className="w-4 h-4" />
-                  )}
-                </Button>
-              </div>
-            </div>
-          </>
+            <MainChatInput
+              onSendMessage={sendMessage}
+              onTyping={handleTyping}
+              workspaceMembers={workspaceMembers}
+              displayName={displayName || ""}
+              selectedChannelName={selectedChannel.name}
+              isDirectMessage={isDirectMessage}
+            />
+          </div>
         ) : (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">

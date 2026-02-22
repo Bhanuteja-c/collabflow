@@ -44,13 +44,16 @@ function SidebarContent({ workspaceSlug, onItemClick }: { workspaceSlug: string;
     const pathname = usePathname();
     const baseUrl = `/workspace/${workspaceSlug}`;
     const [workspaceId, setWorkspaceId] = useState<string | undefined>();
+    const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(true);
 
     // Fetch workspace ID from slug
     useEffect(() => {
+        setIsLoadingWorkspace(true);
         fetch(`/api/workspaces/${workspaceSlug}`)
             .then(res => res.ok ? res.json() : null)
             .then(data => { if (data?.id) setWorkspaceId(data.id); })
-            .catch(() => { });
+            .catch(() => { })
+            .finally(() => setIsLoadingWorkspace(false));
     }, [workspaceSlug]);
 
     const { onlineUsers } = useWorkspacePresence(workspaceId);
@@ -59,7 +62,7 @@ function SidebarContent({ workspaceSlug, onItemClick }: { workspaceSlug: string;
         <>
             {/* Logo */}
             <div className="p-4 border-b">
-                <Link href="/" className="flex items-center gap-2">
+                <Link href="/" onClick={onItemClick} className="flex items-center gap-2">
                     <Logo size="sm" showText={true} />
                 </Link>
             </div>
@@ -82,9 +85,9 @@ function SidebarContent({ workspaceSlug, onItemClick }: { workspaceSlug: string;
                             key={item.label}
                             href={href}
                             onClick={onItemClick}
-                            className={`flex items-center gap-3 px-3 py-3 rounded-lg text-sm transition-colors touch-manipulation ${isActive
+                            className={`flex items-center gap-3 px-3 py-3 rounded-lg text-sm transition-all active:scale-[0.98] touch-manipulation ${isActive
                                 ? "bg-primary/10 text-primary font-medium"
-                                : "text-muted-foreground hover:text-foreground hover:bg-muted/50 active:bg-muted"
+                                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                                 }`}
                         >
                             <item.icon className="w-5 h-5 flex-shrink-0" />
@@ -95,7 +98,19 @@ function SidebarContent({ workspaceSlug, onItemClick }: { workspaceSlug: string;
             </nav>
 
             {/* Online Members Section */}
-            {onlineUsers.length > 0 && (
+            {isLoadingWorkspace ? (
+                <div className="p-3 border-t">
+                    <div className="h-3 w-20 bg-muted/60 rounded animate-pulse mb-3 ml-1" />
+                    <div className="space-y-1">
+                        {[1, 2, 3].map(i => (
+                            <div key={i} className="flex items-center gap-2.5 px-2 py-1.5 rounded-md">
+                                <div className="h-6 w-6 rounded-full bg-muted/60 animate-pulse flex-shrink-0" />
+                                <div className="h-3 w-24 bg-muted/60 rounded animate-pulse" />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            ) : onlineUsers.length > 0 && (
                 <div className="p-3 border-t">
                     <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2 px-1">
                         Online — {onlineUsers.length}

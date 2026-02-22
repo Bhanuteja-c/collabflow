@@ -3,11 +3,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ensureUser } from "@/lib/ensureUser";
-import { emitToChannel } from "@/lib/socket";
+import { emitToChannel, emitToUser, emitToWorkspace } from "@/lib/socket";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rateLimit";
 
 // GET /api/messages?channelId=xxx - Get messages for a channel
 // GET /api/messages?channelId=xxx&parentId=yyy - Get replies to a message (thread)
+// GET /api/messages?channelId=xxx&pinned=true - Get only pinned messages for a channel
 export async function GET(req: NextRequest) {
     try {
         const session = await auth();
@@ -59,6 +60,31 @@ export async function GET(req: NextRequest) {
             return NextResponse.json(replies);
         }
 
+        const pinnedOnly = searchParams.get("pinned") === "true";
+
+        if (pinnedOnly) {
+            // Fetch only pinned messages for this channel
+            const pinned = await prisma.pinnedMessage.findMany({
+                where: { message: { channelId } },
+                orderBy: { pinnedAt: "asc" },
+                include: {
+                    message: {
+                        include: {
+                            author: { select: { id: true, name: true, image: true } },
+                            reactions: true,
+                        },
+                    },
+                },
+            });
+            const result = pinned.map((p) => ({
+                ...p.message,
+                isPinned: true,
+                pinnedAt: p.pinnedAt,
+                pinnedBy: p.pinnedBy,
+            }));
+            return NextResponse.json(result);
+        }
+
         // Fetch top-level messages only (no parentId)
         const messages = await prisma.message.findMany({
             where: { channelId, parentId: null },
@@ -68,6 +94,9 @@ export async function GET(req: NextRequest) {
                     select: { id: true, name: true, image: true },
                 },
                 reactions: true,
+                pinnedMessage: {
+                    select: { id: true },
+                },
                 // Include latest reply author for thread preview
                 replies: {
                     orderBy: { createdAt: "desc" },
@@ -82,7 +111,21 @@ export async function GET(req: NextRequest) {
             },
         });
 
-        return NextResponse.json(messages);
+        // Map to expose isPinned as a boolean
+        const result = messages.map(({ pinnedMessage, ...msg }) => ({
+            ...msg,
+            isPinned: !!pinnedMessage,
+        }));
+
+        // Update this user's lastReadAt and notify other channel members (for read receipts / blue ticks)
+        const readAt = new Date();
+        await prisma.channelMember.updateMany({
+            where: { channelId, userId },
+            data: { lastReadAt: readAt },
+        });
+        emitToChannel(channelId, "messages-read", { userId, readAt: readAt.toISOString() });
+
+        return NextResponse.json(result);
     } catch (error) {
         console.error("[API/messages] Error:", error);
         return NextResponse.json({
@@ -204,6 +247,18 @@ export async function POST(req: NextRequest) {
         } else {
             // Emit normal new-message event for top-level messages
             emitToChannel(channelId, "new-message", message);
+
+            // Emit lightweight workspace-level event for unread badge increments
+            const channelInfo = await prisma.channel.findUnique({
+                where: { id: channelId },
+                select: { workspaceId: true },
+            });
+            if (channelInfo?.workspaceId) {
+                emitToWorkspace(channelInfo.workspaceId, "channel-new-message", {
+                    channelId,
+                    authorId: userId,
+                });
+            }
         }
 
         // Update channel's updatedAt
@@ -211,6 +266,55 @@ export async function POST(req: NextRequest) {
             where: { id: channelId },
             data: { updatedAt: new Date() },
         });
+
+        // Parse Mentions and Create Notifications
+        const mentionRegex = /@(\w+)/g;
+        const matches = [...content.matchAll(mentionRegex)].map((m) => m[1].toLowerCase());
+
+        if (matches.length > 0) {
+            const channelInfo = await prisma.channel.findUnique({
+                where: { id: channelId },
+                include: {
+                    workspace: {
+                        include: { members: { include: { user: true } } }
+                    }
+                }
+            });
+
+            if (channelInfo?.workspace) {
+                const workspaceId = channelInfo.workspaceId;
+                const workspaceMembers = channelInfo.workspace.members;
+                const mentionedUserIds = new Set<string>();
+
+                for (const match of matches) {
+                    const member = workspaceMembers.find((m) => {
+                        const nameParts = (m.user.name || "").toLowerCase().split(" ");
+                        const fullNameNoSpaces = (m.user.name || "").toLowerCase().replace(/\s+/g, "");
+                        return nameParts.includes(match) || fullNameNoSpaces === match;
+                    });
+
+                    if (member && member.user.id !== userId) {
+                        mentionedUserIds.add(member.user.id);
+                    }
+                }
+
+                for (const mentionedUserId of mentionedUserIds) {
+                    const notification = await prisma.notification.create({
+                        data: {
+                            userId: mentionedUserId,
+                            type: "mention",
+                            title: "New Mention",
+                            message: `${message.author.name || "Someone"} mentioned you in a message.`,
+                            senderId: userId,
+                            workspaceId: workspaceId,
+                            link: `/workspace/${channelInfo.workspace.slug}/chat?channelId=${channelId}`
+                        }
+                    });
+
+                    emitToUser(mentionedUserId, "notification", notification);
+                }
+            }
+        }
 
         return NextResponse.json(message);
     } catch (error) {

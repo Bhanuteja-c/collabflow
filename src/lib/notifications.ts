@@ -1,6 +1,7 @@
 // src/lib/notifications.ts
 // Utility functions to create notifications
 import { prisma } from "./prisma";
+import { emitToUser } from "./socket";
 
 export type NotificationType =
     | "workspace_invite"
@@ -39,12 +40,26 @@ export async function createNotification(params: CreateNotificationParams) {
             },
         });
 
+        // Enrich with sender data (no Prisma relation — resolved manually like the REST API does)
+        let sender: { name: string; image: string | null } | null = null;
+        if (params.senderId) {
+            const senderUser = await prisma.user.findUnique({
+                where: { id: params.senderId },
+                select: { name: true, image: true },
+            });
+            if (senderUser) sender = { name: senderUser.name ?? "", image: senderUser.image };
+        }
+
+        // Push live to the user's personal socket room
+        emitToUser(params.userId, "notification", { ...notification, sender });
+
         return notification;
     } catch (error) {
         console.error("Failed to create notification:", error);
         return null;
     }
 }
+
 
 // Helper to notify all workspace members
 export async function notifyWorkspaceMembers(

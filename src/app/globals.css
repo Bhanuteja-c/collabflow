@@ -520,3 +520,78 @@ li[data-type="taskItem"][data-checked="true"] div {
 .tiptap img.ProseMirror-selectednode {
     outline: 3px solid var(--color-accent);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LiveKit Overrides (CollabFlow Premium Theme)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Room background */
+.lk-room-container {
+    background-color: var(--color-background) !important;
+}
+
+/* Video blocks */
+.lk-participant-tile {
+    border-radius: var(--radius) !important;
+    overflow: hidden !important;
+    box-shadow: var(--shadow-md) !important;
+    border: 1px solid var(--color-border) !important;
+    background-color: var(--color-surface) !important;
+    transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+.lk-participant-tile:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: var(--shadow-lg) !important;
+}
+
+/* Name tag on video */
+.lk-participant-name {
+    background: rgba(0, 0, 0, 0.6) !important;
+    backdrop-filter: blur(8px) !important;
+    border-radius: 4px !important;
+    padding: 2px 8px !important;
+    font-size: 0.75rem !important;
+    font-weight: 500 !important;
+}
+
+/* Control Bar (bottom dock) */
+.lk-control-bar {
+    background: var(--color-surface-elevated) !important;
+    border: 1px solid var(--color-border) !important;
+    border-radius: 9999px !important; /* Pill shape */
+    padding: 0.5rem 1rem !important;
+    margin-bottom: 1.5rem !important;
+    box-shadow: var(--shadow-lg) !important;
+    backdrop-filter: blur(16px) !important;
+    display: inline-flex !important;
+    gap: 0.5rem !important;
+}
+
+/* Buttons in control bar */
+.lk-button {
+    background-color: transparent !important;
+    color: var(--color-foreground) !important;
+    border-radius: 9999px !important;
+    transition: all 0.2s ease !important;
+    padding: 0.5rem !important;
+}
+
+.lk-button:hover {
+    background-color: var(--color-muted) !important;
+}
+
+.lk-button:active {
+    transform: scale(0.92) !important;
+}
+
+/* Disabled/Off state (e.g. muted mic) */
+.lk-button[aria-pressed="true"], .lk-disconnect-button {
+    background-color: var(--color-destructive) !important;
+    color: white !important;
+}
+
+.lk-button[aria-pressed="true"]:hover, .lk-disconnect-button:hover {
+    background-color: hsl(0 84% 50%) !important;
+    transform: scale(1.05) !important;
+}

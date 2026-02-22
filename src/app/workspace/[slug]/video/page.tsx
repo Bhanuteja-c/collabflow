@@ -60,148 +60,142 @@ export default function WorkspaceVideoPage() {
     ];
 
     return (
-        <div className="min-h-full flex items-center justify-center bg-background relative overflow-hidden p-6">
-            {/* Ambient Background Effects */}
-            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/20 rounded-full blur-[120px] -translate-y-1/2 translate-x-1/2 pointer-events-none" />
-            <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-emerald-500/10 rounded-full blur-[120px] translate-y-1/2 -translate-x-1/2 pointer-events-none" />
+        <div className="min-h-full flex items-center justify-center relative overflow-hidden p-6">
+            {/* Very subtle ambient background */}
+            <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-primary/5 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+            <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-primary/5 rounded-full blur-[100px] translate-y-1/2 -translate-x-1/2 pointer-events-none" />
 
-            <div className="grid lg:grid-cols-2 gap-12 max-w-6xl w-full z-10 items-center">
-
+            {/* Content Container */}
+            <div className="grid lg:grid-cols-2 gap-12 lg:gap-24 max-w-6xl w-full z-10 items-center">
+                
                 {/* Left Column: Hero Content */}
                 <motion.div
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5 }}
                     className="flex flex-col space-y-8"
                 >
-                    <div className="space-y-4">
-                        <motion.div
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.2 }}
-                            className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium w-fit"
-                        >
-                            <Sparkles className="w-4 h-4" />
-                            <span>New: Virtual Backgrounds & Blur</span>
-                        </motion.div>
+                    <div className="space-y-6">
+                        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-primary/20 bg-primary/5 text-primary text-xs font-medium backdrop-blur-sm">
+                            <Sparkles className="w-3.5 h-3.5" />
+                            <span>Premium Workspace Video</span>
+                        </div>
 
-                        <h1 className="text-5xl md:text-6xl font-extrabold tracking-tight leading-tight">
-                            Connect Instantly, <br />
-                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-emerald-500">
-                                Collaborate Freely.
-                            </span>
+                        <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-[1.1]">
+                            Secure meetings, <br />
+                            <span className="text-muted-foreground">built for teams.</span>
                         </h1>
 
-                        <p className="text-xl text-muted-foreground leading-relaxed max-w-lg">
-                            Experience premium video conferencing with real-time collaboration tools built right into your workspace.
+                        <p className="text-lg text-muted-foreground leading-relaxed max-w-md">
+                            Start instantly, share your screen, and collaborate seamlessly without ever leaving your workspace.
                         </p>
                     </div>
 
-                    <div className="flex flex-col sm:flex-row gap-4">
+                    <div className="flex flex-col sm:flex-row gap-3 pt-2">
                         <Button
                             size="lg"
                             onClick={() => startNewMeeting(false)}
-                            className="h-14 px-8 text-lg shadow-lg shadow-primary/25 hover:shadow-primary/40 transition-shadow"
+                            className="h-12 px-8 rounded-full shadow-lg shadow-primary/20 text-base active:scale-[0.98] transition-all"
                         >
-                            <Video className="mr-2 h-5 w-5" />
-                            New Meeting
+                            <Video className="mr-2 h-4 w-4" />
+                            Start Meeting
                         </Button>
                         <Button
                             size="lg"
                             variant="outline"
                             onClick={() => startNewMeeting(true)}
-                            className="h-14 px-8 text-lg border-2"
+                            className="h-12 px-8 rounded-full text-base bg-background/50 backdrop-blur-sm active:scale-[0.98] transition-all"
                         >
-                            <ExternalLink className="mr-2 h-5 w-5" />
-                            Open in Window
+                            <ExternalLink className="mr-2 h-4 w-4" />
+                            Open Window
                         </Button>
                     </div>
 
-                    {/* Feature Grid */}
-                    <div className="grid grid-cols-2 gap-6 pt-8 pr-12">
+                    {/* Minimal Feature Grid */}
+                    <div className="grid grid-cols-2 gap-y-6 gap-x-8 pt-6 border-t border-border/50 mt-8">
                         {features.map((feature, i) => (
-                            <motion.div
-                                key={i}
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.4 + (i * 0.1) }}
-                                className="flex items-start gap-3"
-                            >
-                                <div className="p-2 bg-muted rounded-lg">
-                                    <feature.icon className="w-5 h-5 text-primary" />
+                            <div key={i} className="flex flex-col gap-1.5">
+                                <div className="flex items-center gap-2 text-foreground font-medium text-sm">
+                                    <feature.icon className="w-4 h-4 text-primary" />
+                                    {feature.label}
                                 </div>
-                                <div>
-                                    <h3 className="font-semibold text-sm">{feature.label}</h3>
-                                    <p className="text-xs text-muted-foreground">{feature.desc}</p>
-                                </div>
-                            </motion.div>
+                                <p className="text-xs text-muted-foreground">{feature.desc}</p>
+                            </div>
                         ))}
                     </div>
                 </motion.div>
 
                 {/* Right Column: Join Card */}
                 <motion.div
-                    initial={{ opacity: 0, scale: 0.95 }}
+                    initial={{ opacity: 0, scale: 0.97 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.5, delay: 0.2 }}
-                    className="flex justify-center"
+                    transition={{ duration: 0.5, delay: 0.1 }}
+                    className="flex justify-center lg:justify-end"
                 >
-                    <Card className="w-full max-w-md bg-card/50 backdrop-blur-xl border-border/50 hover:bg-card/60 transition-colors shadow-2xl">
-                        <CardHeader className="space-y-1">
-                            <CardTitle className="text-2xl font-bold">Join a Meeting</CardTitle>
-                            <CardDescription>
-                                Enter the meeting code to join your team.
+                    <Card className="w-full max-w-[420px] bg-card/40 backdrop-blur-xl border-border/40 shadow-xl overflow-hidden rounded-2xl">
+                        {/* Decorative header line */}
+                        <div className="h-1 w-full bg-gradient-to-r from-primary/40 via-primary to-primary/40" />
+                        
+                        <CardHeader className="space-y-2 pb-6 pt-8 px-8">
+                            <CardTitle className="text-xl font-semibold tracking-tight">Join Existing Meeting</CardTitle>
+                            <CardDescription className="text-sm">
+                                Enter a meeting code to join your team.
                             </CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-6">
-                            <div className="rounded-xl border border-border p-1 focus-within:ring-2 focus-within:ring-primary/20 transition-all bg-background/50">
-                                <Input
-                                    placeholder="Enter code (e.g. abc-def-ghi)"
-                                    value={meetingId}
-                                    onChange={(e) => setMeetingId(e.target.value)}
-                                    onKeyDown={(e) => e.key === "Enter" && joinMeeting(false)}
-                                    className="border-0 shadow-none focus-visible:ring-0 h-12 text-lg bg-transparent"
-                                />
-                            </div>
+                        
+                        <CardContent className="space-y-6 px-8 pb-8">
+                            <div className="space-y-3">
+                                <div className="relative group">
+                                    <Input
+                                        placeholder="e.g. abc-def-ghi"
+                                        value={meetingId}
+                                        onChange={(e) => setMeetingId(e.target.value)}
+                                        onKeyDown={(e) => e.key === "Enter" && joinMeeting(false)}
+                                        className="h-12 pl-4 pr-12 bg-background/50 border-border/50 focus-visible:ring-1 focus-visible:border-primary transition-all text-base rounded-xl"
+                                    />
+                                    <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="absolute right-1 top-1 h-10 w-10 text-muted-foreground hover:text-foreground opacity-50 group-hover:opacity-100 transition-opacity"
+                                        onClick={() => joinMeeting(true)}
+                                        disabled={!meetingId.trim()}
+                                        title="Open in new window"
+                                    >
+                                        <ExternalLink className="h-4 w-4" />
+                                    </Button>
+                                </div>
 
-                            <div className="grid grid-cols-5 gap-2">
                                 <Button
-                                    className="col-span-4 h-12 text-base font-medium bg-gradient-to-r from-primary to-primary/90 hover:to-primary"
+                                    className="w-full h-12 text-sm font-medium rounded-xl active:scale-[0.98] transition-all"
                                     onClick={() => joinMeeting(false)}
                                     disabled={!meetingId.trim()}
                                 >
-                                    Join Now
+                                    Join Meeting
                                     <ArrowRight className="ml-2 h-4 w-4" />
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    className="col-span-1 h-12 bg-background/50"
-                                    onClick={() => joinMeeting(true)}
-                                    disabled={!meetingId.trim()}
-                                    title="Open in new window"
-                                >
-                                    <ExternalLink className="h-5 w-5" />
                                 </Button>
                             </div>
 
-                            <div className="relative py-2">
+                            <div className="relative py-2 hidden sm:block">
                                 <div className="absolute inset-0 flex items-center">
-                                    <span className="w-full border-t border-border/60" />
+                                    <span className="w-full border-t border-border/40" />
                                 </div>
-                                <div className="relative flex justify-center text-xs uppercase">
-                                    <span className="bg-background/0 backdrop-blur px-2 text-muted-foreground font-medium">
-                                        or invite others
+                                <div className="relative flex justify-center text-[10px] uppercase font-medium tracking-wider">
+                                    <span className="bg-card/40 backdrop-blur-sm px-3 text-muted-foreground">
+                                        or
                                     </span>
                                 </div>
                             </div>
 
-                            <div className="bg-muted/30 rounded-lg p-4 text-center">
-                                <p className="text-sm text-muted-foreground mb-3">
-                                    Send an invite link to start collaborating.
-                                </p>
-                                <Button variant="secondary" size="sm" className="w-full">
-                                    <MessageSquare className="w-4 h-4 mr-2" />
-                                    Generate Invite Link
+                            <div className="hidden sm:block">
+                                <Button 
+                                    variant="secondary" 
+                                    className="w-full h-11 text-xs rounded-xl bg-muted/50 hover:bg-muted font-medium"
+                                    onClick={() => {
+                                        startNewMeeting(false);
+                                    }}
+                                >
+                                    <Video className="w-3.5 h-3.5 mr-2" />
+                                    Start an instant meeting
                                 </Button>
                             </div>
                         </CardContent>

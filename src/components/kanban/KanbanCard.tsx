@@ -136,8 +136,11 @@ export default function KanbanCard({
     return (
         <div
             ref={setNodeRef}
-            style={style}
-            className={`group ${isDragging || isSortableDragging ? "opacity-40 scale-[0.98]" : ""}`}
+            style={{
+                ...style,
+                zIndex: isDragging ? 999 : "auto",
+            }}
+            className={`group outline-none ${isSortableDragging && !isDragging ? "opacity-30 mix-blend-luminosity" : ""}`}
             onMouseEnter={() => setShowActions(true)}
             onMouseLeave={() => setShowActions(false)}
         >
@@ -151,8 +154,8 @@ export default function KanbanCard({
                     hover:-translate-y-0.5 hover:shadow-md hover:border-border
                     cursor-pointer
                     ${isOverdue ? "ring-1 ring-red-500/30" : ""}
-                    ${isDragging ? "shadow-2xl rotate-2 scale-105 border-primary/30" : ""}
-                    ${card.status === "completed" ? "opacity-60" : ""}
+                    ${isDragging ? "shadow-[0_20px_60px_-15px_rgba(37,99,235,0.2)] rotate-3 scale-105 border-primary/40 ring-2 ring-primary/20 brightness-110" : ""}
+                    ${card.status === "completed" && !isDragging ? "opacity-60" : ""}
                 `}
                 onClick={handleCardClick}
             >

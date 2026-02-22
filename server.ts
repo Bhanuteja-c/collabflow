@@ -32,7 +32,10 @@ app.prepare().then(() => {
     if (process.env.REDIS_URL) {
         console.log("Initializing Redis Adapter...");
         try {
-            const pubClient = new Redis(process.env.REDIS_URL);
+            const tlsOpts = process.env.REDIS_URL?.startsWith("rediss://")
+                ? { tls: { rejectUnauthorized: false } }
+                : {};
+            const pubClient = new Redis(process.env.REDIS_URL, tlsOpts);
             const subClient = pubClient.duplicate();
             
             pubClient.on("error", (err) => {

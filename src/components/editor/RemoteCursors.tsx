@@ -27,11 +27,20 @@ interface CursorPosition {
     top: number;
     left: number;
     visible: boolean;
+    active?: boolean;
 }
 
 export function RemoteCursors({ editor, remoteUsers }: RemoteCursorsProps) {
     const [cursors, setCursors] = useState<CursorPosition[]>([]);
     const containerRef = useRef<HTMLDivElement>(null);
+    const cursorTimers = useRef<{ [socketId: string]: NodeJS.Timeout }>({});
+
+    // Cleanup timers on unmount
+    useEffect(() => {
+        return () => {
+            Object.values(cursorTimers.current).forEach(clearTimeout);
+        };
+    }, []);
 
     useEffect(() => {
         if (!editor) return;
@@ -64,7 +73,20 @@ export function RemoteCursors({ editor, remoteUsers }: RemoteCursorsProps) {
                         top,
                         left,
                         visible,
+                        active: true, // Activity flag
                     });
+
+                    // Reset fade-out timer for this cursor
+                    if (cursorTimers.current[remoteUser.socketId]) {
+                        clearTimeout(cursorTimers.current[remoteUser.socketId]);
+                    }
+                    cursorTimers.current[remoteUser.socketId] = setTimeout(() => {
+                        setCursors(currentCursors => 
+                            currentCursors.map(c => 
+                                c.socketId === remoteUser.socketId ? { ...c, active: false } : c
+                            )
+                        );
+                    }, 3000);
                 } catch (e) {
                     // Position might be out of range, ignore
                 }
@@ -126,19 +148,25 @@ export function RemoteCursors({ editor, remoteUsers }: RemoteCursorsProps) {
                             style={{ backgroundColor: cursor.color }}
                         />
 
-                        {/* Name label */}
-                        <motion.div
-                            initial={{ opacity: 0, y: -5 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="absolute -top-5 left-0 whitespace-nowrap"
-                        >
-                            <span
-                                className="text-[10px] font-medium text-white px-1.5 py-0.5 rounded shadow-sm"
-                                style={{ backgroundColor: cursor.color }}
-                            >
-                                {cursor.name}
-                            </span>
-                        </motion.div>
+                        {/* Name label - Fades out on inactivity */}
+                        <AnimatePresence>
+                            {cursor.active && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: -5 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, scale: 0.9 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="absolute -top-5 left-0 whitespace-nowrap"
+                                >
+                                    <span
+                                        className="text-[10px] font-medium text-white px-1.5 py-0.5 rounded shadow-sm"
+                                        style={{ backgroundColor: cursor.color }}
+                                    >
+                                        {cursor.name}
+                                    </span>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
                     </motion.div>
                 ))}
             </AnimatePresence>

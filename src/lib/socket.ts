@@ -46,3 +46,19 @@ export const emitToAll = (event: string, data: any) => {
         io.emit(event, data);
     }
 };
+
+// Emit to a specific user's personal room
+export const emitToUser = (userId: string, event: string, data: any) => {
+    const io = getIO();
+    if (io) {
+        io.to(`user:${userId}`).emit(event, data);
+    }
+};
+
+// Emit to all connected clients in a workspace room
+export const emitToWorkspace = (workspaceId: string, event: string, data: any) => {
+    const io = getIO();
+    if (io) {
+        io.to(`workspace:${workspaceId}`).emit(event, data);
+    }
+};

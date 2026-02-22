@@ -58,7 +58,7 @@ export function WorkspaceSwitcher({ currentSlug }: WorkspaceSwitcherProps) {
 
     if (loading) {
         return (
-            <div className="h-10 w-48 bg-muted/50 rounded-md animate-pulse" />
+            <div className="flex h-10 w-full animate-pulse items-center gap-2 rounded-md bg-muted/30 px-3" />
         );
     }
 
