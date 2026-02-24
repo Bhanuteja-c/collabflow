@@ -1,7 +1,7 @@
 // src/lib/auth.config.ts
 // Edge-compatible auth configuration with Google and Credentials providers
 import type { NextAuthConfig } from "next-auth";
-import Google from "next-auth/providers/google";
+// import Google from "next-auth/providers/google"; // Commented for FOSS compliance
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 
@@ -12,10 +12,11 @@ export const authConfig = {
         strategy: "jwt",
     },
     providers: [
-        Google({
-            clientId: process.env.GOOGLE_CLIENT_ID!,
-            clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-        }),
+        // Google OAuth — commented out for FOSS hackathon compliance
+        // Google({
+        //     clientId: process.env.GOOGLE_CLIENT_ID!,
+        //     clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+        // }),
         Credentials({
             name: "credentials",
             credentials: {
