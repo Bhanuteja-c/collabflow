@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
                     },
                 },
             });
-            const result = pinned.map((p) => ({
+            const result = pinned.map((p: any) => ({
                 ...p.message,
                 isPinned: true,
                 pinnedAt: p.pinnedAt,
@@ -112,7 +112,7 @@ export async function GET(req: NextRequest) {
         });
 
         // Map to expose isPinned as a boolean
-        const result = messages.map(({ pinnedMessage, ...msg }) => ({
+        const result = messages.map(({ pinnedMessage, ...msg }: any) => ({
             ...msg,
             isPinned: !!pinnedMessage,
         }));
@@ -287,7 +287,7 @@ export async function POST(req: NextRequest) {
                 const mentionedUserIds = new Set<string>();
 
                 for (const match of matches) {
-                    const member = workspaceMembers.find((m) => {
+                    const member = workspaceMembers.find((m: any) => {
                         const nameParts = (m.user.name || "").toLowerCase().split(" ");
                         const fullNameNoSpaces = (m.user.name || "").toLowerCase().replace(/\s+/g, "");
                         return nameParts.includes(match) || fullNameNoSpaces === match;
