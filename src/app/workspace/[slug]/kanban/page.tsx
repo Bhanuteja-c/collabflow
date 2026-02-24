@@ -32,6 +32,7 @@ import {
 import KanbanColumn from "@/components/kanban/KanbanColumn";
 import KanbanCard from "@/components/kanban/KanbanCard";
 import CardDetailModal from "@/components/kanban/CardDetailModal";
+import CreateCardDialog from "@/components/kanban/CreateCardDialog";
 import {
   Plus,
   Loader2,
@@ -109,6 +110,10 @@ export default function WorkspaceKanbanPage() {
   const [filterOverdue, setFilterOverdue] = useState(false);
   const [filterLabel, setFilterLabel] = useState<string | null>(null);
 
+  // Create card dialog
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [createDialogColumnId, setCreateDialogColumnId] = useState("");
+
   // Current user for presence
   const currentUser = useMemo(() => {
     if (!session?.user?.id) return undefined;
@@ -179,12 +184,12 @@ export default function WorkspaceKanbanPage() {
           columns: prev.columns.map((col) =>
             col.id === data.columnId
               ? {
-                  ...col,
-                  cards: [
-                    ...col.cards.filter((c) => c.id !== data.card.id),
-                    data.card,
-                  ],
-                }
+                ...col,
+                cards: [
+                  ...col.cards.filter((c) => c.id !== data.card.id),
+                  data.card,
+                ],
+              }
               : col,
           ),
         };
@@ -486,27 +491,53 @@ export default function WorkspaceKanbanPage() {
     }
   };
 
-  const addCard = async (columnId: string, title: string) => {
+  const addCard = async (columnId: string, title: string, extra?: Partial<Card>) => {
     if (!board || !title.trim()) return;
 
     try {
       const res = await fetch("/api/cards", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title.trim(), columnId }),
+        body: JSON.stringify({
+          title: title.trim(),
+          columnId,
+          ...(extra?.priority && { priority: extra.priority }),
+          ...(extra?.assigneeId && { assigneeId: extra.assigneeId }),
+          ...(extra?.dueDate && { dueDate: extra.dueDate }),
+          ...(extra?.startDate && { startDate: extra.startDate }),
+          ...(extra?.labels && extra.labels.length > 0 && { labels: extra.labels }),
+          ...(extra?.description && { description: extra.description }),
+        }),
       });
 
       if (res.ok) {
         const newCard = await res.json();
+        // Normalize card to ensure all fields exist for consistent rendering
+        const normalizedCard: Card = {
+          id: newCard.id,
+          title: newCard.title,
+          description: newCard.description || undefined,
+          order: newCard.order ?? 0,
+          priority: newCard.priority || "medium",
+          dueDate: newCard.dueDate || undefined,
+          startDate: newCard.startDate || undefined,
+          labels: newCard.labels || [],
+          status: newCard.status || "active",
+          assigneeId: newCard.assigneeId || undefined,
+          assignee: newCard.assignee || undefined,
+          commentsCount: newCard.commentsCount ?? 0,
+          checklistCompleted: newCard.checklistCompleted ?? 0,
+          checklistTotal: newCard.checklistTotal ?? 0,
+        };
         setBoard({
           ...board,
           columns: board.columns.map((col) =>
             col.id === columnId
-              ? { ...col, cards: [...col.cards, newCard] }
+              ? { ...col, cards: [...col.cards, normalizedCard] }
               : col,
           ),
         });
-        emitCardCreated(columnId, newCard);
+        emitCardCreated(columnId, normalizedCard);
       }
     } catch (error) {
       toast.error("Failed to create card");
@@ -589,6 +620,59 @@ export default function WorkspaceKanbanPage() {
     if (selectedCard?.id === cardId) {
       setSelectedCard({ ...selectedCard, ...updates });
     }
+  };
+
+  const handleMoveCardFromModal = (
+    cardId: string,
+    targetColumnId: string,
+    updates: Partial<Card>,
+  ) => {
+    if (!board) return;
+
+    // Find current column and the card
+    let movedCard: Card | undefined;
+    let fromColumnId: string | undefined;
+
+    for (const col of board.columns) {
+      const found = col.cards.find((c) => c.id === cardId);
+      if (found) {
+        movedCard = { ...found, ...updates };
+        fromColumnId = col.id;
+        break;
+      }
+    }
+
+    if (!movedCard || !fromColumnId || fromColumnId === targetColumnId) {
+      // Already in target column or not found, just apply updates
+      handleUpdateCardFromModal(cardId, updates);
+      return;
+    }
+
+    // Move card between columns
+    setBoard({
+      ...board,
+      columns: board.columns.map((col) => {
+        if (col.id === fromColumnId) {
+          return { ...col, cards: col.cards.filter((c) => c.id !== cardId) };
+        }
+        if (col.id === targetColumnId) {
+          return { ...col, cards: [...col.cards, movedCard!] };
+        }
+        return col;
+      }),
+    });
+
+    // Broadcast move via socket
+    const targetCol = board.columns.find((c) => c.id === targetColumnId);
+    const newOrder = targetCol ? targetCol.cards.length : 0;
+    emitCardMoved(cardId, fromColumnId, targetColumnId, newOrder);
+
+    // Update selected card if it's the one being moved
+    if (selectedCard?.id === cardId) {
+      setSelectedCard({ ...selectedCard, ...updates });
+    }
+
+    toast.success("Card moved to Done");
   };
 
   const findColumn = (id: string | undefined) => {
@@ -738,47 +822,47 @@ export default function WorkspaceKanbanPage() {
             <div className="h-5 w-20 bg-muted/40 rounded-full animate-pulse" />
             <div className="flex-1" />
             <div className="hidden md:flex gap-2">
-               <div className="h-8 w-20 bg-muted/40 rounded-lg animate-pulse" />
-               <div className="h-8 w-8 rounded-full bg-muted/40 animate-pulse" />
-               <div className="h-8 w-8 rounded-full bg-muted/40 animate-pulse" />
+              <div className="h-8 w-20 bg-muted/40 rounded-lg animate-pulse" />
+              <div className="h-8 w-8 rounded-full bg-muted/40 animate-pulse" />
+              <div className="h-8 w-8 rounded-full bg-muted/40 animate-pulse" />
             </div>
           </div>
         </div>
-        
+
         {/* Skeleton columns */}
         <div className="flex-1 p-4 flex gap-4 overflow-hidden relative">
           {/* Ambient background glow to match the premium theme */}
           <div className="absolute top-0 right-[20%] w-[500px] h-[500px] bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
-          
+
           {[1, 2, 3, 4].map((i) => (
             <div key={i} className="w-[21rem] flex-shrink-0 flex flex-col gap-3">
               {/* Column Header */}
               <div className="h-10 px-3 bg-muted/20 border border-border/30 rounded-xl flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                   <div className="h-4 w-4 bg-muted/50 rounded-sm animate-pulse" />
-                   <div className="h-4 w-24 bg-muted/50 rounded animate-pulse" />
+                  <div className="h-4 w-4 bg-muted/50 rounded-sm animate-pulse" />
+                  <div className="h-4 w-24 bg-muted/50 rounded animate-pulse" />
                 </div>
                 <div className="h-5 w-8 bg-muted/40 rounded-md animate-pulse" />
               </div>
-              
+
               {/* Cards in Column */}
               <div className="flex flex-col gap-3 rounded-xl border border-border/30 bg-muted/10 p-2 flex-1 relative overflow-hidden">
                 {/* Subtle shimmer sweeping across the column */}
                 <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/5 to-transparent z-10 pointer-events-none" />
-                
+
                 {Array.from({ length: [3, 2, 4, 2][i - 1] ?? 3 }).map((_, j) => (
                   <div key={j} className="h-[104px] bg-card/60 backdrop-blur-sm border border-border/50 rounded-xl p-3 flex flex-col justify-between shadow-sm">
-                     <div className="space-y-2">
-                        <div className="h-4 w-[80%] bg-muted/60 rounded animate-pulse" />
-                        <div className="h-3 w-[40%] bg-muted/40 rounded animate-pulse" />
-                     </div>
-                     <div className="flex justify-between items-center mt-2">
-                        <div className="h-5 w-16 bg-muted/40 rounded-full animate-pulse" />
-                        <div className="flex -space-x-1">
-                           <div className="h-6 w-6 rounded-full bg-muted/60 border-2 border-background animate-pulse" />
-                           {j % 2 === 0 && <div className="h-6 w-6 rounded-full bg-muted/50 border-2 border-background animate-pulse" />}
-                        </div>
-                     </div>
+                    <div className="space-y-2">
+                      <div className="h-4 w-[80%] bg-muted/60 rounded animate-pulse" />
+                      <div className="h-3 w-[40%] bg-muted/40 rounded animate-pulse" />
+                    </div>
+                    <div className="flex justify-between items-center mt-2">
+                      <div className="h-5 w-16 bg-muted/40 rounded-full animate-pulse" />
+                      <div className="flex -space-x-1">
+                        <div className="h-6 w-6 rounded-full bg-muted/60 border-2 border-background animate-pulse" />
+                        {j % 2 === 0 && <div className="h-6 w-6 rounded-full bg-muted/50 border-2 border-background animate-pulse" />}
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1111,6 +1195,10 @@ export default function WorkspaceKanbanPage() {
                   onOpenDetail={handleOpenDetail}
                   onRenameColumn={renameColumn}
                   onDeleteColumn={deleteColumn}
+                  onOpenCreateDialog={(colId) => {
+                    setCreateDialogColumnId(colId);
+                    setCreateDialogOpen(true);
+                  }}
                   canDelete={board.columns.length > 1}
                 />
               </motion.div>
@@ -1129,8 +1217,20 @@ export default function WorkspaceKanbanPage() {
         isOpen={isModalOpen}
         onClose={handleCloseModal}
         onUpdate={handleUpdateCardFromModal}
+        onMoveCard={handleMoveCardFromModal}
+        columns={board.columns.map((col) => ({ id: col.id, title: col.title }))}
         workspaceMembers={workspaceMembers}
         currentUserId={session?.user?.id || ""}
+      />
+
+      {/* Create Card Dialog */}
+      <CreateCardDialog
+        isOpen={createDialogOpen}
+        onClose={() => setCreateDialogOpen(false)}
+        onCreateCard={addCard}
+        columnId={createDialogColumnId}
+        columnTitle={board.columns.find((c) => c.id === createDialogColumnId)?.title || ""}
+        workspaceMembers={workspaceMembers}
       />
     </div>
   );

@@ -79,11 +79,18 @@ interface Card {
     updatedAt?: string;
 }
 
+interface ColumnInfo {
+    id: string;
+    title: string;
+}
+
 interface CardDetailModalProps {
     card: Card | null;
     isOpen: boolean;
     onClose: () => void;
     onUpdate: (cardId: string, updates: Partial<Card>) => void;
+    onMoveCard?: (cardId: string, targetColumnId: string, updates: Partial<Card>) => void;
+    columns?: ColumnInfo[];
     workspaceMembers: User[];
     currentUserId: string;
 }
@@ -141,11 +148,15 @@ function ProgressRing({ progress, size = 28, strokeWidth = 3 }: { progress: numb
     );
 }
 
+const DONE_COLUMN_NAMES = ["done", "complete", "completed", "finished", "closed"];
+
 export default function CardDetailModal({
     card,
     isOpen,
     onClose,
     onUpdate,
+    onMoveCard,
+    columns,
     workspaceMembers,
     currentUserId,
 }: CardDetailModalProps) {
@@ -262,10 +273,64 @@ export default function CardDetailModal({
         saveField("labels", newLabels);
     };
 
-    const handleStatusToggle = () => {
-        const newStatus = status === "active" ? "completed" : "active";
-        setStatus(newStatus);
-        saveField("status", newStatus);
+    const handleStatusToggle = async () => {
+        if (!card) return;
+
+        if (status === "active") {
+            // Mark as done: set status, add "Done" label, move to Done column
+            const newStatus = "completed";
+            const newLabels = labels.includes("Done") ? labels : [...labels, "Done"];
+            setStatus(newStatus);
+            setLabels(newLabels);
+
+            // Find the Done column
+            const doneColumn = columns?.find(col =>
+                DONE_COLUMN_NAMES.includes(col.title.toLowerCase())
+            );
+
+            try {
+                // Save status + labels + move in one API call
+                const updatePayload: Record<string, any> = {
+                    status: newStatus,
+                    labels: newLabels,
+                };
+                if (doneColumn) {
+                    updatePayload.columnId = doneColumn.id;
+                }
+
+                await fetch(`/api/cards/${card.id}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(updatePayload),
+                });
+
+                if (doneColumn && onMoveCard) {
+                    // Move card to Done column + apply updates
+                    onMoveCard(card.id, doneColumn.id, { status: newStatus, labels: newLabels });
+                } else {
+                    onUpdate(card.id, { status: newStatus, labels: newLabels });
+                }
+            } catch (error) {
+                console.error("Failed to mark as done:", error);
+            }
+        } else {
+            // Revert to active: remove "Done" label, but don't auto-move back
+            const newStatus = "active";
+            const newLabels = labels.filter(l => l !== "Done");
+            setStatus(newStatus);
+            setLabels(newLabels);
+
+            try {
+                await fetch(`/api/cards/${card.id}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ status: newStatus, labels: newLabels }),
+                });
+                onUpdate(card.id, { status: newStatus, labels: newLabels });
+            } catch (error) {
+                console.error("Failed to revert status:", error);
+            }
+        }
     };
 
     // Comments
@@ -412,13 +477,12 @@ export default function CardDetailModal({
 
                         {/* Due Date */}
                         <div className="flex items-center gap-1.5">
-                            <div className={`inline-flex items-center rounded-lg border h-8 px-2 text-xs font-medium ${
-                                isOverdue
+                            <div className={`inline-flex items-center rounded-lg border h-8 px-2 text-xs font-medium ${isOverdue
                                     ? "border-red-500/50 text-red-600 dark:text-red-400 bg-red-500/5"
                                     : isDueSoon
                                         ? "border-amber-500/50 text-amber-600 dark:text-amber-400 bg-amber-500/5"
                                         : "border-border"
-                            }`}>
+                                }`}>
                                 <Calendar className="w-3.5 h-3.5 mr-1.5 text-muted-foreground" />
                                 <Input
                                     type="date"
@@ -517,11 +581,10 @@ export default function CardDetailModal({
                                 <button
                                     key={label}
                                     onClick={() => handleLabelToggle(label)}
-                                    className={`text-xs font-medium px-2.5 py-1 rounded-lg border transition-all ${
-                                        labels.includes(label)
+                                    className={`text-xs font-medium px-2.5 py-1 rounded-lg border transition-all ${labels.includes(label)
                                             ? `${labelColorMap[label] || "bg-violet-500/15 text-violet-700"} border-current/20 ring-1 ring-current/20`
                                             : "bg-muted/30 text-muted-foreground border-border/50 hover:bg-muted/60"
-                                    }`}
+                                        }`}
                                 >
                                     {label}
                                 </button>

@@ -87,9 +87,9 @@ export function WorkspaceHeader({ onMenuClick, workspaceSlug, workspaceId }: Wor
                                 <DropdownMenuSeparator />
                             </>
                         )}
-                        <DropdownMenuItem 
+                        <DropdownMenuItem
                             className="text-destructive focus:bg-destructive focus:text-destructive-foreground cursor-pointer"
-                            onClick={() => signOut({ callbackUrl: "/auth/signin" })}
+                            onClick={() => signOut({ callbackUrl: "/" })}
                         >
                             <LogOut className="mr-2 h-4 w-4" />
                             <span>Log out</span>

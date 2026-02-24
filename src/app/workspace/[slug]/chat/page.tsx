@@ -99,10 +99,10 @@ interface Channel {
 
 const EMOJI_LIST = ["👍", "❤️", "😂", "🎉", "🔥", "👀", "💯", "✅"];
 
-function ThreadReplyInput({ 
-  onSend, 
-  workspaceMembers 
-}: { 
+function ThreadReplyInput({
+  onSend,
+  workspaceMembers
+}: {
   onSend: (content: string) => void,
   workspaceMembers: { id: string; name: string; image?: string; email?: string }[]
 }) {
@@ -582,7 +582,8 @@ export default function ChatPage() {
   };
 
   const sendMessage = async (content: string, attachment: any | null, clientId: string) => {
-    if (!content.trim() || !selectedChannel) return;
+    if (!content.trim() && !attachment) return;
+    if (!selectedChannel) return;
 
     // Optimistic: immediately show the message in the UI
     const optimisticMsg: Message = {
@@ -902,7 +903,7 @@ export default function ChatPage() {
             ))}
           </div>
         </div>
-        
+
         {/* Skeleton Main Chat Area */}
         <div className="flex-1 flex flex-col">
           <div className="p-4 border-b flex items-center gap-3">
@@ -935,12 +936,12 @@ export default function ChatPage() {
   const isDirectMessage = selectedChannel?.type === "direct";
   const targetUser = isDirectMessage
     ? workspaceMembers.find(
-        (m) =>
-          m.id !== currentUser?.id &&
-          selectedChannel.members?.some(
-            (mem: any) => mem.userId === m.id || mem.user?.id === m.id,
-          ),
-      )
+      (m) =>
+        m.id !== currentUser?.id &&
+        selectedChannel.members?.some(
+          (mem: any) => mem.userId === m.id || mem.user?.id === m.id,
+        ),
+    )
     : null;
 
   const displayName = isDirectMessage
@@ -1027,67 +1028,66 @@ export default function ChatPage() {
             {/* Channels section */}
             <div className="px-3 pb-1">
               <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 px-1 mb-1">Channels</p>
-            {channels.filter((c) => c.type !== "direct").length === 0 ? (
-              <div className="text-center py-8 px-4">
-                <MessageSquare className="w-10 h-10 mx-auto text-muted-foreground mb-2" />
-                <p className="text-sm text-muted-foreground">No channels yet</p>
-                <Button
-                  variant="link"
-                  size="sm"
-                  onClick={() => setShowNewChannel(true)}
-                  className="mt-2"
-                >
-                  Create your first channel
-                </Button>
-              </div>
-            ) : (
-              channels
-                .filter((c) => c.type !== "direct")
-                .map((channel) => (
-                  <button
-                    key={channel.id}
-                    onClick={() => {
-                      setSelectedChannel(channel);
-                      setSidebarOpen(false);
-                      // Clear unread count locally
-                      setChannels((prev) =>
-                        prev.map((ch) =>
-                          ch.id === channel.id ? { ...ch, unreadCount: 0 } : ch,
-                        ),
-                      );
-                    }}
-                    className={`w-full text-left px-3 py-1.5 rounded-md flex items-center gap-2 transition-all relative touch-manipulation active:scale-[0.98] ${
-                      selectedChannel?.id === channel.id
+              {channels.filter((c) => c.type !== "direct").length === 0 ? (
+                <div className="text-center py-8 px-4">
+                  <MessageSquare className="w-10 h-10 mx-auto text-muted-foreground mb-2" />
+                  <p className="text-sm text-muted-foreground">No channels yet</p>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    onClick={() => setShowNewChannel(true)}
+                    className="mt-2"
+                  >
+                    Create your first channel
+                  </Button>
+                </div>
+              ) : (
+                channels
+                  .filter((c) => c.type !== "direct")
+                  .map((channel) => (
+                    <button
+                      key={channel.id}
+                      onClick={() => {
+                        setSelectedChannel(channel);
+                        setSidebarOpen(false);
+                        // Clear unread count locally
+                        setChannels((prev) =>
+                          prev.map((ch) =>
+                            ch.id === channel.id ? { ...ch, unreadCount: 0 } : ch,
+                          ),
+                        );
+                      }}
+                      className={`w-full text-left px-3 py-1.5 rounded-md flex items-center gap-2 transition-all relative touch-manipulation active:scale-[0.98] ${selectedChannel?.id === channel.id
                         ? "text-primary-foreground font-medium"
                         : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {selectedChannel?.id === channel.id && (
+                        }`}
+                    >
+                      {selectedChannel?.id === channel.id && (
                         <motion.div
-                            layoutId="activeSidebarItem"
-                            className="absolute inset-0 bg-primary/90 shadow-sm rounded-md"
-                            initial={false}
-                            transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                          layoutId="activeSidebarItem"
+                          className="absolute inset-0 bg-primary/90 shadow-sm rounded-md"
+                          initial={false}
+                          transition={{ type: "spring", stiffness: 500, damping: 30 }}
                         />
-                    )}
-                    <Hash className="w-4 h-4 flex-shrink-0 relative z-10" />
-                    <span className="truncate text-sm flex-1 relative z-10">
-                      {channel.name}
-                    </span>
-                     {(channel.unreadCount ?? 0) > 0 &&
-                      selectedChannel?.id !== channel.id && (
-                        <Badge
-                          variant="destructive"
-                          className="h-5 min-w-5 px-1.5 text-[10px] font-bold relative z-10 scale-90"
-                        >
-                          {channel.unreadCount! > 99
-                            ? "99+"
-                            : channel.unreadCount}
-                        </Badge>
                       )}
-                  </button>
-                ))
-            )}
+                      <Hash className="w-4 h-4 flex-shrink-0 relative z-10" />
+                      <span className="truncate text-sm flex-1 relative z-10">
+                        {channel.name}
+                      </span>
+                      {(channel.unreadCount ?? 0) > 0 &&
+                        selectedChannel?.id !== channel.id && (
+                          <Badge
+                            variant="destructive"
+                            className="h-5 min-w-5 px-1.5 text-[10px] font-bold relative z-10 scale-90"
+                          >
+                            {channel.unreadCount! > 99
+                              ? "99+"
+                              : channel.unreadCount}
+                          </Badge>
+                        )}
+                    </button>
+                  ))
+              )}
             </div>
           </div>
 
@@ -1122,19 +1122,18 @@ export default function ChatPage() {
                     <button
                       key={member.id}
                       onClick={() => handleDirectMessage(member.id)}
-                      className={`w-full text-left px-3 py-1.5 rounded-md flex items-center gap-2 transition-all relative touch-manipulation active:scale-[0.98] ${
-                        isSelected
-                          ? "text-primary-foreground font-medium"
-                          : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"
-                      }`}
+                      className={`w-full text-left px-3 py-1.5 rounded-md flex items-center gap-2 transition-all relative touch-manipulation active:scale-[0.98] ${isSelected
+                        ? "text-primary-foreground font-medium"
+                        : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"
+                        }`}
                     >
                       {isSelected && (
-                          <motion.div
-                              layoutId="activeSidebarItem"
-                              className="absolute inset-0 bg-primary/90 shadow-sm rounded-md"
-                              initial={false}
-                              transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                          />
+                        <motion.div
+                          layoutId="activeSidebarItem"
+                          className="absolute inset-0 bg-primary/90 shadow-sm rounded-md"
+                          initial={false}
+                          transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                        />
                       )}
                       <div className="relative z-10">
                         <Avatar className="w-5 h-5 flex-shrink-0">
@@ -1162,7 +1161,7 @@ export default function ChatPage() {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {selectedChannel ? (
           <div className="flex-1 flex flex-col min-h-0">
-              {/* Channel header */}
+            {/* Channel header */}
             <div className="px-4 py-3 border-b flex items-center justify-between bg-background/95 backdrop-blur-sm">
               <div className="flex items-center gap-3 min-w-0">
                 <Button variant="ghost" size="icon" className="md:hidden h-9 w-9 flex-shrink-0" onClick={() => setSidebarOpen(true)}>
@@ -1367,144 +1366,144 @@ export default function ChatPage() {
                             </span>
                           </div>
                         )}
-                      <motion.div
-                        initial={{ opacity: 0, y: 3 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className={`relative group flex items-start gap-2 px-4 -mx-4 py-0.5 hover:bg-muted/30 transition-colors ${showAvatar ? "mt-2" : ""} ${message.status === "pending" ? "opacity-50" : ""} ${message.status === "failed" ? "bg-red-500/5" : ""}`}
-                      >
-                        {/* Avatar gutter */}
-                        {showAvatar ? (
-                          <Avatar className="h-8 w-8 mt-0.5 flex-shrink-0">
-                            <AvatarImage src={message.author.image || ""} />
-                            <AvatarFallback className={avatarFallbackClass(message.author.name, "text-[11px] font-semibold")}>
-                              {message.author.name?.[0]?.toUpperCase() || "?"}
-                            </AvatarFallback>
-                          </Avatar>
-                        ) : (
-                          <div className="w-8 flex-shrink-0 flex items-center justify-center">
-                            <span className="text-[10px] text-muted-foreground/0 group-hover:text-muted-foreground/50 transition-colors tabular-nums">
-                              {new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}
-                            </span>
-                          </div>
-                        )}
-
-                        {/* Message body */}
-                        <div className="flex-1 min-w-0">
-                          {/* Author + timestamp header (only for first in group) */}
-                          {showAvatar && (
-                            <div className="flex items-baseline gap-1.5">
-                              <span className="font-bold text-[13px] hover:underline cursor-pointer">
-                                {message.author.name}
-                              </span>
-                              <span className="text-[11px] text-muted-foreground/60 leading-none">
-                                {formatTime(message.createdAt)}
-                              </span>
-                              {isOwnMessage && (() => {
-                                const msgTime = new Date(message.createdAt).getTime();
-                                const currentUserId = (session?.user as any)?.id;
-                                const isRead = Object.entries(readTimestamps).some(
-                                  ([uid, ts]) => uid !== currentUserId && new Date(ts).getTime() >= msgTime
-                                );
-                                const tickStatus = message.status === "pending" ? "sending" : isRead ? "read" : "sent";
-                                return <MessageTicks status={tickStatus} />;
-                              })()}
-                              {message.isEdited && <span className="text-[10px] text-muted-foreground/50">(edited)</span>}
-                            </div>
-                          )}
-
-                          {/* Reply quote */}
-                          {message.parentMessage && (
-                            <div className="mb-0.5 pl-2 border-l-2 border-primary/30 py-0.5 mt-0.5">
-                              <span className="text-[11px] font-semibold text-primary/60">{message.parentMessage.author?.name}</span>
-                              <span className="text-[11px] text-muted-foreground ml-1.5 truncate">{message.parentMessage.content}</span>
-                            </div>
-                          )}
-
-                          {isEditing ? (
-                            <div className="flex items-center gap-2 my-0.5">
-                              <Input value={editContent} onChange={(e) => setEditContent(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") cancelEditing(); }} className="flex-1 h-7 text-sm" autoFocus />
-                              <Button size="icon" variant="ghost" className="h-6 w-6" onClick={saveEdit}><Check className="w-3.5 h-3.5 text-emerald-500" /></Button>
-                              <Button size="icon" variant="ghost" className="h-6 w-6" onClick={cancelEditing}><X className="w-3.5 h-3.5" /></Button>
-                            </div>
+                        <motion.div
+                          initial={{ opacity: 0, y: 3 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className={`relative group flex items-start gap-2 px-4 -mx-4 py-0.5 hover:bg-muted/30 transition-colors ${showAvatar ? "mt-2" : ""} ${message.status === "pending" ? "opacity-50" : ""} ${message.status === "failed" ? "bg-red-500/5" : ""}`}
+                        >
+                          {/* Avatar gutter */}
+                          {showAvatar ? (
+                            <Avatar className="h-8 w-8 mt-0.5 flex-shrink-0">
+                              <AvatarImage src={message.author.image || ""} />
+                              <AvatarFallback className={avatarFallbackClass(message.author.name, "text-[11px] font-semibold")}>
+                                {message.author.name?.[0]?.toUpperCase() || "?"}
+                              </AvatarFallback>
+                            </Avatar>
                           ) : (
-                            <>
-                              <div className={`text-[13px] leading-snug break-words ${message.isDeleted ? "italic text-muted-foreground" : ""}`}>
-                                {message.isDeleted ? message.content : (
-                                  <MessageContent content={message.content} workspaceMembers={workspaceMembers} />
-                                )}
-                              </div>
-
-                              {message.attachments && <AttachmentPreview attachments={message.attachments} />}
-
-                              {message.status === "failed" && (
-                                <div className="flex items-center gap-2 mt-0.5">
-                                  <span className="text-[10px] text-destructive">Failed</span>
-                                  <button onClick={() => retryMessage(message)} className="text-[10px] text-accent hover:underline flex items-center gap-0.5"><RefreshCw className="w-2.5 h-2.5" /> Retry</button>
-                                  <button onClick={() => removeMessage(message.id)} className="text-[10px] text-muted-foreground hover:text-foreground">Dismiss</button>
-                                </div>
-                              )}
-
-                              {/* Reaction counts — tight to message */}
-                              {(message.reactions?.length ?? 0) > 0 && (
-                                <div className="flex flex-wrap gap-1 mt-0.5">
-                                  {(Object.entries(
-                                    (message.reactions || []).reduce(
-                                      (acc: Record<string, { count: number; users: string[]; hasOwn: boolean }>, r: Reaction) => {
-                                        if (!acc[r.emoji]) acc[r.emoji] = { count: 0, users: [], hasOwn: false };
-                                        acc[r.emoji].count++;
-                                        acc[r.emoji].users.push(r.user?.name || "Unknown");
-                                        if (r.userId === (session?.user as any)?.id) acc[r.emoji].hasOwn = true;
-                                        return acc;
-                                      },
-                                      {} as Record<string, { count: number; users: string[]; hasOwn: boolean }>,
-                                    ),
-                                  ) as [string, { count: number; users: string[]; hasOwn: boolean }][]).map(([emoji, data]) => (
-                                    <button key={emoji} onClick={() => toggleReaction(message.id, emoji)}
-                                      className={`inline-flex items-center gap-0.5 h-5 px-1.5 rounded-full text-[11px] border transition-colors ${data.hasOwn ? "bg-primary/10 border-primary/30 text-primary" : "bg-muted/50 border-transparent hover:border-border hover:bg-muted"}`}
-                                      title={data.users.join(", ")}
-                                    >
-                                      <span className="leading-none">{emoji}</span>
-                                      <span className="font-medium leading-none">{data.count}</span>
-                                    </button>
-                                  ))}
-                                  <button onClick={() => {}} className="inline-flex items-center justify-center h-5 w-5 rounded-full border border-transparent hover:border-border hover:bg-muted text-muted-foreground/50 hover:text-muted-foreground text-[11px] transition-colors" title="Add reaction">+</button>
-                                </div>
-                              )}
-
-                              {/* Thread indicator */}
-                              {(message.replyCount || 0) > 0 && (
-                                <button onClick={() => openThread(message)} className="flex items-center gap-1 mt-0.5 text-[11px] text-primary hover:underline font-medium">
-                                  <MessageSquare className="w-3 h-3" />
-                                  {message.replyCount} {message.replyCount === 1 ? "reply" : "replies"}
-                                </button>
-                              )}
-                            </>
-                          )}
-                        </div>
-
-                        {/* Hover toolbar — Slack-style with text labels */}
-                        {!message.isDeleted && !message.status && (
-                          <div className="absolute top-0 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-100 z-10 -translate-y-1/2">
-                            <div className="flex items-center bg-popover border rounded-md shadow-sm overflow-hidden">
-                              <button onClick={() => toggleReaction(message.id, "✅")} className="h-7 w-7 flex items-center justify-center hover:bg-muted text-[13px] transition-colors" title="Complete">✅</button>
-                              <button onClick={() => toggleReaction(message.id, "👀")} className="h-7 w-7 flex items-center justify-center hover:bg-muted text-[13px] transition-colors" title="Eyes">👀</button>
-                              <button onClick={() => toggleReaction(message.id, "🙌")} className="h-7 w-7 flex items-center justify-center hover:bg-muted text-[13px] transition-colors" title="Raise hands">🙌</button>
-                              <div className="w-px h-4 bg-border" />
-                              <button onClick={() => toggleReaction(message.id, "")} className="h-7 px-2 flex items-center gap-1 hover:bg-muted text-[11px] text-muted-foreground font-medium transition-colors" title="Add reaction">
-                                <Smile className="w-3.5 h-3.5" /> React
-                              </button>
-                              <div className="w-px h-4 bg-border" />
-                              <button onClick={() => setReplyingTo(message)} className="h-7 px-2 flex items-center gap-1 hover:bg-muted text-[11px] text-muted-foreground font-medium transition-colors" title="Reply in thread">
-                                <MessageSquare className="w-3.5 h-3.5" /> Reply
-                              </button>
-                              <div className="w-px h-4 bg-border" />
-                              <button className="h-7 w-7 flex items-center justify-center hover:bg-muted text-muted-foreground transition-colors" title="More actions">
-                                <MoreVertical className="w-3.5 h-3.5" />
-                              </button>
+                            <div className="w-8 flex-shrink-0 flex items-center justify-center">
+                              <span className="text-[10px] text-muted-foreground/0 group-hover:text-muted-foreground/50 transition-colors tabular-nums">
+                                {new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}
+                              </span>
                             </div>
+                          )}
+
+                          {/* Message body */}
+                          <div className="flex-1 min-w-0">
+                            {/* Author + timestamp header (only for first in group) */}
+                            {showAvatar && (
+                              <div className="flex items-baseline gap-1.5">
+                                <span className="font-bold text-[13px] hover:underline cursor-pointer">
+                                  {message.author.name}
+                                </span>
+                                <span className="text-[11px] text-muted-foreground/60 leading-none">
+                                  {formatTime(message.createdAt)}
+                                </span>
+                                {isOwnMessage && (() => {
+                                  const msgTime = new Date(message.createdAt).getTime();
+                                  const currentUserId = (session?.user as any)?.id;
+                                  const isRead = Object.entries(readTimestamps).some(
+                                    ([uid, ts]) => uid !== currentUserId && new Date(ts).getTime() >= msgTime
+                                  );
+                                  const tickStatus = message.status === "pending" ? "sending" : isRead ? "read" : "sent";
+                                  return <MessageTicks status={tickStatus} />;
+                                })()}
+                                {message.isEdited && <span className="text-[10px] text-muted-foreground/50">(edited)</span>}
+                              </div>
+                            )}
+
+                            {/* Reply quote */}
+                            {message.parentMessage && (
+                              <div className="mb-0.5 pl-2 border-l-2 border-primary/30 py-0.5 mt-0.5">
+                                <span className="text-[11px] font-semibold text-primary/60">{message.parentMessage.author?.name}</span>
+                                <span className="text-[11px] text-muted-foreground ml-1.5 truncate">{message.parentMessage.content}</span>
+                              </div>
+                            )}
+
+                            {isEditing ? (
+                              <div className="flex items-center gap-2 my-0.5">
+                                <Input value={editContent} onChange={(e) => setEditContent(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") cancelEditing(); }} className="flex-1 h-7 text-sm" autoFocus />
+                                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={saveEdit}><Check className="w-3.5 h-3.5 text-emerald-500" /></Button>
+                                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={cancelEditing}><X className="w-3.5 h-3.5" /></Button>
+                              </div>
+                            ) : (
+                              <>
+                                <div className={`text-[13px] leading-snug break-words ${message.isDeleted ? "italic text-muted-foreground" : ""}`}>
+                                  {message.isDeleted ? message.content : (
+                                    <MessageContent content={message.content} workspaceMembers={workspaceMembers} />
+                                  )}
+                                </div>
+
+                                {message.attachments && <AttachmentPreview attachments={message.attachments} />}
+
+                                {message.status === "failed" && (
+                                  <div className="flex items-center gap-2 mt-0.5">
+                                    <span className="text-[10px] text-destructive">Failed</span>
+                                    <button onClick={() => retryMessage(message)} className="text-[10px] text-accent hover:underline flex items-center gap-0.5"><RefreshCw className="w-2.5 h-2.5" /> Retry</button>
+                                    <button onClick={() => removeMessage(message.id)} className="text-[10px] text-muted-foreground hover:text-foreground">Dismiss</button>
+                                  </div>
+                                )}
+
+                                {/* Reaction counts — tight to message */}
+                                {(message.reactions?.length ?? 0) > 0 && (
+                                  <div className="flex flex-wrap gap-1 mt-0.5">
+                                    {(Object.entries(
+                                      (message.reactions || []).reduce(
+                                        (acc: Record<string, { count: number; users: string[]; hasOwn: boolean }>, r: Reaction) => {
+                                          if (!acc[r.emoji]) acc[r.emoji] = { count: 0, users: [], hasOwn: false };
+                                          acc[r.emoji].count++;
+                                          acc[r.emoji].users.push(r.user?.name || "Unknown");
+                                          if (r.userId === (session?.user as any)?.id) acc[r.emoji].hasOwn = true;
+                                          return acc;
+                                        },
+                                        {} as Record<string, { count: number; users: string[]; hasOwn: boolean }>,
+                                      ),
+                                    ) as [string, { count: number; users: string[]; hasOwn: boolean }][]).map(([emoji, data]) => (
+                                      <button key={emoji} onClick={() => toggleReaction(message.id, emoji)}
+                                        className={`inline-flex items-center gap-0.5 h-5 px-1.5 rounded-full text-[11px] border transition-colors ${data.hasOwn ? "bg-primary/10 border-primary/30 text-primary" : "bg-muted/50 border-transparent hover:border-border hover:bg-muted"}`}
+                                        title={data.users.join(", ")}
+                                      >
+                                        <span className="leading-none">{emoji}</span>
+                                        <span className="font-medium leading-none">{data.count}</span>
+                                      </button>
+                                    ))}
+                                    <button onClick={() => { }} className="inline-flex items-center justify-center h-5 w-5 rounded-full border border-transparent hover:border-border hover:bg-muted text-muted-foreground/50 hover:text-muted-foreground text-[11px] transition-colors" title="Add reaction">+</button>
+                                  </div>
+                                )}
+
+                                {/* Thread indicator */}
+                                {(message.replyCount || 0) > 0 && (
+                                  <button onClick={() => openThread(message)} className="flex items-center gap-1 mt-0.5 text-[11px] text-primary hover:underline font-medium">
+                                    <MessageSquare className="w-3 h-3" />
+                                    {message.replyCount} {message.replyCount === 1 ? "reply" : "replies"}
+                                  </button>
+                                )}
+                              </>
+                            )}
                           </div>
-                        )}
-                      </motion.div>
+
+                          {/* Hover toolbar — Slack-style with text labels */}
+                          {!message.isDeleted && !message.status && (
+                            <div className="absolute top-0 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-100 z-10 -translate-y-1/2">
+                              <div className="flex items-center bg-popover border rounded-md shadow-sm overflow-hidden">
+                                <button onClick={() => toggleReaction(message.id, "✅")} className="h-7 w-7 flex items-center justify-center hover:bg-muted text-[13px] transition-colors" title="Complete">✅</button>
+                                <button onClick={() => toggleReaction(message.id, "👀")} className="h-7 w-7 flex items-center justify-center hover:bg-muted text-[13px] transition-colors" title="Eyes">👀</button>
+                                <button onClick={() => toggleReaction(message.id, "🙌")} className="h-7 w-7 flex items-center justify-center hover:bg-muted text-[13px] transition-colors" title="Raise hands">🙌</button>
+                                <div className="w-px h-4 bg-border" />
+                                <button onClick={() => toggleReaction(message.id, "")} className="h-7 px-2 flex items-center gap-1 hover:bg-muted text-[11px] text-muted-foreground font-medium transition-colors" title="Add reaction">
+                                  <Smile className="w-3.5 h-3.5" /> React
+                                </button>
+                                <div className="w-px h-4 bg-border" />
+                                <button onClick={() => openThread(message)} className="h-7 px-2 flex items-center gap-1 hover:bg-muted text-[11px] text-muted-foreground font-medium transition-colors" title="Reply in thread">
+                                  <MessageSquare className="w-3.5 h-3.5" /> Reply
+                                </button>
+                                <div className="w-px h-4 bg-border" />
+                                <button className="h-7 w-7 flex items-center justify-center hover:bg-muted text-muted-foreground transition-colors" title="More actions">
+                                  <MoreVertical className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </motion.div>
                       </div>
                     );
                   })
@@ -1722,8 +1721,8 @@ export default function ChatPage() {
 
               {/* Thread reply input */}
               <div className="p-3 border-t overflow-visible">
-                <ThreadReplyInput 
-                  onSend={sendThreadReply} 
+                <ThreadReplyInput
+                  onSend={sendThreadReply}
                   workspaceMembers={workspaceMembers}
                 />
               </div>

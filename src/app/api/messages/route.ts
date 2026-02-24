@@ -158,8 +158,8 @@ export async function POST(req: NextRequest) {
         const body = await req.json();
         const { channelId, content, attachments, parentId, clientId } = body;
 
-        if (!channelId || !content?.trim()) {
-            return NextResponse.json({ error: "channelId and content are required" }, { status: 400 });
+        if (!channelId || (!content?.trim() && !attachments?.length)) {
+            return NextResponse.json({ error: "channelId and either content or attachments are required" }, { status: 400 });
         }
 
         // Idempotency Check
@@ -178,28 +178,28 @@ export async function POST(req: NextRequest) {
 
         // Check if user is member of channel
         let membership = await prisma.channelMember.findUnique({
-             where: { channelId_userId: { channelId, userId } }
+            where: { channelId_userId: { channelId, userId } }
         });
 
         if (!membership) {
-             // ... Auto-join logic ...
-             const channel = await prisma.channel.findUnique({
-                 where: { id: channelId },
-                 include: { workspace: { select: { members: { where: { userId }, select: { id: true } } } } }
-             });
+            // ... Auto-join logic ...
+            const channel = await prisma.channel.findUnique({
+                where: { id: channelId },
+                include: { workspace: { select: { members: { where: { userId }, select: { id: true } } } } }
+            });
 
-             if (channel?.type === "public" && channel.workspace?.members.length) {
-                 membership = await prisma.channelMember.create({
-                     data: { channelId, userId, role: "member" },
-                 });
-             } else {
-                 return NextResponse.json({ error: "Not a member of this channel" }, { status: 403 });
-             }
+            if (channel?.type === "public" && channel.workspace?.members.length) {
+                membership = await prisma.channelMember.create({
+                    data: { channelId, userId, role: "member" },
+                });
+            } else {
+                return NextResponse.json({ error: "Not a member of this channel" }, { status: 403 });
+            }
         }
 
         const message = await prisma.message.create({
             data: {
-                content: content.trim(),
+                content: content?.trim() || "",
                 channelId,
                 authorId: userId,
                 attachments: attachments ?? undefined,

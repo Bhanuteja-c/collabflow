@@ -14,26 +14,26 @@ export function registerChatHandlers(io: Server, socket: Socket<any, any, any, S
         // ... (Membership checks omitted for brevity in diff, but should remain) ...
         // For now, assuming auth passed or reusing existing checks if I don't overwrite them.
         // Wait, replace_file_content replaces the whole block. I need to keep the checks.
-        
+
         // RE-IMPLEMENTING CHECKS:
         const channel = await prisma.channel.findUnique({
             where: { id: channelId },
             select: {
-                 workspaceId: true,
-                 members: { where: { userId }, select: { id: true } },
-                 workspace: { select: { members: { where: { userId }, select: { id: true } } } }
+                workspaceId: true,
+                members: { where: { userId }, select: { id: true } },
+                workspace: { select: { members: { where: { userId }, select: { id: true } } } }
             }
         });
 
         if (!channel) {
-             socket.emit("error", { message: "Channel not found", code: "NOT_FOUND" });
-             return;
+            socket.emit("error", { message: "Channel not found", code: "NOT_FOUND" });
+            return;
         }
-        
+
         const isMember = channel.members.length > 0 || (channel.workspace?.members?.length ?? 0) > 0;
         if (!isMember) {
-             socket.emit("error", { message: "Not authorized", code: "FORBIDDEN" });
-             return;
+            socket.emit("error", { message: "Not authorized", code: "FORBIDDEN" });
+            return;
         }
 
         const room = makeRoomId(ROOM_PREFIX.CHANNEL, channelId);
@@ -42,15 +42,15 @@ export function registerChatHandlers(io: Server, socket: Socket<any, any, any, S
         // Redis: Increment active count
         const metaKey = `channel:meta:${channelId}`;
         await redis.hincrby(metaKey, "active_count", 1);
-        
+
         // Presence: Mark user as online in this channel context
         const presenceKey = `presence:${userId}`;
         await redis.set(presenceKey, JSON.stringify({ status: "online", channelId, timestamp: Date.now() }), "EX", 60);
 
         // Notify others
-        socket.to(room).emit("channel-user-joined", { 
-            socketId: socket.id, 
-            user: { id: userId, name: socket.data.userName, image: socket.data.userImage } 
+        socket.to(room).emit("channel-user-joined", {
+            socketId: socket.id,
+            user: { id: userId, name: socket.data.userName, image: socket.data.userImage }
         });
 
         // Send active count
@@ -61,17 +61,17 @@ export function registerChatHandlers(io: Server, socket: Socket<any, any, any, S
     socket.on("leave-channel", async (channelId: string) => {
         const room = makeRoomId(ROOM_PREFIX.CHANNEL, channelId);
         socket.leave(room);
-        
+
         const metaKey = `channel:meta:${channelId}`;
         await redis.hincrby(metaKey, "active_count", -1);
-        
+
         socket.to(room).emit("channel-user-left", { socketId: socket.id });
     });
 
     socket.on("typing", async (data: { channelId: string }) => {
         const room = makeRoomId(ROOM_PREFIX.CHANNEL, data.channelId);
         const typingKey = `typing:channel:${data.channelId}`;
-        
+
         // Redis: Store typing timestamp
         await redis.hset(typingKey, socket.data.userId, Date.now());
         // Expire key after 5s (handled by valid-check or separate cleanup, strictly Redis EX is on key, not field. 
@@ -87,9 +87,9 @@ export function registerChatHandlers(io: Server, socket: Socket<any, any, any, S
     socket.on("stop-typing", async (data: { channelId: string }) => {
         const room = makeRoomId(ROOM_PREFIX.CHANNEL, data.channelId);
         const typingKey = `typing:channel:${data.channelId}`;
-        
+
         await redis.hdel(typingKey, socket.data.userId); // Remove user
-        
+
         socket.to(room).emit("user-stop-typing", {
             userId: socket.data.userId,
         });
@@ -100,7 +100,7 @@ export function registerChatHandlers(io: Server, socket: Socket<any, any, any, S
             const { channelId, content, clientId, parentId, attachments } = data;
             const userId = socket.data.userId;
 
-            if (!channelId || !content?.trim()) {
+            if (!channelId || (!content?.trim() && !attachments?.length)) {
                 if (callback) callback({ error: "Invalid data" });
                 return;
             }
@@ -119,18 +119,18 @@ export function registerChatHandlers(io: Server, socket: Socket<any, any, any, S
 
             // 2. Authorization
             const membership = await prisma.channelMember.findUnique({
-                 where: { channelId_userId: { channelId, userId } }
+                where: { channelId_userId: { channelId, userId } }
             });
 
             if (!membership) {
-                 if (callback) callback({ error: "Forbidden" });
-                 return;
+                if (callback) callback({ error: "Forbidden" });
+                return;
             }
 
             // 3. Create Message
             const message = await prisma.message.create({
                 data: {
-                    content: content.trim(),
+                    content: content?.trim() || "",
                     channelId,
                     authorId: userId,
                     clientId: clientId || undefined,
@@ -149,9 +149,9 @@ export function registerChatHandlers(io: Server, socket: Socket<any, any, any, S
                     where: { id: parentId },
                     data: { replyCount: { increment: 1 } }
                 });
-                
+
                 socket.to(makeRoomId(ROOM_PREFIX.CHANNEL, channelId)).emit("thread-reply", { ...message, parentId });
-                
+
                 const parent = await prisma.message.findUnique({ where: { id: parentId }, select: { replyCount: true } });
                 socket.to(makeRoomId(ROOM_PREFIX.CHANNEL, channelId)).emit("reply-count-update", {
                     messageId: parentId,
@@ -237,9 +237,9 @@ export function registerChatHandlers(io: Server, socket: Socket<any, any, any, S
 
     socket.on("heartbeat", async (data: { status?: string }) => {
         const presenceKey = `presence:${socket.data.userId}`;
-        await redis.set(presenceKey, JSON.stringify({ 
-            status: data.status || "online", 
-            lastActive: Date.now() 
+        await redis.set(presenceKey, JSON.stringify({
+            status: data.status || "online",
+            lastActive: Date.now()
         }), "EX", 60);
     });
 }

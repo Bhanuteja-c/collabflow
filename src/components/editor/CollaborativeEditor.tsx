@@ -5,6 +5,7 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import { BubbleMenu, FloatingMenu } from "@tiptap/react/menus";
 import StarterKit from "@tiptap/starter-kit";
 import Collaboration from "@tiptap/extension-collaboration";
+import CollaborationCursor from "@tiptap/extension-collaboration-cursor";
 import BubbleMenuExtension from "@tiptap/extension-bubble-menu";
 import FloatingMenuExtension from "@tiptap/extension-floating-menu";
 import Link from "@tiptap/extension-link";
@@ -59,6 +60,15 @@ export default function CollaborativeEditor({
         Collaboration.configure({
             document: ydoc,
         }),
+        CollaborationCursor.configure({
+            provider: {
+                awareness,
+            } as any,
+            user: {
+                name: userName,
+                color: userColor,
+            },
+        }),
         BubbleMenuExtension,
         FloatingMenuExtension,
         Link.configure({
@@ -73,7 +83,7 @@ export default function CollaborativeEditor({
         Placeholder.configure({
             placeholder: 'Type "/" for commands...',
         }),
-    ], [ydoc]);
+    ], [ydoc, awareness, userName, userColor]);
 
     const editor = useEditor({
         extensions,
@@ -157,7 +167,7 @@ export default function CollaborativeEditor({
                         <div className="h-4 w-[90%] bg-muted/20 rounded animate-[shimmer_2.5s_infinite]" />
                         <div className="h-4 w-[95%] bg-muted/20 rounded animate-[shimmer_2.5s_infinite]" />
                         <div className="h-4 w-[60%] bg-muted/20 rounded animate-[shimmer_2.5s_infinite] mb-4" />
-                        
+
                         <div className="h-4 w-full bg-muted/20 rounded animate-[shimmer_3s_infinite]" />
                         <div className="h-4 w-[85%] bg-muted/20 rounded animate-[shimmer_3s_infinite]" />
                         <div className="h-4 w-[70%] bg-muted/20 rounded animate-[shimmer_3s_infinite]" />

@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
         }
 
         const body = await req.json();
-        const { title, description, columnId } = body;
+        const { title, description, columnId, priority, assigneeId, dueDate, startDate, labels, status } = body;
 
         // Get the last card for both integer order and fractional orderKey
         const lastCard = await prisma.card.findFirst({
@@ -56,6 +56,17 @@ export async function POST(req: NextRequest) {
                 columnId,
                 order: (lastCard?.order ?? -1) + 1,
                 orderKey: newOrderKey,
+                ...(priority && { priority }),
+                ...(assigneeId && { assigneeId }),
+                ...(dueDate && { dueDate: new Date(dueDate) }),
+                ...(startDate && { startDate: new Date(startDate) }),
+                ...(labels && { labels }),
+                ...(status && { status }),
+            },
+            include: {
+                assignee: {
+                    select: { id: true, name: true, image: true },
+                },
             },
         });
 
@@ -64,7 +75,27 @@ export async function POST(req: NextRequest) {
             Activity.cardCreated(userId, column.board.workspaceId, card.id, card.title);
         }
 
-        return NextResponse.json(card);
+        // Return enriched card with all fields for consistent client-side state
+        const enrichedCard = {
+            id: card.id,
+            title: card.title,
+            description: card.description,
+            order: card.order,
+            priority: card.priority,
+            dueDate: card.dueDate,
+            startDate: card.startDate,
+            labels: card.labels,
+            status: card.status,
+            assigneeId: card.assigneeId,
+            assignee: card.assignee,
+            commentsCount: 0,
+            checklistTotal: 0,
+            checklistCompleted: 0,
+            createdAt: card.createdAt,
+            updatedAt: card.updatedAt,
+        };
+
+        return NextResponse.json(enrichedCard);
     } catch (error) {
         console.error("Error creating card:", error);
         return NextResponse.json({ error: "Failed to create card" }, { status: 500 });

@@ -83,9 +83,10 @@ export function MainChatInput({
   };
 
   const handleSend = async () => {
-    if (!value.trim() || sending) return;
+    const hasText = value.trim().length > 0;
+    if ((!hasText && !pendingAttachment) || sending) return;
     setSending(true);
-    const content = value;
+    const content = hasText ? value : "";
     const attachment = pendingAttachment;
     const clientId = crypto.randomUUID();
 

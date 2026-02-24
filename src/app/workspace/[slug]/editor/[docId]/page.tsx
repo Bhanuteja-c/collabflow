@@ -44,6 +44,8 @@ export default function WorkspaceEditorPage({ params }: { params: Promise<{ slug
     const [wordCount, setWordCount] = useState(0);
     const [charCount, setCharCount] = useState(0);
     const contentRef = useRef("");
+    const titleRef = useRef("Untitled");
+    const savePendingRef = useRef<NodeJS.Timeout | null>(null);
 
     // Use the enhanced document sync hook
     const { ydoc, awareness, connected, connectionState, remoteUsers } = useDocumentSync({
@@ -62,6 +64,7 @@ export default function WorkspaceEditorPage({ params }: { params: Promise<{ slug
                 if (res.ok) {
                     const data = await res.json();
                     setTitle(data.title);
+                    titleRef.current = data.title;
                     setInitialContent(data.content || "");
                     setPermission(data.permission || "view");
                 } else {
@@ -77,19 +80,53 @@ export default function WorkspaceEditorPage({ params }: { params: Promise<{ slug
         fetchDoc();
     }, [docId]);
 
+    // Save title independently (on blur / Enter)
+    const saveTitle = useCallback(async (newTitle: string) => {
+        if (!newTitle.trim() || newTitle === titleRef.current) return;
+        titleRef.current = newTitle;
+        try {
+            await fetch(`/api/documents/${docId}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ title: newTitle.trim() })
+            });
+        } catch (e) {
+            console.error("Failed to save title:", e);
+        }
+    }, [docId]);
+
     const handleSave = useCallback(async (content: string) => {
         setSaving(true);
         try {
             await fetch(`/api/documents/${docId}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ title, content })
+                body: JSON.stringify({ title: titleRef.current, content })
             });
             setSaved(true);
             setTimeout(() => setSaved(false), 2000);
         } catch (e) { console.error(e); }
         finally { setSaving(false); }
-    }, [docId, title]);
+    }, [docId]);
+
+    // Save on page unload (navigation, tab close)
+    useEffect(() => {
+        const handleBeforeUnload = () => {
+            // Flush any pending content save
+            if (savePendingRef.current) {
+                clearTimeout(savePendingRef.current);
+                savePendingRef.current = null;
+            }
+            // Use sendBeacon for reliable save on unload
+            if (contentRef.current) {
+                const payload = JSON.stringify({ title: titleRef.current, content: contentRef.current });
+                navigator.sendBeacon(`/api/documents/${docId}`, new Blob([payload], { type: 'application/json' }));
+            }
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [docId]);
 
     const copyShareLink = () => {
         navigator.clipboard.writeText(window.location.href);
@@ -158,7 +195,18 @@ export default function WorkspaceEditorPage({ params }: { params: Promise<{ slug
                         <Button variant="ghost" size="icon" asChild>
                             <Link href={`/workspace/${slug}/documents`}><ArrowLeft className="w-4 h-4" /></Link>
                         </Button>
-                        <Input value={title} onChange={(e) => setTitle(e.target.value)}
+                        <Input value={title} onChange={(e) => {
+                            setTitle(e.target.value);
+                            titleRef.current = e.target.value;
+                        }}
+                            onBlur={(e) => saveTitle(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    saveTitle((e.target as HTMLInputElement).value);
+                                    (e.target as HTMLInputElement).blur();
+                                }
+                            }}
                             className="font-semibold border-0 bg-transparent focus-visible:ring-0 text-lg w-64"
                             placeholder="Untitled Document" />
                     </div>

@@ -52,15 +52,16 @@ interface ColumnProps {
     onOpenDetail?: (card: CardType) => void;
     onRenameColumn?: (columnId: string, title: string) => void;
     onDeleteColumn?: (columnId: string) => void;
+    onOpenCreateDialog?: (columnId: string) => void;
     canDelete?: boolean;
 }
 
 // Column accent color config — gradient strip + dot
 const columnAccents: Record<string, { gradient: string; dot: string; glow: string }> = {
-    "To Do":       { gradient: "from-slate-400 to-slate-500",   dot: "bg-slate-500",   glow: "ring-slate-500/20 bg-slate-500/5" },
-    "In Progress": { gradient: "from-blue-400 to-blue-600",     dot: "bg-blue-500",    glow: "ring-blue-500/20 bg-blue-500/5" },
-    "Review":      { gradient: "from-amber-400 to-amber-500",   dot: "bg-amber-500",   glow: "ring-amber-500/20 bg-amber-500/5" },
-    "Done":        { gradient: "from-emerald-400 to-emerald-600", dot: "bg-emerald-500", glow: "ring-emerald-500/20 bg-emerald-500/5" },
+    "To Do": { gradient: "from-slate-400 to-slate-500", dot: "bg-slate-500", glow: "ring-slate-500/20 bg-slate-500/5" },
+    "In Progress": { gradient: "from-blue-400 to-blue-600", dot: "bg-blue-500", glow: "ring-blue-500/20 bg-blue-500/5" },
+    "Review": { gradient: "from-amber-400 to-amber-500", dot: "bg-amber-500", glow: "ring-amber-500/20 bg-amber-500/5" },
+    "Done": { gradient: "from-emerald-400 to-emerald-600", dot: "bg-emerald-500", glow: "ring-emerald-500/20 bg-emerald-500/5" },
 };
 
 const defaultAccent = { gradient: "from-violet-400 to-violet-600", dot: "bg-violet-500", glow: "ring-violet-500/20 bg-violet-500/5" };
@@ -73,6 +74,7 @@ export default function KanbanColumn({
     onOpenDetail,
     onRenameColumn,
     onDeleteColumn,
+    onOpenCreateDialog,
     canDelete = true,
 }: ColumnProps) {
     const [isAdding, setIsAdding] = useState(false);
@@ -166,8 +168,14 @@ export default function KanbanColumn({
                             <DropdownMenuContent align="end" className="w-40">
                                 <DropdownMenuItem onClick={() => setIsAdding(true)} className="gap-2">
                                     <Plus className="w-3.5 h-3.5" />
-                                    Add Card
+                                    Quick Add
                                 </DropdownMenuItem>
+                                {onOpenCreateDialog && (
+                                    <DropdownMenuItem onClick={() => onOpenCreateDialog(column.id)} className="gap-2">
+                                        <Plus className="w-3.5 h-3.5" />
+                                        Create Card
+                                    </DropdownMenuItem>
+                                )}
                                 <DropdownMenuItem onClick={handleStartRename} className="gap-2">
                                     <Pencil className="w-3.5 h-3.5" />
                                     Rename
