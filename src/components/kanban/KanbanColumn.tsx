@@ -118,7 +118,7 @@ export default function KanbanColumn({
     };
 
     return (
-        <div className="w-[21rem] flex-shrink-0">
+        <div className="w-[85vw] sm:w-[21rem] flex-shrink-0 snap-center">
             <div
                 ref={setNodeRef}
                 className={`

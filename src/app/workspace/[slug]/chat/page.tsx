@@ -1606,13 +1606,13 @@ export default function ChatPage() {
       <AnimatePresence>
         {activeThread && (
           <motion.div
-            initial={{ width: 0, opacity: 0 }}
-            animate={{ width: 360, opacity: 1 }}
-            exit={{ width: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="border-l bg-card overflow-hidden flex-shrink-0"
+            initial={{ x: "100%", opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: "100%", opacity: 0 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="fixed inset-0 sm:relative sm:inset-auto border-l bg-card overflow-hidden flex-shrink-0 z-50 sm:z-auto sm:w-[360px]"
           >
-            <div className="w-[360px] h-full flex flex-col">
+            <div className="w-full sm:w-[360px] h-full flex flex-col">
               {/* Thread header */}
               <div className="flex items-center justify-between px-4 py-3 border-b">
                 <div className="flex items-center gap-2">

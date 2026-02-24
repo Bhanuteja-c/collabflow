@@ -1171,7 +1171,7 @@ export default function WorkspaceKanbanPage() {
       </div>
 
       {/* Kanban Board — dot grid background */}
-      <div className="flex-1 overflow-x-auto p-4 sm:p-5 pb-5 bg-dots">
+      <div className="flex-1 overflow-x-auto p-4 sm:p-5 pb-5 bg-dots snap-x snap-mandatory sm:snap-none overscroll-x-contain">
         <DndContext
           sensors={sensors}
           collisionDetection={closestCorners}

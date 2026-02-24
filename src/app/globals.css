@@ -444,8 +444,17 @@ body {
 
 /* Online presence pulse */
 @keyframes online-pulse {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.6; transform: scale(1.1); }
+
+    0%,
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 0.6;
+        transform: scale(1.1);
+    }
 }
 
 .animate-online-pulse {
@@ -534,8 +543,15 @@ li[data-type="taskItem"][data-checked="true"] div {
 }
 
 @keyframes cursor-blink {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.4;
+    }
 }
 
 .collaboration-cursor__label {
@@ -598,7 +614,8 @@ li[data-type="taskItem"][data-checked="true"] div {
 .lk-control-bar {
     background: var(--color-surface-elevated) !important;
     border: 1px solid var(--color-border) !important;
-    border-radius: 9999px !important; /* Pill shape */
+    border-radius: 9999px !important;
+    /* Pill shape */
     padding: 0.5rem 1rem !important;
     margin-bottom: 1.5rem !important;
     box-shadow: var(--shadow-lg) !important;
@@ -625,12 +642,51 @@ li[data-type="taskItem"][data-checked="true"] div {
 }
 
 /* Disabled/Off state (e.g. muted mic) */
-.lk-button[aria-pressed="true"], .lk-disconnect-button {
+.lk-button[aria-pressed="true"],
+.lk-disconnect-button {
     background-color: var(--color-destructive) !important;
     color: white !important;
 }
 
-.lk-button[aria-pressed="true"]:hover, .lk-disconnect-button:hover {
+.lk-button[aria-pressed="true"]:hover,
+.lk-disconnect-button:hover {
     background-color: hsl(0 84% 50%) !important;
     transform: scale(1.05) !important;
+}
+
+/* ═══ Mobile Touch & Safe Area ═══ */
+html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+
+/* Prevent double-tap zoom on interactive elements */
+button,
+a,
+input,
+select,
+textarea,
+[role="button"] {
+    touch-action: manipulation;
+}
+
+/* iOS safe area padding */
+.safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* Hide scrollbars on mobile for swipe panels */
+@media (max-width: 640px) {
+    .overflow-x-auto::-webkit-scrollbar {
+        display: none;
+    }
+
+    .overflow-x-auto {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+    }
 }
