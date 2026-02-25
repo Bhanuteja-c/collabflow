@@ -138,6 +138,7 @@ model Workspace {
   slug        String  @unique
   description String?
   image       String?
+  inviteCode  String? @unique // Unique code to join private workspaces
   isPublic    Boolean @default(false) // Public workspaces can be discovered and joined
 
   ownerId String

@@ -1484,13 +1484,13 @@ export default function ChatPage() {
                           {/* Hover toolbar — Slack-style with text labels */}
                           {!message.isDeleted && !message.status && (
                             <div className="absolute top-0 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-100 z-10 -translate-y-1/2">
-                              <div className="flex items-center bg-popover border rounded-md shadow-sm overflow-hidden">
+                              <div className="flex bg-background border rounded-md shadow-sm overflow-hidden divide-x opacity-0 group-hover:opacity-100 transition-opacity absolute -top-8 right-0 z-10">
                                 <button onClick={() => toggleReaction(message.id, "✅")} className="h-7 w-7 flex items-center justify-center hover:bg-muted text-[13px] transition-colors" title="Complete">✅</button>
                                 <button onClick={() => toggleReaction(message.id, "👀")} className="h-7 w-7 flex items-center justify-center hover:bg-muted text-[13px] transition-colors" title="Eyes">👀</button>
                                 <button onClick={() => toggleReaction(message.id, "🙌")} className="h-7 w-7 flex items-center justify-center hover:bg-muted text-[13px] transition-colors" title="Raise hands">🙌</button>
-                                <div className="w-px h-4 bg-border" />
-                                <button onClick={() => toggleReaction(message.id, "")} className="h-7 px-2 flex items-center gap-1 hover:bg-muted text-[11px] text-muted-foreground font-medium transition-colors" title="Add reaction">
-                                  <Smile className="w-3.5 h-3.5" /> React
+                                <div className="w-[1px] bg-border my-1"></div>
+                                <button onClick={() => toggleReaction(message.id, "👍")} className="h-7 px-2 flex items-center gap-1 hover:bg-muted text-[11px] text-muted-foreground font-medium transition-colors" title="Like">
+                                  <Smile className="w-3.5 h-3.5" />
                                 </button>
                                 <div className="w-px h-4 bg-border" />
                                 <button onClick={() => openThread(message)} className="h-7 px-2 flex items-center gap-1 hover:bg-muted text-[11px] text-muted-foreground font-medium transition-colors" title="Reply in thread">

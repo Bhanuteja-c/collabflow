@@ -15,7 +15,7 @@ import { Separator } from "@/components/ui/separator";
 import { avatarFallbackClass } from "@/lib/avatar-colors";
 import {
     Sun, Moon, Monitor, Loader2, Save, Trash2, LogOut, Globe,
-    User, Palette, Settings2, Shield, Bell, ChevronRight, Mail, Crown, Users
+    User, Palette, Settings2, Shield, Bell, ChevronRight, Mail, Crown, Users, Key, RefreshCw, Copy
 } from "lucide-react";
 
 type SettingsTab = "profile" | "appearance" | "workspace" | "notifications" | "danger";
@@ -38,8 +38,10 @@ export default function WorkspaceSettingsPage({ params }: { params: Promise<{ sl
     const [name, setName] = useState("");
     const [description, setDescription] = useState("");
     const [isPublic, setIsPublic] = useState(false);
+    const [inviteCode, setInviteCode] = useState("");
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [regenerating, setRegenerating] = useState(false);
     const [userRole, setUserRole] = useState("");
     const [members, setMembers] = useState<any[]>([]);
     const [mounted, setMounted] = useState(false);
@@ -66,6 +68,7 @@ export default function WorkspaceSettingsPage({ params }: { params: Promise<{ sl
                         setName(ws.name);
                         setDescription(ws.description || "");
                         setIsPublic(ws.isPublic || false);
+                        setInviteCode(ws.inviteCode || "");
 
                         const detailRes = await fetch(`/api/workspaces/${ws.id}`);
                         if (detailRes.ok) {
@@ -104,6 +107,36 @@ export default function WorkspaceSettingsPage({ params }: { params: Promise<{ sl
         } catch (e) { toast.error("Failed to delete workspace"); }
     };
 
+    const handleRegenerateInvite = async () => {
+        if (!workspace || !confirm("Regenerate invite code? The old code will no longer work.")) return;
+        setRegenerating(true);
+        try {
+            const res = await fetch(`/api/workspaces/${workspace.id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "regenerate_invite" }),
+            });
+            if (res.ok) {
+                const updated = await res.json();
+                setInviteCode(updated.inviteCode);
+                setWorkspace(updated);
+                toast.success("Invite code regenerated");
+            } else {
+                toast.error("Failed to regenerate code");
+            }
+        } catch (e) {
+            toast.error("Failed to regenerate code");
+        } finally {
+            setRegenerating(false);
+        }
+    };
+
+    const copyInviteCode = () => {
+        if (!inviteCode) return;
+        navigator.clipboard.writeText(inviteCode);
+        toast.success("Invite code copied to clipboard");
+    };
+
     const canManage = ["owner", "admin"].includes(userRole);
     const isOwner = userRole === "owner";
 
@@ -137,8 +170,8 @@ export default function WorkspaceSettingsPage({ params }: { params: Promise<{ sl
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id)}
                             className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive
-                                    ? "bg-primary text-primary-foreground shadow-sm"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                                ? "bg-primary text-primary-foreground shadow-sm"
+                                : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
                                 }`}
                         >
                             <tab.icon className="w-4 h-4 flex-shrink-0" />
@@ -258,8 +291,8 @@ export default function WorkspaceSettingsPage({ params }: { params: Promise<{ sl
                                             key={t.value}
                                             onClick={() => setTheme(t.value)}
                                             className={`group relative flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${isSelected
-                                                    ? "border-primary bg-primary/5 shadow-sm"
-                                                    : "border-border hover:border-primary/40 hover:bg-muted/30"
+                                                ? "border-primary bg-primary/5 shadow-sm"
+                                                : "border-border hover:border-primary/40 hover:bg-muted/30"
                                                 }`}
                                         >
                                             <div className={`p-3 rounded-lg ${isSelected ? "bg-primary/10" : "bg-muted/50 group-hover:bg-muted"} transition-colors`}>
@@ -342,6 +375,34 @@ export default function WorkspaceSettingsPage({ params }: { params: Promise<{ sl
                                 </div>
                             </div>
                             <Switch id="public-toggle" checked={isPublic} onCheckedChange={setIsPublic} />
+                        </div>
+
+                        <Separator />
+
+                        {/* Invite Code */}
+                        <div className="space-y-4">
+                            <div>
+                                <h3 className="text-sm font-medium">Invite Code</h3>
+                                <p className="text-xs text-muted-foreground mt-0.5">Share this code with others so they can join your workspace</p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <div className="relative flex-1">
+                                    <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                                    <Input
+                                        readOnly
+                                        value={inviteCode || "No code generated"}
+                                        className="pl-9 font-mono bg-muted/30"
+                                    />
+                                </div>
+                                <Button variant="secondary" onClick={copyInviteCode} disabled={!inviteCode}>
+                                    <Copy className="w-4 h-4 mr-2" />
+                                    Copy
+                                </Button>
+                                <Button variant="outline" onClick={handleRegenerateInvite} disabled={regenerating}>
+                                    {regenerating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                                    Regenerate
+                                </Button>
+                            </div>
                         </div>
 
                         <Separator />

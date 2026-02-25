@@ -20,20 +20,23 @@ export async function POST(
         const { slug } = await params;
         const id = slug; // Treat as ID/Slug
         const userId = (session.user as { id: string }).id;
-        // Parse body (inviteCode support can be added later)
-        await request.json().catch(() => ({}));
+        // Parse body (inviteCode support)
+        const body = await request.json().catch(() => ({}));
+        const inviteCode = body?.code?.trim();
 
         // 1. Find workspace (by ID or Slug)
         const isCuid = id.length === 25 && /^[a-z0-9]+$/.test(id);
+        const whereClause = isCuid ? { id } : { slug: id };
+
         const workspace = await prisma.workspace.findFirst({
-            where: isCuid ? { id } : { slug: id },
+            where: whereClause,
             include: {
                 members: {
                     where: { userId },
                     select: { id: true }
                 }
             }
-        });
+        }) as any; // Cast to any to allow access to inviteCode
 
         if (!workspace) {
             return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
@@ -44,9 +47,10 @@ export async function POST(
             return NextResponse.json({ error: "Already a member" }, { status: 400 });
         }
 
-        // Check if workspace is public
-        if (!workspace.isPublic) {
-            return NextResponse.json({ error: "This workspace is not public" }, { status: 403 });
+        // Check if workspace is public OR inviteCode matches
+        const isValidInvite = inviteCode && inviteCode === workspace.inviteCode;
+        if (!workspace.isPublic && !isValidInvite) {
+            return NextResponse.json({ error: "This workspace is not public or invalid invite code" }, { status: 403 });
         }
 
         // Add as member

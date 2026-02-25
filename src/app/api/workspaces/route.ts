@@ -71,12 +71,16 @@ export async function POST(request: NextRequest) {
             slug = `${baseSlug}-${Math.random().toString(36).substring(2, 6)}`;
         }
 
+        // Generate random invite code
+        const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+
         // Create workspace and add owner as member
-        const workspace = await prisma.workspace.create({
+        const workspace = await (prisma.workspace as any).create({
             data: {
                 name: name.trim(),
                 slug,
                 description: description?.trim() || null,
+                inviteCode,
                 ownerId: userId,
                 members: {
                     create: {
@@ -90,6 +94,12 @@ export async function POST(request: NextRequest) {
                         name: "general",
                         type: "public",
                         createdById: userId,
+                        members: {
+                            create: {
+                                userId,
+                                role: "admin",
+                            },
+                        },
                     },
                 },
             },

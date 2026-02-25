@@ -67,11 +67,17 @@ export async function GET(
 
         // Check access
         const membership = await checkWorkspaceAccess(workspace.id, userId);
+
+        // Return public invite details if not a member, or full details if member
         if (!membership) {
-            return NextResponse.json({ error: "Access denied" }, { status: 403 });
+            // For non-members, we might just be showing a preview page (if public),
+            // but for now the API restricts access. Let's keep it restricted.
+            if (!workspace.isPublic) {
+                return NextResponse.json({ error: "Access denied" }, { status: 403 });
+            }
         }
 
-        return NextResponse.json({ ...workspace, userRole: membership.role });
+        return NextResponse.json({ ...workspace, userRole: membership?.role || "guest" });
     } catch (error) {
         console.error("Get workspace error:", error);
         return NextResponse.json({ error: "Failed to fetch workspace" }, { status: 500 });
@@ -105,8 +111,12 @@ export async function PUT(
         }
 
         const body = await request.json();
-        const { name, description, image, isPublic } = body;
+        const { name, description, image, isPublic, action } = body;
         const updateData: Record<string, unknown> = {};
+
+        if (action === "regenerate_invite") {
+            updateData.inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+        }
 
         if (name) updateData.name = name.trim();
         if (description !== undefined) updateData.description = description?.trim() || null;

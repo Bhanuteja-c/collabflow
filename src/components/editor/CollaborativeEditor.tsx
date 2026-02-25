@@ -5,7 +5,7 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import { BubbleMenu, FloatingMenu } from "@tiptap/react/menus";
 import StarterKit from "@tiptap/starter-kit";
 import Collaboration from "@tiptap/extension-collaboration";
-import CollaborationCursor from "@tiptap/extension-collaboration-cursor";
+import { CollaborationCursor } from "@/components/editor/extensions/CollaborationCursor";
 import BubbleMenuExtension from "@tiptap/extension-bubble-menu";
 import FloatingMenuExtension from "@tiptap/extension-floating-menu";
 import Link from "@tiptap/extension-link";
@@ -63,7 +63,7 @@ export default function CollaborativeEditor({
         CollaborationCursor.configure({
             provider: {
                 awareness,
-            } as any,
+            },
             user: {
                 name: userName,
                 color: userColor,

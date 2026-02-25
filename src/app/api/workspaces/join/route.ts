@@ -21,14 +21,15 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "Invalid invite code" }, { status: 400 });
         }
 
-        const trimmedCode = code.trim().toLowerCase();
+        const trimmedCode = code.trim();
+        const lowerCode = trimmedCode.toLowerCase();
 
         // Find workspace by slug or invite code
-        const workspace = await prisma.workspace.findFirst({
+        const workspace = await (prisma.workspace as any).findFirst({
             where: {
                 OR: [
-                    { slug: trimmedCode },
-                    { slug: { contains: trimmedCode } },
+                    { slug: lowerCode },
+                    { slug: { contains: lowerCode } },
                 ],
             },
             include: {

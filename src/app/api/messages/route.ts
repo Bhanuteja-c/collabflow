@@ -27,14 +27,26 @@ export async function GET(req: NextRequest) {
         }
 
         // Check if user is member of channel
-        const membership = await prisma.channelMember.findUnique({
+        let membership = await prisma.channelMember.findUnique({
             where: {
                 channelId_userId: { channelId, userId },
             },
         });
 
         if (!membership) {
-            return NextResponse.json({ error: "Not a member of this channel" }, { status: 403 });
+            // Auto-join public channels
+            const channel = await prisma.channel.findUnique({
+                where: { id: channelId },
+                include: { workspace: { select: { members: { where: { userId }, select: { id: true } } } } }
+            });
+
+            if (channel?.type === "public" && channel.workspace?.members.length) {
+                membership = await prisma.channelMember.create({
+                    data: { channelId, userId, role: "member" },
+                });
+            } else {
+                return NextResponse.json({ error: "Not a member of this channel" }, { status: 403 });
+            }
         }
 
         // Update lastReadAt to track unread messages (only for top-level views)
