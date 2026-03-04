@@ -21,7 +21,7 @@ declare global {
     var io: SocketIOServer | undefined;
 }
 
-app.prepare().then(() => {
+app.prepare().then(async () => {
     const httpServer = createServer((req, res) => {
         const parsedUrl = parse(req.url!, true);
         handle(req, res, parsedUrl);
@@ -30,27 +30,68 @@ app.prepare().then(() => {
     // Initialize Socket.io with production-optimized settings
     let adapter;
     if (process.env.REDIS_URL) {
-        console.log("Initializing Redis Adapter...");
+        console.log("[Server] Attempting Redis Adapter connection...");
         try {
             const tlsOpts = process.env.REDIS_URL?.startsWith("rediss://")
                 ? { tls: { rejectUnauthorized: false } }
                 : {};
-            const pubClient = new Redis(process.env.REDIS_URL, tlsOpts);
+
+            const redisOpts = {
+                ...tlsOpts,
+                connectTimeout: 10000,
+                retryStrategy(times: number) {
+                    if (times > 3) {
+                        console.warn(`[Server] Redis adapter: giving up after ${times} attempts.`);
+                        return null;
+                    }
+                    return Math.min(times * 1000, 5000);
+                },
+            };
+
+            const pubClient = new Redis(process.env.REDIS_URL, redisOpts);
             const subClient = pubClient.duplicate();
-            
+
+            let pubError = false;
+            let subError = false;
+
             pubClient.on("error", (err) => {
-                console.error("Redis Pub Client Error:", err.message);
+                if (!pubError) {
+                    console.warn("[Server] Redis Pub Client Error:", err.message);
+                    pubError = true;
+                }
             });
             subClient.on("error", (err) => {
-               console.error("Redis Sub Client Error:", err.message);
+                if (!subError) {
+                    console.warn("[Server] Redis Sub Client Error:", err.message);
+                    subError = true;
+                }
             });
 
-            adapter = createAdapter(pubClient, subClient);
+            // Wait up to 15s for a connection, fall back to in-memory if it fails
+            const connected = await Promise.race([
+                new Promise<boolean>((resolve) => {
+                    pubClient.on("connect", () => resolve(true));
+                    pubClient.on("end", () => resolve(false));
+                }),
+                new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 15000)),
+            ]);
+
+            if (connected) {
+                adapter = createAdapter(pubClient, subClient);
+                console.log("[Server] Redis Adapter connected ✓");
+            } else {
+                console.warn("[Server] Redis unreachable — falling back to in-memory adapter.");
+                console.warn("[Server] Real-time features will work, but only within this server instance.");
+                // Close the failed connections to stop error spam
+                pubClient.disconnect();
+                subClient.disconnect();
+            }
         } catch (e) {
-            console.error("Failed to initialize Redis adapter:", e);
+            console.error("[Server] Failed to initialize Redis adapter:", e);
+            console.warn("[Server] Falling back to in-memory adapter.");
         }
     } else {
-        console.log("No REDIS_URL found, using default in-memory adapter.");
+        console.log("[Server] No REDIS_URL found, using default in-memory adapter.");
     }
 
     const io = new SocketIOServer(httpServer, {

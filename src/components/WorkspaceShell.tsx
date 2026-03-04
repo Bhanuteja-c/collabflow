@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { WorkspaceSidebar, MobileSidebar } from "@/components/WorkspaceSidebar";
 import { WorkspaceHeader } from "@/components/WorkspaceHeader";
 import { KeyboardShortcutsDialog } from "@/components/KeyboardShortcutsDialog";
@@ -16,7 +16,13 @@ interface WorkspaceShellProps {
 export function WorkspaceShell({ workspaceSlug, children }: WorkspaceShellProps) {
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
     const router = useRouter();
+    const pathname = usePathname() || "";
     const base = `/workspace/${workspaceSlug}`;
+
+    // Detect if we're in an active video room (not the video listing page)
+    // Precise string splitting is much safer than regex across different operating system path styles / URL formations
+    const segments = pathname.split('/').filter(Boolean);
+    const isVideoRoom = segments.includes('video') && segments.length >= 4 && segments[segments.length - 1] !== 'video';
 
     // Global workspace keyboard shortcuts
     useKeyboardShortcuts([
@@ -26,6 +32,17 @@ export function WorkspaceShell({ workspaceSlug, children }: WorkspaceShellProps)
         { key: "4", ctrl: true, description: "Go to Chat", category: "Navigation", action: () => router.push(`${base}/chat`) },
         { key: "5", ctrl: true, description: "Go to Video", category: "Navigation", action: () => router.push(`${base}/video`) },
     ]);
+
+    // Video rooms render fullscreen — no sidebar, no header
+    if (isVideoRoom) {
+        return (
+            <SocketProvider>
+                <div className="h-screen w-screen bg-[#202124] overflow-hidden">
+                    {children}
+                </div>
+            </SocketProvider>
+        );
+    }
 
     return (
         <SocketProvider>

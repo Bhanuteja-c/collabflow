@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
                 OR: [
                     { slug: lowerCode },
                     { slug: { contains: lowerCode } },
+                    { inviteCode: trimmedCode } // IMPORTANT: Check invite code
                 ],
             },
             include: {

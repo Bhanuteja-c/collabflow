@@ -4,7 +4,7 @@ import type { Server, Socket } from "socket.io";
 import type { SocketData } from "../types";
 import { makeRoomId, ROOM_PREFIX } from "../types";
 import { prisma } from "../../lib/prisma";
-import { redis } from "../../lib/redis";
+import { redis, isRedisAvailable } from "../../lib/redis";
 
 export function registerChatHandlers(io: Server, socket: Socket<any, any, any, SocketData>) {
     socket.on("join-channel", async (data: string | { channelId: string }) => {
@@ -39,13 +39,17 @@ export function registerChatHandlers(io: Server, socket: Socket<any, any, any, S
         const room = makeRoomId(ROOM_PREFIX.CHANNEL, channelId);
         socket.join(room);
 
-        // Redis: Increment active count
+        // Redis: Increment active count (gracefully degrades if Redis unavailable)
         const metaKey = `channel:meta:${channelId}`;
-        await redis.hincrby(metaKey, "active_count", 1);
+        if (isRedisAvailable()) {
+            await redis!.hincrby(metaKey, "active_count", 1);
+        }
 
         // Presence: Mark user as online in this channel context
         const presenceKey = `presence:${userId}`;
-        await redis.set(presenceKey, JSON.stringify({ status: "online", channelId, timestamp: Date.now() }), "EX", 60);
+        if (isRedisAvailable()) {
+            await redis!.set(presenceKey, JSON.stringify({ status: "online", channelId, timestamp: Date.now() }), "EX", 60);
+        }
 
         // Notify others
         socket.to(room).emit("channel-user-joined", {
@@ -54,7 +58,7 @@ export function registerChatHandlers(io: Server, socket: Socket<any, any, any, S
         });
 
         // Send active count
-        const count = await redis.hget(metaKey, "active_count");
+        const count = isRedisAvailable() ? await redis!.hget(metaKey, "active_count") : null;
         socket.emit("channel-meta", { activeCount: parseInt(count || "1") });
     });
 
@@ -63,7 +67,9 @@ export function registerChatHandlers(io: Server, socket: Socket<any, any, any, S
         socket.leave(room);
 
         const metaKey = `channel:meta:${channelId}`;
-        await redis.hincrby(metaKey, "active_count", -1);
+        if (isRedisAvailable()) {
+            await redis!.hincrby(metaKey, "active_count", -1);
+        }
 
         socket.to(room).emit("channel-user-left", { socketId: socket.id });
     });
@@ -73,10 +79,10 @@ export function registerChatHandlers(io: Server, socket: Socket<any, any, any, S
         const typingKey = `typing:channel:${data.channelId}`;
 
         // Redis: Store typing timestamp
-        await redis.hset(typingKey, socket.data.userId, Date.now());
-        // Expire key after 5s (handled by valid-check or separate cleanup, strictly Redis EX is on key, not field. 
-        // We can set EX on the HASH every time, but fields need manual pruning or just let UI handle debounce.)
-        await redis.expire(typingKey, 5);
+        if (isRedisAvailable()) {
+            await redis!.hset(typingKey, socket.data.userId, Date.now());
+            await redis!.expire(typingKey, 5);
+        }
 
         socket.to(room).emit("user-typing", {
             userId: socket.data.userId,
@@ -88,7 +94,9 @@ export function registerChatHandlers(io: Server, socket: Socket<any, any, any, S
         const room = makeRoomId(ROOM_PREFIX.CHANNEL, data.channelId);
         const typingKey = `typing:channel:${data.channelId}`;
 
-        await redis.hdel(typingKey, socket.data.userId); // Remove user
+        if (isRedisAvailable()) {
+            await redis!.hdel(typingKey, socket.data.userId);
+        }
 
         socket.to(room).emit("user-stop-typing", {
             userId: socket.data.userId,
@@ -237,9 +245,11 @@ export function registerChatHandlers(io: Server, socket: Socket<any, any, any, S
 
     socket.on("heartbeat", async (data: { status?: string }) => {
         const presenceKey = `presence:${socket.data.userId}`;
-        await redis.set(presenceKey, JSON.stringify({
-            status: data.status || "online",
-            lastActive: Date.now()
-        }), "EX", 60);
+        if (isRedisAvailable()) {
+            await redis!.set(presenceKey, JSON.stringify({
+                status: data.status || "online",
+                lastActive: Date.now()
+            }), "EX", 60);
+        }
     });
 }

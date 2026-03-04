@@ -99,4 +99,95 @@ export function registerVideoHandlers(io: Server, socket: Socket<any, any, any, 
             isSpeaking: data.isSpeaking,
         });
     });
+
+    // Hand raise
+    socket.on("hand-raise", (data: { roomId: string; raised: boolean }) => {
+        socket.to(makeRoomId(ROOM_PREFIX.VIDEO, data.roomId)).emit("hand-raise", {
+            userId: socket.data.userId,
+            raised: data.raised,
+        });
+    });
+
+    // Emoji reactions
+    socket.on("reaction", (data: { roomId: string; emoji: string }) => {
+        // Broadcast to everyone including sender for consistent animation
+        io.to(makeRoomId(ROOM_PREFIX.VIDEO, data.roomId)).emit("reaction", {
+            userId: socket.data.userId,
+            userName: socket.data.userName,
+            emoji: data.emoji,
+            id: `${socket.id}-${Date.now()}`,
+        });
+    });
+
+    // ─── Waiting Room ───
+    socket.on("knock", (data: { roomId: string; userId: string; userName: string; userImage: string }) => {
+        const room = makeRoomId(ROOM_PREFIX.VIDEO, data.roomId);
+        // Notify everyone in the room (host will see a toast)
+        socket.to(room).emit("knock", {
+            socketId: socket.id,
+            userId: data.userId,
+            userName: data.userName,
+            userImage: data.userImage,
+        });
+    });
+
+    socket.on("admit-user", (data: { roomId: string; targetSocketId: string }) => {
+        // Tell the waiting user they've been admitted
+        io.to(data.targetSocketId).emit("admitted", { roomId: data.roomId });
+    });
+
+    socket.on("reject-user", (data: { roomId: string; targetSocketId: string }) => {
+        io.to(data.targetSocketId).emit("rejected", { roomId: data.roomId });
+    });
+
+    // ─── Display Name Update ───
+    socket.on("update-display-name", (data: { roomId: string; newName: string }) => {
+        socket.data.userName = data.newName;
+        socket.to(makeRoomId(ROOM_PREFIX.VIDEO, data.roomId)).emit("display-name-updated", {
+            userId: socket.data.userId,
+            newName: data.newName,
+        });
+    });
+
+    // ─── In-Meeting Polls ───
+    socket.on("create-poll", (data: { roomId: string; question: string; options: string[] }) => {
+        const pollId = `poll-${Date.now()}`;
+        io.to(makeRoomId(ROOM_PREFIX.VIDEO, data.roomId)).emit("poll-created", {
+            pollId,
+            question: data.question,
+            options: data.options,
+            createdBy: socket.data.userName,
+            votes: {} as Record<string, string[]>, // option -> userId[]
+        });
+    });
+
+    socket.on("vote-poll", (data: { roomId: string; pollId: string; option: string }) => {
+        io.to(makeRoomId(ROOM_PREFIX.VIDEO, data.roomId)).emit("poll-vote", {
+            pollId: data.pollId,
+            option: data.option,
+            userId: socket.data.userId,
+            userName: socket.data.userName,
+        });
+    });
+
+    // ─── Whiteboard ───
+    socket.on("whiteboard-draw", (data: { roomId: string; stroke: any }) => {
+        socket.to(makeRoomId(ROOM_PREFIX.VIDEO, data.roomId)).emit("whiteboard-draw", {
+            stroke: data.stroke,
+            userId: socket.data.userId,
+        });
+    });
+
+    socket.on("whiteboard-clear", (data: { roomId: string }) => {
+        socket.to(makeRoomId(ROOM_PREFIX.VIDEO, data.roomId)).emit("whiteboard-clear", {
+            userId: socket.data.userId,
+        });
+    });
+
+    socket.on("whiteboard-undo", (data: { roomId: string; strokeId: string }) => {
+        socket.to(makeRoomId(ROOM_PREFIX.VIDEO, data.roomId)).emit("whiteboard-undo", {
+            strokeId: data.strokeId,
+            userId: socket.data.userId,
+        });
+    });
 }

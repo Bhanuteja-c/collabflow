@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
         }
 
         const body = await req.json();
-        const { title, description, columnId, priority, assigneeId, dueDate, startDate, labels, status } = body;
+        const { title, description, columnId, priority, assigneeId, dueDate, startDate, labels, status, issueType } = body;
 
         // Get the last card for both integer order and fractional orderKey
         const lastCard = await prisma.card.findFirst({
@@ -39,15 +39,26 @@ export async function POST(req: NextRequest) {
         // Generate fractional key after the last card
         const newOrderKey = generateKeyBetween(lastCard?.orderKey ?? null, null);
 
-        // Get column and board info for activity logging
+        // Get column and board info for activity logging + issue number
         const column = await prisma.column.findUnique({
             where: { id: columnId },
             include: {
                 board: {
-                    select: { workspaceId: true }
+                    select: { id: true, workspaceId: true }
                 }
             }
         });
+
+        // Compute MAX+1 issue number across all cards in this board
+        let nextIssueNumber = 1;
+        if (column?.board?.id) {
+            const maxCard = await prisma.card.findFirst({
+                where: { column: { boardId: column.board.id } },
+                orderBy: { issueNumber: "desc" },
+                select: { issueNumber: true },
+            });
+            nextIssueNumber = (maxCard?.issueNumber ?? 0) + 1;
+        }
 
         const card = await prisma.card.create({
             data: {
@@ -56,6 +67,8 @@ export async function POST(req: NextRequest) {
                 columnId,
                 order: (lastCard?.order ?? -1) + 1,
                 orderKey: newOrderKey,
+                issueType: issueType || "task",
+                issueNumber: nextIssueNumber,
                 ...(priority && { priority }),
                 ...(assigneeId && { assigneeId }),
                 ...(dueDate && { dueDate: new Date(dueDate) }),
@@ -81,6 +94,8 @@ export async function POST(req: NextRequest) {
             title: card.title,
             description: card.description,
             order: card.order,
+            issueType: card.issueType,
+            issueNumber: card.issueNumber,
             priority: card.priority,
             dueDate: card.dueDate,
             startDate: card.startDate,

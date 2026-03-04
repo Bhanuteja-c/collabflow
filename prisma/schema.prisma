@@ -318,6 +318,10 @@ model Card {
   order       Int     @default(0)
   orderKey    String  @default("a0") // Fractional index for concurrent-safe ordering
 
+  // Issue tracking (Jira-style)
+  issueType   String  @default("task")   // "task" | "story" | "bug" | "feature"
+  issueNumber Int     @default(0)        // Auto-computed as MAX+1 per board in API
+
   // Enhanced fields for Kanban improvements
   priority  String    @default("medium") // "low" | "medium" | "high"
   dueDate   DateTime?

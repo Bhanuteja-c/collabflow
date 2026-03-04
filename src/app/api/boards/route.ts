@@ -74,6 +74,8 @@ export async function GET(req: NextRequest) {
                     title: card.title,
                     description: card.description,
                     order: card.order,
+                    issueType: card.issueType,
+                    issueNumber: card.issueNumber,
                     priority: card.priority,
                     dueDate: card.dueDate,
                     startDate: card.startDate,

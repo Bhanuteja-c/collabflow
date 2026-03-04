@@ -1,9 +1,8 @@
-// src/components/video/VideoChat.tsx
+// src/components/video/VideoChat.tsx — Google Meet "In-call messages" panel
 "use client";
 
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -23,123 +22,94 @@ export function VideoChat({ isOpen, onClose, messages, onSendMessage, currentUse
     const scrollRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
-    // Auto-scroll to bottom on new messages
     useEffect(() => {
-        if (scrollRef.current) {
-            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-        }
+        if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }, [messages]);
 
-    // Focus input when panel opens
     useEffect(() => {
-        if (isOpen) {
-            setTimeout(() => inputRef.current?.focus(), 100);
-        }
+        if (isOpen) setTimeout(() => inputRef.current?.focus(), 100);
     }, [isOpen]);
 
     const handleSend = () => {
-        if (newMessage.trim()) {
-            onSendMessage(newMessage.trim());
-            setNewMessage("");
-        }
+        if (newMessage.trim()) { onSendMessage(newMessage.trim()); setNewMessage(""); }
     };
 
-    const formatTime = (date: Date) => {
-        return new Intl.DateTimeFormat('en-US', {
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true
-        }).format(date);
-    };
+    const formatTime = (date: Date) => new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).format(date);
 
     return (
         <AnimatePresence>
             {isOpen && (
                 <motion.div
-                    initial={{ x: "100%" }}
-                    animate={{ x: 0 }}
-                    exit={{ x: "100%" }}
+                    initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
                     transition={{ type: "spring", damping: 25, stiffness: 300 }}
-                    className="absolute right-0 top-0 bottom-0 w-full sm:w-80 bg-neutral-900 border-l border-neutral-700 flex flex-col z-20"
+                    className="absolute right-0 top-0 bottom-0 w-full sm:w-80 bg-[#2d2e30] border-l border-[#5f6368]/30 flex flex-col z-20"
                 >
-                    {/* Header */}
-                    <div className="flex items-center justify-between p-4 border-b border-neutral-700">
-                        <div className="flex items-center gap-2">
-                            <MessageSquare className="w-5 h-5 text-primary" />
-                            <h3 className="font-semibold text-white">Meeting Chat</h3>
-                        </div>
-                        <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8 text-neutral-400 hover:text-white">
-                            <X className="w-4 h-4" />
-                        </Button>
+                    {/* Header — Google Meet style */}
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-[#5f6368]/20">
+                        <h3 className="text-base font-medium text-[#e8eaed]">In-call messages</h3>
+                        <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-[#9aa0a6] hover:bg-[#3c4043] hover:text-[#e8eaed] transition-colors">
+                            <X className="w-5 h-5" />
+                        </button>
                     </div>
 
+                    {/* Info notice */}
+                    {messages.length === 0 && (
+                        <div className="px-4 py-6 text-center">
+                            <div className="w-12 h-12 rounded-full bg-[#3c4043] flex items-center justify-center mx-auto mb-3">
+                                <MessageSquare className="w-6 h-6 text-[#9aa0a6]" />
+                            </div>
+                            <p className="text-[13px] text-[#9aa0a6] leading-relaxed">
+                                Messages can only be seen by people in the call and are deleted when the call ends.
+                            </p>
+                        </div>
+                    )}
+
                     {/* Messages */}
-                    <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-                        <div className="space-y-4">
-                            {messages.length === 0 ? (
-                                <div className="text-center py-8">
-                                    <MessageSquare className="w-10 h-10 mx-auto text-neutral-600 mb-3" />
-                                    <p className="text-sm text-neutral-500">No messages yet</p>
-                                    <p className="text-xs text-neutral-600 mt-1">Send a message to start the chat</p>
-                                </div>
-                            ) : (
-                                messages.map((msg) => {
-                                    const isOwn = msg.userId === currentUserId;
-                                    return (
-                                        <motion.div
-                                            key={msg.id}
-                                            initial={{ opacity: 0, y: 10 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            className={`flex gap-2 ${isOwn ? 'flex-row-reverse' : ''}`}
-                                        >
-                                            <Avatar className="h-8 w-8 flex-shrink-0">
-                                                <AvatarImage src={msg.userImage} />
-                                                <AvatarFallback className="text-xs">
-                                                    {msg.userName?.[0]?.toUpperCase()}
-                                                </AvatarFallback>
-                                            </Avatar>
-                                            <div className={`flex-1 ${isOwn ? 'text-right' : ''}`}>
-                                                <div className="flex items-baseline gap-2 mb-1">
-                                                    <span className={`text-xs font-medium ${isOwn ? 'text-primary' : 'text-neutral-300'}`}>
-                                                        {isOwn ? 'You' : msg.userName}
-                                                    </span>
-                                                    <span className="text-xs text-neutral-500">
-                                                        {formatTime(msg.timestamp)}
-                                                    </span>
-                                                </div>
-                                                <div className={`inline-block px-3 py-2 rounded-lg text-sm ${isOwn
-                                                    ? 'bg-primary text-primary-foreground'
-                                                    : 'bg-neutral-800 text-white'
-                                                    }`}>
-                                                    {msg.content}
-                                                </div>
-                                            </div>
-                                        </motion.div>
-                                    );
-                                })
-                            )}
+                    <ScrollArea className="flex-1 px-4" ref={scrollRef}>
+                        <div className="space-y-3 py-2">
+                            {messages.map((msg) => {
+                                const isOwn = msg.userId === currentUserId;
+                                return (
+                                    <motion.div
+                                        key={msg.id}
+                                        initial={{ opacity: 0, y: 8 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                    >
+                                        <div className="flex items-baseline gap-2 mb-0.5">
+                                            <span className="text-[13px] font-medium text-[#e8eaed]">
+                                                {isOwn ? "You" : msg.userName}
+                                            </span>
+                                            <span className="text-[11px] text-[#9aa0a6]">
+                                                {formatTime(msg.timestamp)}
+                                            </span>
+                                        </div>
+                                        <p className="text-[13px] text-[#bdc1c6] leading-relaxed">
+                                            {msg.content}
+                                        </p>
+                                    </motion.div>
+                                );
+                            })}
                         </div>
                     </ScrollArea>
 
-                    {/* Input */}
-                    <div className="p-4 border-t border-neutral-700">
-                        <div className="flex gap-2">
-                            <Input
+                    {/* Input — Google Meet style */}
+                    <div className="px-4 py-3 border-t border-[#5f6368]/20">
+                        <div className="flex items-center gap-2 bg-[#3c4043] rounded-full px-4 py-1">
+                            <input
                                 ref={inputRef}
                                 value={newMessage}
                                 onChange={(e) => setNewMessage(e.target.value)}
                                 onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                                placeholder="Type a message..."
-                                className="flex-1 bg-neutral-800 border-neutral-700 text-white placeholder:text-neutral-500"
+                                placeholder="Send a message"
+                                className="flex-1 bg-transparent text-[13px] text-[#e8eaed] placeholder:text-[#9aa0a6] outline-none py-2"
                             />
-                            <Button
-                                size="icon"
+                            <button
                                 onClick={handleSend}
                                 disabled={!newMessage.trim()}
-                                className="h-10 w-10"
+                                className="w-8 h-8 rounded-full flex items-center justify-center text-[#8ab4f8] hover:bg-[#4a4d51] disabled:opacity-30 disabled:cursor-not-allowed transition-colors shrink-0"
                             >
                                 <Send className="w-4 h-4" />
-                            </Button>
+                            </button>
                         </div>
                     </div>
                 </motion.div>

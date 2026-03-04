@@ -29,6 +29,29 @@ export interface ChatMessage {
     timestamp: Date;
 }
 
+export interface Reaction {
+    id: string;
+    userId: string;
+    userName: string;
+    emoji: string;
+    timestamp: number;
+}
+
+export interface Knocker {
+    socketId: string;
+    userId: string;
+    userName: string;
+    userImage: string;
+}
+
+export interface Poll {
+    pollId: string;
+    question: string;
+    options: string[];
+    createdBy: string;
+    votes: Record<string, string[]>; // option -> userIds
+}
+
 interface UseVideoCallOptions {
     roomId: string;
     userId: string;
@@ -56,10 +79,16 @@ export function useVideoCall({ roomId, userId, userName, userImage, localStream 
     const [peers, setPeers] = useState<Peer[]>([]);
     const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
     const [roomFull, setRoomFull] = useState(false);
+    const [handRaisedUsers, setHandRaisedUsers] = useState<Set<string>>(new Set());
+    const [reactions, setReactions] = useState<Reaction[]>([]);
+    const [knockers, setKnockers] = useState<Knocker[]>([]);
+    const [polls, setPolls] = useState<Poll[]>([]);
     const socketRef = useRef<Socket | null>(null);
     const peersRef = useRef<Map<string, Peer>>(new Map());
     const localStreamRef = useRef<MediaStream | null>(localStream);
     const iceRestartTimeoutRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+    const iceRestartCountRef = useRef<Map<string, number>>(new Map());
+    const [reconnectingPeers, setReconnectingPeers] = useState<Set<string>>(new Set());
 
     // Keep localStreamRef updated
     useEffect(() => {
@@ -88,6 +117,55 @@ export function useVideoCall({ roomId, userId, userName, userImage, localStream 
             message,
         });
     }, [roomId, userId, userName, userImage]);
+
+    // Toggle hand raise
+    const toggleHandRaise = useCallback(() => {
+        if (!socketRef.current || !roomId) return;
+        const currentlyRaised = handRaisedUsers.has(userId);
+        const newRaised = !currentlyRaised;
+
+        // Update locally
+        setHandRaisedUsers(prev => {
+            const next = new Set(prev);
+            if (newRaised) next.add(userId); else next.delete(userId);
+            return next;
+        });
+
+        socketRef.current.emit("hand-raise", { roomId, raised: newRaised });
+    }, [roomId, userId, handRaisedUsers]);
+
+    // Send reaction
+    const sendReaction = useCallback((emoji: string) => {
+        if (!socketRef.current || !roomId) return;
+        socketRef.current.emit("reaction", { roomId, emoji });
+    }, [roomId]);
+
+    // Admit knocker into the room
+    const admitUser = useCallback((targetSocketId: string) => {
+        socketRef.current?.emit("admit-user", { roomId, targetSocketId });
+        setKnockers(prev => prev.filter(k => k.socketId !== targetSocketId));
+    }, [roomId]);
+
+    // Reject knocker
+    const rejectUser = useCallback((targetSocketId: string) => {
+        socketRef.current?.emit("reject-user", { roomId, targetSocketId });
+        setKnockers(prev => prev.filter(k => k.socketId !== targetSocketId));
+    }, [roomId]);
+
+    // Update display name mid-call
+    const updateDisplayName = useCallback((newName: string) => {
+        socketRef.current?.emit("update-display-name", { roomId, newName });
+    }, [roomId]);
+
+    // Create a poll
+    const createPoll = useCallback((question: string, options: string[]) => {
+        socketRef.current?.emit("create-poll", { roomId, question, options });
+    }, [roomId]);
+
+    // Vote on a poll
+    const votePoll = useCallback((pollId: string, option: string) => {
+        socketRef.current?.emit("vote-poll", { roomId, pollId, option });
+    }, [roomId]);
 
     // Replace video track with screen share
     const replaceVideoTrack = useCallback((newTrack: MediaStreamTrack) => {
@@ -134,13 +212,34 @@ export function useVideoCall({ roomId, userId, userName, userImage, localStream 
     // Toggle local speaking status
     const setLocalSpeaking = useCallback((isSpeaking: boolean) => {
         if (!socketRef.current || !roomId) return;
+        
+        // Immediately update local state so the user sees their own speaking ring
+        setActiveSpeakers(prev => {
+            const newSet = new Set(prev);
+            if (isSpeaking) newSet.add(userId);
+            else newSet.delete(userId);
+            return newSet;
+        });
+
         socketRef.current.emit("speaking-status", { roomId, isSpeaking });
-    }, [roomId]);
+    }, [roomId, userId]);
     const performIceRestart = useCallback((socketId: string) => {
         const peer = peersRef.current.get(socketId);
         if (!peer || !socketRef.current) return;
 
-        console.log(`[WebRTC] Performing ICE restart for ${socketId}`);
+        const retries = iceRestartCountRef.current.get(socketId) || 0;
+        const MAX_RETRIES = 4;
+
+        if (retries >= MAX_RETRIES) {
+            console.warn(`[WebRTC] Max ICE restart retries reached for ${socketId}`);
+            setReconnectingPeers(prev => { const n = new Set(prev); n.delete(socketId); return n; });
+            return;
+        }
+
+        iceRestartCountRef.current.set(socketId, retries + 1);
+        setReconnectingPeers(prev => new Set(prev).add(socketId));
+
+        console.log(`[WebRTC] ICE restart attempt ${retries + 1}/${MAX_RETRIES} for ${socketId}`);
 
         peer.connection.createOffer({ iceRestart: true })
             .then(offer => peer.connection.setLocalDescription(offer))
@@ -230,17 +329,33 @@ export function useVideoCall({ roomId, userId, userName, userImage, localStream 
 
             // Auto ICE restart on disconnected/failed
             if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
-                // Clear existing timeout
                 const existingTimeout = iceRestartTimeoutRef.current.get(targetSocketId);
                 if (existingTimeout) clearTimeout(existingTimeout);
 
-                // Schedule ICE restart after 2 seconds
+                const retries = iceRestartCountRef.current.get(targetSocketId) || 0;
+                const delay = Math.min(2000 * Math.pow(2, retries), 16000); // 2s, 4s, 8s, 16s
+
                 const timeout = setTimeout(() => {
                     if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
                         performIceRestart(targetSocketId);
                     }
-                }, 2000);
+                }, delay);
                 iceRestartTimeoutRef.current.set(targetSocketId, timeout);
+            }
+
+            // Clear reconnecting state and reset retry counter on successful connection
+            if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+                iceRestartCountRef.current.delete(targetSocketId);
+                setReconnectingPeers(prev => {
+                    const n = new Set(prev);
+                    n.delete(targetSocketId);
+                    return n;
+                });
+                const existingTimeout = iceRestartTimeoutRef.current.get(targetSocketId);
+                if (existingTimeout) {
+                    clearTimeout(existingTimeout);
+                    iceRestartTimeoutRef.current.delete(targetSocketId);
+                }
             }
         };
 
@@ -476,6 +591,59 @@ export function useVideoCall({ roomId, userId, userName, userImage, localStream 
             });
         });
 
+        // Handle hand raise
+        socket.on("hand-raise", (data: { userId: string; raised: boolean }) => {
+            setHandRaisedUsers(prev => {
+                const next = new Set(prev);
+                if (data.raised) next.add(data.userId); else next.delete(data.userId);
+                return next;
+            });
+        });
+
+        // Handle reactions — auto-remove after 3s
+        socket.on("reaction", (data: Reaction) => {
+            const reaction = { ...data, timestamp: Date.now() };
+            setReactions(prev => [...prev, reaction]);
+            setTimeout(() => {
+                setReactions(prev => prev.filter(r => r.id !== reaction.id));
+            }, 3000);
+        });
+
+        // Waiting room knockers
+        socket.on("knock", (data: Knocker) => {
+            setKnockers(prev => [...prev, data]);
+        });
+
+        // Display name updates from peers
+        socket.on("display-name-updated", (data: { userId: string; newName: string }) => {
+            peersRef.current.forEach((peer, socketId) => {
+                if (peer.userData.id === data.userId) {
+                    peer.userData.name = data.newName;
+                    peersRef.current.set(socketId, peer);
+                }
+            });
+            setPeers(Array.from(peersRef.current.values()));
+        });
+
+        // Polls
+        socket.on("poll-created", (data: Poll) => {
+            setPolls(prev => [...prev, data]);
+        });
+
+        socket.on("poll-vote", (data: { pollId: string; option: string; userId: string }) => {
+            setPolls(prev => prev.map(p => {
+                if (p.pollId !== data.pollId) return p;
+                const votes = { ...p.votes };
+                // Remove previous vote by this user
+                for (const opt of Object.keys(votes)) {
+                    votes[opt] = (votes[opt] || []).filter(id => id !== data.userId);
+                }
+                // Add new vote
+                votes[data.option] = [...(votes[data.option] || []), data.userId];
+                return { ...p, votes };
+            }));
+        });
+
         return () => {
             socket.emit("leave-room", roomId);
             // These refs hold stable Map instances — safe to access in cleanup
@@ -502,5 +670,17 @@ export function useVideoCall({ roomId, userId, userName, userImage, localStream 
         replaceAudioTrack,
         activeSpeakers,
         setLocalSpeaking,
+        handRaisedUsers,
+        toggleHandRaise,
+        reactions,
+        sendReaction,
+        reconnectingPeers,
+        knockers,
+        admitUser,
+        rejectUser,
+        updateDisplayName,
+        polls,
+        createPoll,
+        votePoll,
     };
 }

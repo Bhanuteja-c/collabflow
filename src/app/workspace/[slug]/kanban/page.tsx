@@ -44,9 +44,16 @@ import {
   Columns,
   CheckCircle2,
   AlertTriangle,
+  Search,
+  List,
+  SquareCheck,
+  BookOpen,
+  Bug,
+  Settings,
 } from "lucide-react";
 import { TouchSensor } from "@dnd-kit/core";
 import { useKanbanSync } from "@/hooks/useKanbanSync";
+import { format } from "date-fns";
 
 interface User {
   id: string;
@@ -58,6 +65,8 @@ interface Card {
   id: string;
   title: string;
   description?: string;
+  issueType?: "task" | "story" | "bug" | "feature";
+  issueNumber?: number;
   priority?: "low" | "medium" | "high";
   dueDate?: string;
   startDate?: string;
@@ -113,6 +122,10 @@ export default function WorkspaceKanbanPage() {
   // Create card dialog
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createDialogColumnId, setCreateDialogColumnId] = useState("");
+
+  // Search & view mode
+  const [searchQuery, setSearchQuery] = useState("");
+  const [viewMode, setViewMode] = useState<"board" | "list">("board");
 
   // Current user for presence
   const currentUser = useMemo(() => {
@@ -294,10 +307,11 @@ export default function WorkspaceKanbanPage() {
     return new Date(card.dueDate) < new Date();
   };
 
-  // Filter cards in columns
+  // Filter cards in columns (with search)
   const filteredBoard = useMemo(() => {
     if (!board) return null;
-    if (!filterPriority && !filterAssignee && !filterOverdue && !filterLabel)
+    const q = searchQuery.toLowerCase().trim();
+    if (!filterPriority && !filterAssignee && !filterOverdue && !filterLabel && !q)
       return board;
 
     return {
@@ -305,6 +319,12 @@ export default function WorkspaceKanbanPage() {
       columns: board.columns.map((col) => ({
         ...col,
         cards: col.cards.filter((card) => {
+          if (q) {
+            const matchTitle = card.title.toLowerCase().includes(q);
+            const matchDesc = (card.description || "").toLowerCase().includes(q);
+            const matchId = card.issueNumber ? `kan-${card.issueNumber}`.includes(q) : false;
+            if (!matchTitle && !matchDesc && !matchId) return false;
+          }
           if (filterPriority && card.priority !== filterPriority) return false;
           if (filterAssignee && card.assigneeId !== filterAssignee)
             return false;
@@ -315,7 +335,7 @@ export default function WorkspaceKanbanPage() {
         }),
       })),
     };
-  }, [board, filterPriority, filterAssignee, filterOverdue, filterLabel]);
+  }, [board, filterPriority, filterAssignee, filterOverdue, filterLabel, searchQuery]);
 
   const hasActiveFilters =
     filterPriority || filterAssignee || filterOverdue || filterLabel;
@@ -501,6 +521,7 @@ export default function WorkspaceKanbanPage() {
         body: JSON.stringify({
           title: title.trim(),
           columnId,
+          ...(extra?.issueType && { issueType: extra.issueType }),
           ...(extra?.priority && { priority: extra.priority }),
           ...(extra?.assigneeId && { assigneeId: extra.assigneeId }),
           ...(extra?.dueDate && { dueDate: extra.dueDate }),
@@ -518,6 +539,8 @@ export default function WorkspaceKanbanPage() {
           title: newCard.title,
           description: newCard.description || undefined,
           order: newCard.order ?? 0,
+          issueType: newCard.issueType || "task",
+          issueNumber: newCard.issueNumber || 0,
           priority: newCard.priority || "medium",
           dueDate: newCard.dueDate || undefined,
           startDate: newCard.startDate || undefined,
@@ -907,206 +930,248 @@ export default function WorkspaceKanbanPage() {
 
   return (
     <div className="h-[calc(100vh-3.5rem)] flex flex-col bg-background">
-      {/* Header — glass effect */}
-      <div className="px-4 sm:px-5 lg:px-6 py-3 border-b border-border/50 bg-background/80 backdrop-blur-sm">
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex items-center justify-between gap-3"
-        >
-          {/* Left side - Title and status */}
-          <div className="min-w-0 flex items-center gap-2.5">
-            {editingTitle ? (
-              <Input
-                value={titleDraft}
-                onChange={(e) => setTitleDraft(e.target.value)}
-                onBlur={saveBoardTitle}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") saveBoardTitle();
-                  if (e.key === "Escape") setEditingTitle(false);
-                }}
-                autoFocus
-                className="text-xl font-bold w-64 h-9"
-              />
-            ) : (
-              <h1
-                className="text-xl sm:text-2xl font-bold tracking-tight truncate cursor-pointer hover:text-primary/80 transition-colors"
-                onClick={() => {
-                  setTitleDraft(board.title);
-                  setEditingTitle(true);
-                }}
-                title="Click to rename"
-              >
-                {board.title}
-              </h1>
-            )}
-            {syncConnected ? (
-              <span
-                className="flex items-center gap-1.5 text-xs text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full"
-                title="Real-time sync active"
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-online-pulse" />
-                <span className="hidden sm:inline font-medium">Live</span>
-              </span>
-            ) : (
-              <span
-                className="flex items-center gap-1.5 text-xs text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full"
-                title="Connecting..."
-              >
-                <WifiOff className="w-3 h-3" />
-                <span className="hidden sm:inline font-medium">Offline</span>
-              </span>
-            )}
-          </div>
-
-          {/* Center - Stats + Viewers */}
-          <div className="hidden md:flex items-center gap-2.5">
-            {/* Board stats — glass pills */}
-            <div className="flex items-center gap-1.5">
-              <div className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground bg-muted/50 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-border/30">
-                <Columns className="w-3 h-3" />
-                {boardStats.total}
+      {/* ═══ Jira-Style Header ═══ */}
+      <div className="border-b border-border/50 bg-background/80 backdrop-blur-sm">
+        {/* Row 1: Title + Status + Stats + Add Column */}
+        <div className="px-4 sm:px-5 lg:px-6 pt-3 pb-2">
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center justify-between gap-3"
+          >
+            {/* Left: Icon + Title + Live badge */}
+            <div className="min-w-0 flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center flex-shrink-0 shadow-sm">
+                <LayoutGrid className="w-4 h-4 text-white" />
               </div>
-              {boardStats.completed > 0 && (
-                <div className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">
-                  <CheckCircle2 className="w-3 h-3" />
-                  {boardStats.completed}
-                </div>
+              {editingTitle ? (
+                <Input
+                  value={titleDraft}
+                  onChange={(e) => setTitleDraft(e.target.value)}
+                  onBlur={saveBoardTitle}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") saveBoardTitle();
+                    if (e.key === "Escape") setEditingTitle(false);
+                  }}
+                  autoFocus
+                  className="text-lg font-bold w-64 h-9"
+                />
+              ) : (
+                <h1
+                  className="text-lg font-bold tracking-tight truncate cursor-pointer hover:text-primary/80 transition-colors"
+                  onClick={() => {
+                    setTitleDraft(board.title);
+                    setEditingTitle(true);
+                  }}
+                  title="Click to rename"
+                >
+                  {board.title}
+                </h1>
               )}
-              {boardStats.overdue > 0 && (
-                <div className="inline-flex items-center gap-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-500/10 px-2.5 py-1 rounded-lg border border-red-500/20">
-                  <AlertTriangle className="w-3 h-3" />
-                  {boardStats.overdue}
+              {syncConnected ? (
+                <span className="flex items-center gap-1.5 text-[10px] text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full font-medium">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-online-pulse" />
+                  Live
+                </span>
+              ) : (
+                <span className="flex items-center gap-1.5 text-[10px] text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full font-medium">
+                  <WifiOff className="w-3 h-3" />
+                  Offline
+                </span>
+              )}
+            </div>
+
+            {/* Center: Stats + Viewers */}
+            <div className="hidden md:flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
+                <div className="inline-flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-md border border-border/30">
+                  <Columns className="w-3 h-3" />
+                  {boardStats.total}
+                </div>
+                {boardStats.completed > 0 && (
+                  <div className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md">
+                    <CheckCircle2 className="w-3 h-3" />
+                    {boardStats.completed}
+                  </div>
+                )}
+                {boardStats.overdue > 0 && (
+                  <div className="inline-flex items-center gap-1 text-[11px] font-medium text-red-600 dark:text-red-400 bg-red-500/10 px-2 py-0.5 rounded-md">
+                    <AlertTriangle className="w-3 h-3" />
+                    {boardStats.overdue}
+                  </div>
+                )}
+              </div>
+              {viewers.length > 0 && (
+                <div className="flex items-center gap-1.5 ml-1">
+                  <div className="w-px h-4 bg-border/50" />
+                  <div className="flex -space-x-2">
+                    {viewers.slice(0, 5).map((viewer) => (
+                      <div key={viewer.socketId} className="relative">
+                        <Avatar className="w-6 h-6 border-2 border-background ring-1 ring-border/30" title={viewer.user.name}>
+                          <AvatarImage src={viewer.user.image} />
+                          <AvatarFallback className="text-[9px] font-semibold">{viewer.user.name?.[0] || "?"}</AvatarFallback>
+                        </Avatar>
+                        <span className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-500 border border-background" />
+                      </div>
+                    ))}
+                    {viewers.length > 5 && (
+                      <div className="w-6 h-6 rounded-full bg-muted border-2 border-background flex items-center justify-center text-[9px] font-semibold text-muted-foreground">
+                        +{viewers.length - 5}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
 
-            {/* Viewers (presence) */}
-            {viewers.length > 0 && (
-              <div className="flex items-center gap-1.5 ml-1">
-                <div className="w-px h-4 bg-border/50" />
-                <div className="flex -space-x-2">
-                  {viewers.slice(0, 5).map((viewer) => (
-                    <div key={viewer.socketId} className="relative">
-                      <Avatar
-                        className="w-7 h-7 border-2 border-background ring-1 ring-border/30"
-                        title={viewer.user.name}
-                      >
-                        <AvatarImage src={viewer.user.image} />
-                        <AvatarFallback className="text-[10px] font-semibold">
-                          {viewer.user.name?.[0] || "?"}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 border border-background" />
-                    </div>
-                  ))}
-                  {viewers.length > 5 && (
-                    <div className="w-7 h-7 rounded-full bg-muted border-2 border-background flex items-center justify-center text-[10px] font-semibold text-muted-foreground">
-                      +{viewers.length - 5}
-                    </div>
-                  )}
+            {/* Right: Add Column */}
+            <div className="flex items-center gap-1.5">
+              {addingColumn ? (
+                <div className="flex items-center gap-1">
+                  <Input
+                    value={newColumnTitle}
+                    onChange={(e) => setNewColumnTitle(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") addColumn();
+                      if (e.key === "Escape") setAddingColumn(false);
+                    }}
+                    placeholder="Column name..."
+                    autoFocus
+                    className="h-8 w-36 text-sm rounded-lg"
+                  />
+                  <Button size="sm" onClick={addColumn} className="h-8 rounded-lg text-xs">Add</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setAddingColumn(false)} className="h-8 w-8 p-0 rounded-lg">
+                    <X className="w-3.5 h-3.5" />
+                  </Button>
                 </div>
-              </div>
+              ) : (
+                <Button onClick={() => setAddingColumn(true)} className="btn-glow flex-shrink-0 rounded-lg h-8 text-xs" size="sm">
+                  <Plus className="w-3.5 h-3.5 sm:mr-1.5" />
+                  <span className="hidden sm:inline">Add Column</span>
+                </Button>
+              )}
+            </div>
+          </motion.div>
+        </div>
+
+        {/* Row 2: Tabs + Search + Quick Filters */}
+        <div className="px-4 sm:px-5 lg:px-6 pb-2 flex items-center gap-3 flex-wrap">
+          {/* View Tabs */}
+          <div className="flex items-center bg-muted/40 rounded-lg p-0.5 border border-border/30">
+            <button
+              onClick={() => setViewMode("board")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                viewMode === "board"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              Board
+            </button>
+            <button
+              onClick={() => setViewMode("list")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                viewMode === "list"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <List className="w-3.5 h-3.5" />
+              List
+            </button>
+          </div>
+
+          {/* Search */}
+          <div className="relative flex-1 max-w-[240px]">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search board"
+              className="h-8 pl-8 text-xs rounded-lg bg-muted/30 border-border/30 focus:bg-background"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="w-3 h-3" />
+              </button>
             )}
           </div>
 
-          {/* Right side - Filters and actions */}
+          {/* Quick Filters */}
           <div className="flex items-center gap-1.5">
+            {/* Member avatar quick filter */}
+            {workspaceMembers.slice(0, 4).map((member) => (
+              <button
+                key={member.id}
+                onClick={() => setFilterAssignee(filterAssignee === member.id ? null : member.id)}
+                className={`relative transition-all ${
+                  filterAssignee === member.id ? "ring-2 ring-blue-500 rounded-full" : "opacity-70 hover:opacity-100"
+                }`}
+                title={member.name || "Member"}
+              >
+                <Avatar className="w-7 h-7 border-2 border-background">
+                  <AvatarImage src={member.image || undefined} />
+                  <AvatarFallback className="text-[9px] font-semibold bg-primary/10 text-primary">{member.name?.[0] || "?"}</AvatarFallback>
+                </Avatar>
+              </button>
+            ))}
+
+            <div className="w-px h-5 bg-border/40 mx-1" />
+
+            {/* Only My Issues */}
+            <Button
+              variant={filterAssignee === session?.user?.id ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => setFilterAssignee(filterAssignee === session?.user?.id ? null : session?.user?.id || null)}
+              className="gap-1.5 rounded-lg h-7 text-[11px] px-2.5"
+            >
+              <Users className="w-3 h-3" />
+              Only My Issues
+            </Button>
+
             {/* Filter dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button
-                  variant={hasActiveFilters ? "secondary" : "ghost"}
-                  size="sm"
-                  className="gap-1.5 rounded-lg h-8 text-xs"
-                >
-                  <Filter className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Filter</span>
-                  {hasActiveFilters && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-accent" />
-                  )}
+                <Button variant={hasActiveFilters ? "secondary" : "ghost"} size="sm" className="gap-1 rounded-lg h-7 text-[11px] px-2.5">
+                  <Filter className="w-3 h-3" />
+                  Filter
+                  {hasActiveFilters && <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-52">
-                <DropdownMenuItem
-                  onClick={() =>
-                    setFilterPriority(filterPriority === "high" ? null : "high")
-                  }
-                  className="gap-2"
-                >
+                <DropdownMenuItem onClick={() => setFilterPriority(filterPriority === "high" ? null : "high")} className="gap-2">
                   <span className="w-2 h-2 rounded-full bg-red-500" />
                   High Priority
-                  {filterPriority === "high" && (
-                    <span className="ml-auto">✓</span>
-                  )}
+                  {filterPriority === "high" && <span className="ml-auto">✓</span>}
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() =>
-                    setFilterPriority(
-                      filterPriority === "medium" ? null : "medium",
-                    )
-                  }
-                  className="gap-2"
-                >
+                <DropdownMenuItem onClick={() => setFilterPriority(filterPriority === "medium" ? null : "medium")} className="gap-2">
                   <span className="w-2 h-2 rounded-full bg-amber-500" />
                   Medium Priority
-                  {filterPriority === "medium" && (
-                    <span className="ml-auto">✓</span>
-                  )}
+                  {filterPriority === "medium" && <span className="ml-auto">✓</span>}
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() =>
-                    setFilterPriority(filterPriority === "low" ? null : "low")
-                  }
-                  className="gap-2"
-                >
+                <DropdownMenuItem onClick={() => setFilterPriority(filterPriority === "low" ? null : "low")} className="gap-2">
                   <span className="w-2 h-2 rounded-full bg-emerald-500" />
                   Low Priority
-                  {filterPriority === "low" && (
-                    <span className="ml-auto">✓</span>
-                  )}
+                  {filterPriority === "low" && <span className="ml-auto">✓</span>}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={() => setFilterOverdue(!filterOverdue)}
-                  className="gap-2"
-                >
+                <DropdownMenuItem onClick={() => setFilterOverdue(!filterOverdue)} className="gap-2">
                   <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
                   Overdue Only
                   {filterOverdue && <span className="ml-auto">✓</span>}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() =>
-                    setFilterAssignee(
-                      filterAssignee === session?.user?.id
-                        ? null
-                        : session?.user?.id || null,
-                    )
-                  }
-                  className="gap-2"
-                >
-                  <Users className="w-3.5 h-3.5" />
-                  Assigned to Me
-                  {filterAssignee === session?.user?.id && (
-                    <span className="ml-auto">✓</span>
-                  )}
                 </DropdownMenuItem>
                 {allLabels.length > 0 && (
                   <>
                     <DropdownMenuSeparator />
                     {allLabels.map((label) => (
-                      <DropdownMenuItem
-                        key={label}
-                        onClick={() =>
-                          setFilterLabel(filterLabel === label ? null : label)
-                        }
-                        className="gap-2"
-                      >
+                      <DropdownMenuItem key={label} onClick={() => setFilterLabel(filterLabel === label ? null : label)} className="gap-2">
                         <span className="w-2 h-2 rounded-full bg-violet-500" />
                         {label}
-                        {filterLabel === label && (
-                          <span className="ml-auto">✓</span>
-                        )}
+                        {filterLabel === label && <span className="ml-auto">✓</span>}
                       </DropdownMenuItem>
                     ))}
                   </>
@@ -1114,102 +1179,140 @@ export default function WorkspaceKanbanPage() {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Clear filters button */}
             {hasActiveFilters && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={clearFilters}
-                className="gap-1 text-muted-foreground rounded-lg h-8 text-xs"
-              >
-                <X className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Clear</span>
+              <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1 text-muted-foreground rounded-lg h-7 text-[11px] px-2">
+                <X className="w-3 h-3" />
+                Clear
               </Button>
             )}
+          </div>
+        </div>
+      </div>
 
-            {/* Divider */}
-            <div className="w-px h-5 bg-border/50 mx-0.5" />
-
-            {/* Add Column */}
-            {addingColumn ? (
-              <div className="flex items-center gap-1">
-                <Input
-                  value={newColumnTitle}
-                  onChange={(e) => setNewColumnTitle(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") addColumn();
-                    if (e.key === "Escape") setAddingColumn(false);
-                  }}
-                  placeholder="Column name..."
-                  autoFocus
-                  className="h-8 w-36 text-sm rounded-lg"
-                />
-                <Button size="sm" onClick={addColumn} className="h-8 rounded-lg text-xs">
-                  Add
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setAddingColumn(false)}
-                  className="h-8 w-8 p-0 rounded-lg"
+      {/* Board or List view */}
+      {viewMode === "board" ? (
+        <div className="flex-1 overflow-x-auto p-4 sm:p-5 pb-5 bg-dots snap-x snap-mandatory sm:snap-none overscroll-x-contain">
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCorners}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDragEnd={handleDragEnd}
+          >
+            <div className="flex gap-4 h-full min-w-max">
+              {(filteredBoard || board).columns.map((column, index) => (
+                <motion.div
+                  key={column.id}
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.08, duration: 0.3 }}
                 >
-                  <X className="w-3.5 h-3.5" />
-                </Button>
-              </div>
-            ) : (
-              <Button
-                onClick={() => setAddingColumn(true)}
-                className="btn-glow flex-shrink-0 rounded-lg h-8 text-xs"
-                size="sm"
-              >
-                <Plus className="w-3.5 h-3.5 sm:mr-1.5" />
-                <span className="hidden sm:inline">Add Column</span>
-              </Button>
-            )}
-          </div>
-        </motion.div>
-      </div>
+                  <KanbanColumn
+                    column={column}
+                    onAddCard={addCard}
+                    onUpdateCard={updateCard}
+                    onDeleteCard={deleteCard}
+                    onOpenDetail={handleOpenDetail}
+                    onRenameColumn={renameColumn}
+                    onDeleteColumn={deleteColumn}
+                    onOpenCreateDialog={(colId) => {
+                      setCreateDialogColumnId(colId);
+                      setCreateDialogOpen(true);
+                    }}
+                    canDelete={board.columns.length > 1}
+                  />
+                </motion.div>
+              ))}
+            </div>
 
-      {/* Kanban Board — dot grid background */}
-      <div className="flex-1 overflow-x-auto p-4 sm:p-5 pb-5 bg-dots snap-x snap-mandatory sm:snap-none overscroll-x-contain">
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCorners}
-          onDragStart={handleDragStart}
-          onDragOver={handleDragOver}
-          onDragEnd={handleDragEnd}
-        >
-          <div className="flex gap-4 h-full min-w-max">
-            {(filteredBoard || board).columns.map((column, index) => (
-              <motion.div
-                key={column.id}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.08, duration: 0.3 }}
-              >
-                <KanbanColumn
-                  column={column}
-                  onAddCard={addCard}
-                  onUpdateCard={updateCard}
-                  onDeleteCard={deleteCard}
-                  onOpenDetail={handleOpenDetail}
-                  onRenameColumn={renameColumn}
-                  onDeleteColumn={deleteColumn}
-                  onOpenCreateDialog={(colId) => {
-                    setCreateDialogColumnId(colId);
-                    setCreateDialogOpen(true);
-                  }}
-                  canDelete={board.columns.length > 1}
-                />
-              </motion.div>
-            ))}
+            <DragOverlay>
+              {activeCard && <KanbanCard card={activeCard} isDragging />}
+            </DragOverlay>
+          </DndContext>
+        </div>
+      ) : (
+        /* ═══ List View ═══ */
+        <div className="flex-1 overflow-auto p-4 sm:p-5">
+          <div className="bg-card/50 rounded-xl border border-border/50 overflow-hidden">
+            {/* Table header */}
+            <div className="grid grid-cols-[60px_40px_1fr_120px_100px_80px_90px] gap-2 px-4 py-2.5 bg-muted/30 border-b border-border/30 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+              <span>ID</span>
+              <span>Type</span>
+              <span>Title</span>
+              <span>Status</span>
+              <span>Assignee</span>
+              <span>Priority</span>
+              <span>Due Date</span>
+            </div>
+            {/* Table rows */}
+            <div className="divide-y divide-border/20">
+              {(filteredBoard || board).columns.flatMap((col) =>
+                col.cards.map((card) => {
+                  const typeConfig: Record<string, { color: string }> = {
+                    task: { color: "text-blue-500" },
+                    story: { color: "text-emerald-500" },
+                    bug: { color: "text-red-500" },
+                    feature: { color: "text-amber-500" },
+                  };
+                  const tc = typeConfig[card.issueType || "task"];
+                  const priorityColors: Record<string, string> = {
+                    low: "text-emerald-500 bg-emerald-500/10",
+                    medium: "text-amber-500 bg-amber-500/10",
+                    high: "text-red-500 bg-red-500/10",
+                  };
+                  const pc = priorityColors[card.priority || "medium"];
+                  return (
+                    <div
+                      key={card.id}
+                      onClick={() => handleOpenDetail(card)}
+                      className="grid grid-cols-[60px_40px_1fr_120px_100px_80px_90px] gap-2 px-4 py-2.5 hover:bg-muted/20 cursor-pointer transition-colors items-center"
+                    >
+                      <span className="text-[11px] font-semibold text-blue-500/80">
+                        {card.issueNumber ? `KAN-${card.issueNumber}` : "—"}
+                      </span>
+                      <span className={`${tc.color}`}>
+                        {card.issueType === "task" && <SquareCheck className="w-4 h-4" />}
+                        {card.issueType === "story" && <BookOpen className="w-4 h-4" />}
+                        {card.issueType === "bug" && <Bug className="w-4 h-4" />}
+                        {card.issueType === "feature" && <Settings className="w-4 h-4" />}
+                        {!card.issueType && <SquareCheck className="w-4 h-4" />}
+                      </span>
+                      <span className="text-sm font-medium text-foreground truncate">{card.title}</span>
+                      <span className="text-[11px] font-medium text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-md truncate text-center">
+                        {col.title}
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        {card.assignee ? (
+                          <>
+                            <Avatar className="w-5 h-5">
+                              <AvatarImage src={card.assignee.image || undefined} />
+                              <AvatarFallback className="text-[8px] font-semibold bg-primary/10 text-primary">{card.assignee.name?.[0]}</AvatarFallback>
+                            </Avatar>
+                            <span className="text-[11px] text-muted-foreground truncate">{card.assignee.name?.split(" ")[0]}</span>
+                          </>
+                        ) : (
+                          <span className="text-[11px] text-muted-foreground/50">Unassigned</span>
+                        )}
+                      </span>
+                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${pc} text-center capitalize`}>
+                        {card.priority || "medium"}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground">
+                        {card.dueDate ? format(new Date(card.dueDate), "MMM d") : "—"}
+                      </span>
+                    </div>
+                  );
+                })
+              )}
+              {(filteredBoard || board).columns.flatMap((c) => c.cards).length === 0 && (
+                <div className="flex items-center justify-center py-12 text-muted-foreground/60">
+                  <span className="text-sm">No cards match your filters</span>
+                </div>
+              )}
+            </div>
           </div>
-
-          <DragOverlay>
-            {activeCard && <KanbanCard card={activeCard} isDragging />}
-          </DragOverlay>
-        </DndContext>
-      </div>
+        </div>
+      )}
 
       {/* Card Detail Modal */}
       <CardDetailModal

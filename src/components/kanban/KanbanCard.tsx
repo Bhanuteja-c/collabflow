@@ -1,5 +1,5 @@
 // src/components/kanban/KanbanCard.tsx
-// Premium Kanban card with glassmorphism, priority strip, progress bar, and hover animations
+// Jira-style Kanban card with issue type icons, issue IDs, priority strip, and hover actions
 "use client";
 
 import { useState, useRef, useEffect } from "react";
@@ -16,6 +16,10 @@ import {
     MessageSquare,
     CheckSquare,
     AlertCircle,
+    SquareCheck,
+    BookOpen,
+    Bug,
+    Settings,
 } from "lucide-react";
 import { format, isBefore, addDays } from "date-fns";
 
@@ -29,6 +33,8 @@ interface CardData {
     id: string;
     title: string;
     description?: string;
+    issueType?: "task" | "story" | "bug" | "feature";
+    issueNumber?: number;
     priority?: "low" | "medium" | "high";
     dueDate?: string;
     startDate?: string;
@@ -50,10 +56,18 @@ interface CardProps {
     onOpenDetail?: (card: CardData) => void;
 }
 
+// Issue type config — SVG icons + colors (Jira-style)
+const issueTypeConfig = {
+    task: { icon: SquareCheck, color: "text-blue-500", bg: "bg-blue-500", label: "Task", border: "border-l-blue-500" },
+    story: { icon: BookOpen, color: "text-emerald-500", bg: "bg-emerald-500", label: "Story", border: "border-l-emerald-500" },
+    bug: { icon: Bug, color: "text-red-500", bg: "bg-red-500", label: "Bug", border: "border-l-red-500" },
+    feature: { icon: Settings, color: "text-amber-500", bg: "bg-amber-500", label: "Feature", border: "border-l-amber-500" },
+};
+
 const priorityConfig = {
-    low: { color: "bg-emerald-500", strip: "from-emerald-400 to-emerald-600", textColor: "text-emerald-600 dark:text-emerald-400", label: "Low" },
-    medium: { color: "bg-amber-500", strip: "from-amber-400 to-amber-500", textColor: "text-amber-600 dark:text-amber-400", label: "Medium" },
-    high: { color: "bg-red-500", strip: "from-red-400 to-rose-600", textColor: "text-red-600 dark:text-red-400", label: "High" },
+    low: { color: "bg-emerald-500", textColor: "text-emerald-600 dark:text-emerald-400", label: "Low" },
+    medium: { color: "bg-amber-500", textColor: "text-amber-600 dark:text-amber-400", label: "Medium" },
+    high: { color: "bg-red-500", textColor: "text-red-600 dark:text-red-400", label: "High" },
 };
 
 const labelColors = [
@@ -129,6 +143,8 @@ export default function KanbanCard({
     const isOverdue = card.dueDate && isBefore(new Date(card.dueDate), new Date());
     const isDueSoon = card.dueDate && !isOverdue && isBefore(new Date(card.dueDate), addDays(new Date(), 2));
     const priority = card.priority && priorityConfig[card.priority];
+    const issueType = issueTypeConfig[card.issueType || "task"];
+    const IssueIcon = issueType.icon;
     const checklistProgress = card.checklistTotal && card.checklistTotal > 0
         ? Math.round((card.checklistCompleted || 0) / card.checklistTotal * 100)
         : null;
@@ -146,25 +162,20 @@ export default function KanbanCard({
         >
             <div
                 className={`
-                    relative overflow-hidden rounded-xl
-                    bg-card/80 backdrop-blur-sm
-                    border border-border/60 
+                    relative overflow-hidden rounded-lg
+                    bg-card/90 backdrop-blur-sm
+                    border border-border/50 border-l-[3px] ${issueType.border}
                     shadow-sm
                     transition-all duration-200 ease-out
                     hover:-translate-y-0.5 hover:shadow-md hover:border-border
                     cursor-pointer
                     ${isOverdue ? "ring-1 ring-red-500/30" : ""}
-                    ${isDragging ? "shadow-[0_20px_60px_-15px_rgba(37,99,235,0.2)] rotate-3 scale-105 border-primary/40 ring-2 ring-primary/20 brightness-110" : ""}
+                    ${isDragging ? "shadow-[0_20px_60px_-15px_rgba(37,99,235,0.2)] rotate-2 scale-105 border-primary/40 ring-2 ring-primary/20" : ""}
                     ${card.status === "completed" && !isDragging ? "opacity-60" : ""}
                 `}
                 onClick={handleCardClick}
             >
-                {/* Priority strip — left edge */}
-                {priority && (
-                    <div className={`absolute left-0 top-0 bottom-0 w-[3px] bg-gradient-to-b ${priority.strip}`} />
-                )}
-
-                <div className={`p-3 space-y-2.5 ${priority ? "pl-3.5" : ""}`}>
+                <div className="p-3 space-y-2">
                     {/* Labels */}
                     {card.labels && card.labels.length > 0 && (
                         <div className="flex flex-wrap gap-1.5">
@@ -233,6 +244,25 @@ export default function KanbanCard({
                         )}
                     </div>
 
+                    {/* Issue type + ID row */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <div className="flex items-center gap-1.5">
+                            <IssueIcon className={`w-3.5 h-3.5 ${issueType.color}`} />
+                            {card.issueNumber ? (
+                                <span className="text-[11px] font-semibold text-blue-500/80">
+                                    KAN-{card.issueNumber}
+                                </span>
+                            ) : null}
+                        </div>
+
+                        {/* Priority badge */}
+                        {priority && (
+                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${priority.textColor} bg-current/5`}>
+                                {priority.label}
+                            </span>
+                        )}
+                    </div>
+
                     {/* Meta row */}
                     <div className="flex items-center gap-2 flex-wrap">
                         {/* Due date */}
@@ -272,13 +302,17 @@ export default function KanbanCard({
 
                         {/* Spacer + Assignee */}
                         <div className="flex-1" />
-                        {card.assignee && (
+                        {card.assignee ? (
                             <Avatar className="w-6 h-6 ring-2 ring-background" title={card.assignee.name || "Assigned"}>
                                 <AvatarImage src={card.assignee.image || undefined} />
                                 <AvatarFallback className="text-[9px] font-semibold bg-primary/10 text-primary">
                                     {card.assignee.name?.[0] || "?"}
                                 </AvatarFallback>
                             </Avatar>
+                        ) : (
+                            <div className="w-6 h-6 rounded-full border-2 border-dashed border-border/50 flex items-center justify-center opacity-0 group-hover:opacity-60 transition-opacity" title="Unassigned">
+                                <span className="text-[9px] text-muted-foreground">+</span>
+                            </div>
                         )}
                     </div>
                 </div>
