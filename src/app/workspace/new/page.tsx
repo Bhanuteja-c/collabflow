@@ -1,22 +1,53 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/ui/Logo";
-import { Loader2, ArrowRight, Building2, Users, FileText, Sparkles, UserPlus, Plus } from "lucide-react";
+import { Loader2, ArrowRight, Building2, Users, FileText, Sparkles, UserPlus, Plus, Globe, Lock } from "lucide-react";
 import Link from "next/link";
 
 export default function CreateWorkspacePage() {
     const router = useRouter();
+    const { data: session } = useSession();
     const [mode, setMode] = useState<"choose" | "create" | "join">("choose");
     const [name, setName] = useState("");
     const [description, setDescription] = useState("");
+    const [isPublic, setIsPublic] = useState(false);
     const [inviteCode, setInviteCode] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
+    
+    // Public workspaces state
+    const [publicWorkspaces, setPublicWorkspaces] = useState<any[]>([]);
+    const [loadingPublic, setLoadingPublic] = useState(false);
+    const [joiningWorkspace, setJoiningWorkspace] = useState<string | null>(null);
+
+    // Fetch public workspaces when mode changes to 'join'
+    useEffect(() => {
+        if (mode === "join") {
+            const fetchPublicWorkspaces = async () => {
+                setLoadingPublic(true);
+                try {
+                    const res = await fetch("/api/workspaces/public?limit=5");
+                    if (res.ok) {
+                        const data = await res.json();
+                        setPublicWorkspaces(data.workspaces || []);
+                    }
+                } catch (err) {
+                    console.error("Failed to fetch public workspaces", err);
+                } finally {
+                    setLoadingPublic(false);
+                }
+            };
+            fetchPublicWorkspaces();
+        }
+    }, [mode]);
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -32,7 +63,11 @@ export default function CreateWorkspacePage() {
             const res = await fetch("/api/workspaces", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name: name.trim(), description: description.trim() }),
+                body: JSON.stringify({ 
+                    name: name.trim(), 
+                    description: description.trim(),
+                    isPublic 
+                }),
             });
 
             if (res.ok) {
@@ -46,6 +81,33 @@ export default function CreateWorkspacePage() {
             setError("Something went wrong");
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleJoinPublic = async (workspaceSlug: string) => {
+        if (!session) {
+            router.push("/sign-in");
+            return;
+        }
+
+        setJoiningWorkspace(workspaceSlug);
+        setError("");
+
+        try {
+            const res = await fetch(`/api/workspaces/${workspaceSlug}/join`, {
+                method: "POST",
+            });
+
+            if (res.ok) {
+                router.push(`/workspace/${workspaceSlug}`);
+            } else {
+                const data = await res.json();
+                setError(data.error || "Failed to join workspace");
+            }
+        } catch (err) {
+            setError("Something went wrong joining the public workspace");
+        } finally {
+            setJoiningWorkspace(null);
         }
     };
 
@@ -202,6 +264,25 @@ export default function CreateWorkspacePage() {
                                 />
                             </div>
 
+                            <div className="flex flex-row items-center justify-between rounded-lg border p-4 shadow-sm bg-card">
+                                <div className="space-y-0.5">
+                                    <Label htmlFor="privacy-switch" className="text-base flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity">
+                                        {isPublic ? <Globe className="w-4 h-4 text-primary" /> : <Lock className="w-4 h-4 text-muted-foreground" />}
+                                        Workspace Privacy
+                                    </Label>
+                                    <p className="text-sm text-muted-foreground">
+                                        {isPublic 
+                                            ? "Public — Anyone can discover and join this workspace." 
+                                            : "Private — Only people with an invite code can join."}
+                                    </p>
+                                </div>
+                                <Switch
+                                    id="privacy-switch"
+                                    checked={isPublic}
+                                    onCheckedChange={setIsPublic}
+                                />
+                            </div>
+
                             {error && (
                                 <p className="text-sm text-destructive">{error}</p>
                             )}
@@ -275,7 +356,7 @@ export default function CreateWorkspacePage() {
                             <p className="text-sm text-destructive">{error}</p>
                         )}
 
-                        <div className="flex gap-3">
+                        <div className="flex gap-3 pt-2">
                             <Button
                                 type="button"
                                 variant="outline"
@@ -298,6 +379,62 @@ export default function CreateWorkspacePage() {
                             </Button>
                         </div>
                     </form>
+
+                    {/* Public Workspaces List */}
+                    <div className="mt-8 pt-6 border-t">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="font-semibold flex items-center gap-2">
+                                <Globe className="w-4 h-4 text-primary" />
+                                Public Workspaces
+                            </h3>
+                            <Link href="/explore" className="text-xs text-primary hover:underline">
+                                View all
+                            </Link>
+                        </div>
+
+                        {loadingPublic ? (
+                            <div className="flex justify-center py-4">
+                                <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                            </div>
+                        ) : publicWorkspaces.length === 0 ? (
+                            <div className="text-center py-6 bg-muted/30 rounded-lg border border-dashed">
+                                <p className="text-sm text-muted-foreground">No public workspaces available yet.</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-3 max-h-[250px] overflow-y-auto pr-2 custom-scrollbar">
+                                {publicWorkspaces.map((ws) => (
+                                    <div key={ws.id} className="flex items-center justify-between p-3 rounded-lg border bg-background hover:border-primary/50 transition-colors group">
+                                        <div className="min-w-0 pr-4">
+                                            <h4 className="font-medium text-sm truncate group-hover:text-primary transition-colors">{ws.name}</h4>
+                                            <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
+                                                <span className="flex items-center gap-1">
+                                                    <Users className="w-3 h-3" /> {ws.memberCount}
+                                                </span>
+                                                <span className="flex items-center gap-1">
+                                                    <FileText className="w-3 h-3" /> {ws.documentCount}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <Button 
+                                            size="sm" 
+                                            variant={ws.isMember ? "outline" : "default"}
+                                            onClick={() => ws.isMember ? router.push(`/workspace/${ws.slug}`) : handleJoinPublic(ws.slug)}
+                                            disabled={joiningWorkspace === ws.slug}
+                                            className="shrink-0"
+                                        >
+                                            {joiningWorkspace === ws.slug ? (
+                                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                            ) : ws.isMember ? (
+                                                "Open"
+                                            ) : (
+                                                "Join"
+                                            )}
+                                        </Button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>

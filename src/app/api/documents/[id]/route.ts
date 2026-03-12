@@ -26,6 +26,12 @@ export async function GET(
         const document = await prisma.document.findUnique({
             where: { id },
             include: {
+                parent: {
+                    select: { id: true, title: true }
+                },
+                children: {
+                    select: { id: true, title: true }
+                },
                 shares: {
                     where: { userId },
                     select: { permission: true }
@@ -101,7 +107,7 @@ export async function PUT(
         const userId = await ensureUser(session.user as any);
 
         const body = await req.json();
-        const { title, content, isPublic } = body;
+        const { title, content, isPublic, parentId } = body;
 
         // Check ownership OR edit permission OR workspace membership
         const existing = await prisma.document.findUnique({
@@ -148,6 +154,7 @@ export async function PUT(
                 ...(title !== undefined && { title }),
                 ...(content !== undefined && { content }),
                 ...(isPublic !== undefined && { isPublic }),
+                ...(parentId !== undefined && { parentId }),
             },
         });
 

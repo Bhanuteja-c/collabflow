@@ -34,6 +34,8 @@ export default function WorkspaceEditorPage({ params }: { params: Promise<{ slug
     const [permission, setPermission] = useState<"owner" | "edit" | "view">("view");
     const [copied, setCopied] = useState(false);
     const [historyOpen, setHistoryOpen] = useState(false);
+    const [parent, setParent] = useState<{ id: string; title: string } | null>(null);
+    const [workspaceMembers, setWorkspaceMembers] = useState<{ id: string; name: string | null; image?: string | null }[]>([]);
 
     const userId = (session?.user as any)?.id || "";
     const userName = session?.user?.name || "Anonymous";
@@ -67,6 +69,7 @@ export default function WorkspaceEditorPage({ params }: { params: Promise<{ slug
                     titleRef.current = data.title;
                     setInitialContent(data.content || "");
                     setPermission(data.permission || "view");
+                    setParent(data.parent || null);
                 } else {
                     setError("Document not found");
                 }
@@ -79,6 +82,28 @@ export default function WorkspaceEditorPage({ params }: { params: Promise<{ slug
         };
         fetchDoc();
     }, [docId]);
+
+    // Fetch workspace members for mention suggestions
+    useEffect(() => {
+        const fetchMembers = async () => {
+            try {
+                const res = await fetch(`/api/workspaces/${slug}/members`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setWorkspaceMembers(
+                        (data.members || data || []).map((m: any) => ({
+                            id: m.user?.id || m.userId || m.id,
+                            name: m.user?.name || m.name || null,
+                            image: m.user?.image || m.image || null,
+                        }))
+                    );
+                }
+            } catch (e) {
+                console.error("Failed to fetch workspace members:", e);
+            }
+        };
+        fetchMembers();
+    }, [slug]);
 
     // Save title independently (on blur / Enter)
     const saveTitle = useCallback(async (newTitle: string) => {
@@ -190,25 +215,35 @@ export default function WorkspaceEditorPage({ params }: { params: Promise<{ slug
             {/* Header */}
             <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b">
                 <div className="flex items-center justify-between p-3 gap-4">
-                    {/* Left: Back + Title */}
-                    <div className="flex items-center gap-3">
-                        <Button variant="ghost" size="icon" asChild>
+                    {/* Left: Back + Breadcrumb/Title */}
+                    <div className="flex bg-transparent items-center gap-3">
+                        <Button variant="ghost" size="icon" className="shrink-0" asChild>
                             <Link href={`/workspace/${slug}/documents`}><ArrowLeft className="w-4 h-4" /></Link>
                         </Button>
-                        <Input value={title} onChange={(e) => {
-                            setTitle(e.target.value);
-                            titleRef.current = e.target.value;
-                        }}
-                            onBlur={(e) => saveTitle(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    saveTitle((e.target as HTMLInputElement).value);
-                                    (e.target as HTMLInputElement).blur();
-                                }
+                        <div className="flex flex-col">
+                            {parent && (
+                                <Link
+                                    href={`/workspace/${slug}/editor/${parent.id}`}
+                                    className="text-[11px] text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1 -mb-1 ml-3"
+                                >
+                                    <FileText className="w-3 h-3" /> {parent.title} /
+                                </Link>
+                            )}
+                            <Input value={title} onChange={(e) => {
+                                setTitle(e.target.value);
+                                titleRef.current = e.target.value;
                             }}
-                            className="font-semibold border-0 bg-transparent focus-visible:ring-0 text-lg w-64"
-                            placeholder="Untitled Document" />
+                                onBlur={(e) => saveTitle(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        saveTitle((e.target as HTMLInputElement).value);
+                                        (e.target as HTMLInputElement).blur();
+                                    }
+                                }}
+                                className="font-semibold border-0 bg-transparent focus-visible:ring-0 text-lg w-64 shadow-none"
+                                placeholder="Untitled Document" />
+                        </div>
                     </div>
 
                     {/* Center: Presence */}
@@ -300,6 +335,8 @@ export default function WorkspaceEditorPage({ params }: { params: Promise<{ slug
                             onHistoryClose={() => setHistoryOpen(false)}
                             documentId={docId}
                             onContentChange={handleContentChange}
+                            workspaceMembers={workspaceMembers}
+                            workspaceSlug={slug}
                         />
                     </div>
                 ) : (

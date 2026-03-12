@@ -50,6 +50,7 @@ export async function GET(request: NextRequest) {
                 title: true,
                 isPublic: true,
                 workspaceId: true,
+                parentId: true,
                 createdAt: true,
                 updatedAt: true,
                 author: {
@@ -91,7 +92,7 @@ export async function POST(req: NextRequest) {
         const userId = await ensureUser(session.user as any);
 
         const body = await req.json();
-        const { title, content, workspaceId } = body;
+        const { title, content, workspaceId, parentId } = body;
 
         // If workspaceId provided, verify membership
         if (workspaceId) {
@@ -109,6 +110,7 @@ export async function POST(req: NextRequest) {
                 content: content || "",
                 authorId: userId,
                 workspaceId: workspaceId || null,
+                parentId: parentId || null,
             },
         });
 

@@ -25,6 +25,12 @@ async function checkBoardAccess(boardId: string, userId: string) {
                         include: {
                             assignee: {
                                 select: { id: true, name: true, image: true }
+                            },
+                            epic: {
+                                select: { id: true, title: true, color: true }
+                            },
+                            _count: {
+                                select: { dependsOn: true, dependedBy: true }
                             }
                         }
                     },
@@ -64,10 +70,16 @@ export async function GET(
             return NextResponse.json({ error: "Board not found" }, { status: 404 });
         }
 
+        // Count backlog items for this board
+        const backlogCount = await prisma.card.count({
+            where: { boardId: id, isBacklog: true },
+        });
+
         // Don't expose internal workspace membership details
         return NextResponse.json({
             ...board,
-            workspace: undefined
+            workspace: undefined,
+            backlogCount,
         });
     } catch (error) {
         console.error("Error fetching board:", error);

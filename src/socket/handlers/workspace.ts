@@ -51,4 +51,26 @@ export function registerWorkspaceHandlers(io: Server, socket: Socket<any, any, a
         socket.leave(room);
         socket.to(room).emit("workspace-user-left", { socketId: socket.id });
     });
+
+    // Epics Real-Time Sync
+    socket.on("epic-created", (data: { workspaceId: string; epic: any }) => {
+        const room = makeRoomId(ROOM_PREFIX.WORKSPACE, data.workspaceId);
+        socket.to(room).emit("epic-created", data);
+    });
+
+    socket.on("epic-updated", (data: { workspaceId: string; epic: any }) => {
+        const room = makeRoomId(ROOM_PREFIX.WORKSPACE, data.workspaceId);
+        socket.to(room).emit("epic-updated", data);
+    });
+
+    socket.on("epic-deleted", (data: { workspaceId: string; epicId: string }) => {
+        const room = makeRoomId(ROOM_PREFIX.WORKSPACE, data.workspaceId);
+        socket.to(room).emit("epic-deleted", data);
+    });
+
+    // Dependencies Real-Time Sync
+    socket.on("card-dependency-updated", (data: { workspaceId: string; cardId: string; dependencyCount: number; isBlocked: boolean; targetCardId: string; targetDependencyCount: number; targetIsBlocked: boolean }) => {
+        const room = makeRoomId(ROOM_PREFIX.WORKSPACE, data.workspaceId);
+        socket.to(room).emit("card-dependency-updated", data);
+    });
 }

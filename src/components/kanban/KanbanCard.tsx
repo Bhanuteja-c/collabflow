@@ -5,9 +5,15 @@
 import { useState, useRef, useEffect } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { Check } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+    HoverCard,
+    HoverCardContent,
+    HoverCardTrigger,
+} from "@/components/ui/hover-card";
 import {
     Pencil,
     Trash2,
@@ -20,6 +26,12 @@ import {
     BookOpen,
     Bug,
     Settings,
+    ListTree,
+    Hexagon,
+    Link2,
+    ArrowUp,
+    ArrowDown,
+    ArrowUpDown,
 } from "lucide-react";
 import { format, isBefore, addDays } from "date-fns";
 
@@ -40,31 +52,41 @@ interface CardData {
     startDate?: string;
     labels?: string[];
     status?: string;
-    assignee?: User;
-    assigneeId?: string;
+    assignee?: User | null;
+    assigneeId?: string | null;
     commentsCount?: number;
     checklistCompleted?: number;
     checklistTotal?: number;
+    subtaskCount?: number;
+    subtaskCompleted?: number;
+    storyPoints?: number | null;
+    isBacklog?: boolean;
+    parentId?: string | null;
+    epic?: { id: string; title: string; color: string } | null;
+    dependencyCount?: number;
+    isBlocked?: boolean;
     order?: number;
 }
 
 interface CardProps {
     card: CardData;
     isDragging?: boolean;
+    isSelected?: boolean;
     onUpdate?: (id: string, title: string) => void;
     onDelete?: (id: string) => void;
     onOpenDetail?: (card: CardData) => void;
+    onSelect?: (id: string, e: React.MouseEvent) => void;
 }
 
 // Issue type config — SVG icons + colors (Jira-style)
-const issueTypeConfig = {
+export const issueTypeConfig = {
     task: { icon: SquareCheck, color: "text-blue-500", bg: "bg-blue-500", label: "Task", border: "border-l-blue-500" },
     story: { icon: BookOpen, color: "text-emerald-500", bg: "bg-emerald-500", label: "Story", border: "border-l-emerald-500" },
     bug: { icon: Bug, color: "text-red-500", bg: "bg-red-500", label: "Bug", border: "border-l-red-500" },
     feature: { icon: Settings, color: "text-amber-500", bg: "bg-amber-500", label: "Feature", border: "border-l-amber-500" },
 };
 
-const priorityConfig = {
+export const priorityConfig = {
     low: { color: "bg-emerald-500", textColor: "text-emerald-600 dark:text-emerald-400", label: "Low" },
     medium: { color: "bg-amber-500", textColor: "text-amber-600 dark:text-amber-400", label: "Medium" },
     high: { color: "bg-red-500", textColor: "text-red-600 dark:text-red-400", label: "High" },
@@ -78,13 +100,32 @@ const labelColors = [
     { dot: "bg-pink-500", text: "text-pink-700 dark:text-pink-300" },
     { dot: "bg-cyan-500", text: "text-cyan-700 dark:text-cyan-300" },
 ];
+export const PRIORITY_ICONS = {
+    highest: ArrowUp,
+    high: ArrowUp,
+    medium: ArrowUpDown,
+    low: ArrowDown,
+    lowest: ArrowDown,
+    none: CheckSquare
+};
+
+export const PRIORITY_COLORS = {
+    highest: "text-red-600 dark:text-red-400",
+    high: "text-red-500",
+    medium: "text-amber-500",
+    low: "text-emerald-500",
+    lowest: "text-blue-500",
+    none: "text-muted-foreground"
+};
 
 export default function KanbanCard({
     card,
     isDragging,
+    isSelected,
     onUpdate,
     onDelete,
     onOpenDetail,
+    onSelect,
 }: CardProps) {
     const [isEditing, setIsEditing] = useState(false);
     const [editTitle, setEditTitle] = useState(card.title);
@@ -104,6 +145,12 @@ export default function KanbanCard({
         transform: CSS.Transform.toString(transform),
         transition,
     };
+
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
     useEffect(() => {
         if (isEditing && inputRef.current) {
@@ -132,10 +179,18 @@ export default function KanbanCard({
     const handleCardClick = (e: React.MouseEvent) => {
         if (isEditing) return;
         if ((e.target as HTMLElement).closest("button")) return;
+        // Ctrl/Cmd+Click toggles selection
+        if ((e.ctrlKey || e.metaKey) && onSelect) {
+            e.preventDefault();
+            e.stopPropagation();
+            onSelect(card.id, e);
+            return;
+        }
         onOpenDetail?.(card);
     };
 
     const formatDueDate = (dateStr: string) => {
+        if (!mounted) return "";
         const date = new Date(dateStr);
         return format(date, "MMM d");
     };
@@ -169,17 +224,39 @@ export default function KanbanCard({
                     transition-all duration-200 ease-out
                     hover:-translate-y-0.5 hover:shadow-md hover:border-border
                     cursor-pointer
-                    ${isOverdue ? "ring-1 ring-red-500/30" : ""}
+                    ${isOverdue && !isSelected ? "ring-1 ring-red-500/30" : ""}
+                    ${isSelected ? "ring-2 ring-blue-500 border-blue-500/50 bg-blue-500/5" : ""}
                     ${isDragging ? "shadow-[0_20px_60px_-15px_rgba(37,99,235,0.2)] rotate-2 scale-105 border-primary/40 ring-2 ring-primary/20" : ""}
                     ${card.status === "completed" && !isDragging ? "opacity-60" : ""}
                 `}
                 onClick={handleCardClick}
             >
+                {/* Selection checkbox overlay */}
+                {isSelected && (
+                    <div className="absolute top-2 right-2 z-10 w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center shadow-sm">
+                        <Check className="w-3 h-3 text-white" strokeWidth={3} />
+                    </div>
+                )}
                 <div className="p-3 space-y-2">
-                    {/* Labels */}
-                    {card.labels && card.labels.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5">
-                            {card.labels.map((label, i) => {
+                    {/* Labels & Epic */}
+                    {(card.epic || (card.labels && card.labels.length > 0)) && (
+                        <div className="flex flex-wrap gap-1.5 items-center">
+                            {card.epic && (
+                                <span
+                                    className="inline-flex items-center gap-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded shadow-sm"
+                                    style={{
+                                        backgroundColor: `${card.epic.color}15`,
+                                        color: card.epic.color,
+                                    }}
+                                >
+                                    <span
+                                        className="w-1.5 h-1.5 rounded-full"
+                                        style={{ backgroundColor: card.epic.color }}
+                                    />
+                                    {card.epic.title}
+                                </span>
+                            )}
+                            {card.labels?.map((label, i) => {
                                 const lc = labelColors[i % labelColors.length];
                                 return (
                                     <span
@@ -300,17 +377,63 @@ export default function KanbanCard({
                             </div>
                         )}
 
+                        {/* Subtask progress */}
+                        {card.subtaskCount != null && card.subtaskCount > 0 && (
+                            <div className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                                <ListTree className="w-3 h-3" />
+                                {card.subtaskCompleted ?? 0}/{card.subtaskCount}
+                            </div>
+                        )}
+
+                        {/* Story Points */}
+                        {card.storyPoints != null && (
+                            <div className="inline-flex items-center gap-1 text-[10px] font-semibold text-muted-foreground bg-muted/60 rounded px-1.5 py-0.5">
+                                <Hexagon className="w-2.5 h-2.5" />
+                                {card.storyPoints}
+                            </div>
+                        )}
+
+                        {/* Dependency count */}
+                        {card.dependencyCount != null && card.dependencyCount > 0 && (
+                            <div className={`inline-flex items-center gap-1 text-[10px] font-semibold rounded px-1.5 py-0.5 ${
+                                card.isBlocked
+                                    ? "bg-red-500/10 text-red-600 dark:text-red-400"
+                                    : "bg-muted/60 text-muted-foreground"
+                            }`}>
+                                {card.isBlocked ? <AlertCircle className="w-2.5 h-2.5" /> : <Link2 className="w-2.5 h-2.5" />}
+                                {card.dependencyCount}
+                            </div>
+                        )}
+
                         {/* Spacer + Assignee */}
                         <div className="flex-1" />
                         {card.assignee ? (
-                            <Avatar className="w-6 h-6 ring-2 ring-background" title={card.assignee.name || "Assigned"}>
-                                <AvatarImage src={card.assignee.image || undefined} />
-                                <AvatarFallback className="text-[9px] font-semibold bg-primary/10 text-primary">
-                                    {card.assignee.name?.[0] || "?"}
-                                </AvatarFallback>
-                            </Avatar>
+                            <HoverCard openDelay={200} closeDelay={100}>
+                                <HoverCardTrigger asChild>
+                                    <Avatar className="w-6 h-6 ring-2 ring-background cursor-pointer hover:ring-primary/50 transition-all">
+                                        <AvatarImage src={card.assignee.image || undefined} />
+                                        <AvatarFallback className="text-[9px] font-semibold bg-primary/10 text-primary">
+                                            {card.assignee.name?.[0] || "?"}
+                                        </AvatarFallback>
+                                    </Avatar>
+                                </HoverCardTrigger>
+                                <HoverCardContent side="bottom" align="end" className="w-auto p-3">
+                                    <div className="flex items-center gap-3">
+                                        <Avatar className="w-9 h-9">
+                                            <AvatarImage src={card.assignee.image || undefined} />
+                                            <AvatarFallback className="text-sm font-semibold bg-primary/10 text-primary">
+                                                {card.assignee.name?.[0] || "?"}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                        <div className="flex flex-col">
+                                            <span className="text-sm font-semibold leading-none">{card.assignee.name}</span>
+                                            <span className="text-[11px] text-muted-foreground mt-1">Assignee</span>
+                                        </div>
+                                    </div>
+                                </HoverCardContent>
+                            </HoverCard>
                         ) : (
-                            <div className="w-6 h-6 rounded-full border-2 border-dashed border-border/50 flex items-center justify-center opacity-0 group-hover:opacity-60 transition-opacity" title="Unassigned">
+                            <div className="w-6 h-6 rounded-full border-2 border-dashed border-border/50 flex items-center justify-center opacity-0 group-hover:opacity-60 transition-opacity">
                                 <span className="text-[9px] text-muted-foreground">+</span>
                             </div>
                         )}

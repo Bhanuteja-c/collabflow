@@ -246,6 +246,8 @@ export function MainChatInput({
             <button
               onClick={() => {
                 setValue((prev) => prev + "@");
+                setShowMentionMenu(true);
+                setMentionSearch("");
                 inputRef.current?.focus();
               }}
               className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted text-muted-foreground/60 hover:text-foreground transition-colors"

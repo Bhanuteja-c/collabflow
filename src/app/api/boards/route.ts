@@ -50,6 +50,8 @@ export async function GET(req: NextRequest) {
                                         checklist: true,
                                     },
                                 },
+                                dependsOn: { select: { id: true } },
+                                dependedBy: { select: { id: true } },
                                 checklist: {
                                     where: { completed: true },
                                     select: { id: true },
@@ -86,6 +88,8 @@ export async function GET(req: NextRequest) {
                     commentsCount: card._count.comments,
                     checklistTotal: card._count.checklist,
                     checklistCompleted: card.checklist.length,
+                    dependencyCount: (card.dependsOn?.length || 0) + (card.dependedBy?.length || 0),
+                    isBlocked: (card.dependedBy?.length || 0) > 0,
                     createdAt: card.createdAt,
                     updatedAt: card.updatedAt,
                 })),
@@ -135,10 +139,10 @@ export async function POST(req: NextRequest) {
                 workspaceId,
                 columns: {
                     create: [
-                        { title: "To Do", order: 0 },
-                        { title: "In Progress", order: 1 },
-                        { title: "Review", order: 2 },
-                        { title: "Done", order: 3 },
+                        { title: "To Do", order: 0, category: "todo", color: "#6366f1" },
+                        { title: "In Progress", order: 1, category: "in_progress", color: "#f59e0b" },
+                        { title: "Review", order: 2, category: "in_progress", color: "#8b5cf6" },
+                        { title: "Done", order: 3, category: "done", color: "#10b981" },
                     ],
                 },
             },

@@ -26,13 +26,28 @@ export async function checkCardWorkspaceAccess(cardId: string, userId: string) {
                         }
                     }
                 }
+            },
+            board: {
+                include: {
+                    workspace: {
+                        include: {
+                            members: {
+                                where: { userId },
+                                select: { id: true }
+                            }
+                        }
+                    }
+                }
             }
         }
     });
 
     if (!card) return null;
 
-    const board = card.column.board;
+    // Resolve board from column path or direct board relation (backlog cards)
+    const board = card.column?.board || card.board;
+    if (!board) return null;
+
     const isAuthor = board.authorId === userId;
     const isWorkspaceMember = board.workspace?.members && board.workspace.members.length > 0;
 

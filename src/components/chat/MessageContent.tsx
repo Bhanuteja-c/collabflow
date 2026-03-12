@@ -1,214 +1,99 @@
 // src/components/chat/MessageContent.tsx
-// Renders message content with @mentions, entity links, and code blocks
+// Renders chat message content with styled @user and #card mentions
 "use client";
 
-import React, { useMemo } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { Video } from "lucide-react";
-import { CardLinkPreview } from "./CardLinkPreview";
-import { DocLinkPreview } from "./DocLinkPreview";
-import { CodeBlock } from "./CodeBlock";
+import React from "react";
+
+interface WorkspaceMember {
+  id: string;
+  name: string;
+  image?: string;
+  email?: string;
+}
 
 interface MessageContentProps {
-    content: string;
-    workspaceMembers?: { id: string; name: string; image?: string }[];
-    onMentionClick?: (userId: string) => void;
+  content: string;
+  workspaceMembers?: WorkspaceMember[];
+  onMentionClick?: (userId: string) => void;
+  onCardClick?: (cardId: string) => void;
 }
 
-interface ContentPart {
-    type: 'text' | 'mention' | 'card' | 'doc' | 'code' | 'inline_code' | 'huddle';
-    content: string;
-    id?: string;
-    language?: string;
-}
-
-// Parse code blocks first, then inline elements
-function parseContent(content: string): ContentPart[] {
-    const parts: ContentPart[] = [];
-
-    // First, extract code blocks (```language\ncode```)
-    const codeBlockRegex = /```(\w*)\n?([\s\S]*?)```/g;
-    let lastIndex = 0;
-    let match;
-
-    while ((match = codeBlockRegex.exec(content)) !== null) {
-        // Parse text before code block for inline elements
-        if (match.index > lastIndex) {
-            const textBefore = content.slice(lastIndex, match.index);
-            parts.push(...parseInlineElements(textBefore));
-        }
-
-        // Add code block
-        parts.push({
-            type: 'code',
-            content: match[2].trim(),
-            language: match[1] || '',
-        });
-
-        lastIndex = match.index + match[0].length;
-    }
-
-    // Parse remaining text for inline elements
-    if (lastIndex < content.length) {
-        parts.push(...parseInlineElements(content.slice(lastIndex)));
-    }
-
-    return parts;
-}
-
-// Parse inline elements (@mentions, #card:, #doc:, `inline code`)
-function parseInlineElements(content: string): ContentPart[] {
-    const parts: ContentPart[] = [];
-    let lastIndex = 0;
-
-    // Combined regex to match all inline patterns including `code` and #huddle:
-    const combinedRegex = /(@\w+|#card:\w+|#doc:\w+|#huddle:[\w-]+|`[^`]+`)/g;
-    let match;
-
-    while ((match = combinedRegex.exec(content)) !== null) {
-        // Add text before this match
-        if (match.index > lastIndex) {
-            parts.push({
-                type: 'text',
-                content: content.slice(lastIndex, match.index),
-            });
-        }
-
-        const matched = match[0];
-
-        if (matched.startsWith('@')) {
-            parts.push({
-                type: 'mention',
-                content: matched,
-                id: matched.slice(1),
-            });
-        } else if (matched.startsWith('#card:')) {
-            parts.push({
-                type: 'card',
-                content: matched,
-                id: matched.slice(6),
-            });
-        } else if (matched.startsWith('#doc:')) {
-            parts.push({
-                type: 'doc',
-                content: matched,
-                id: matched.slice(5),
-            });
-        } else if (matched.startsWith('#huddle:')) {
-            parts.push({
-                type: 'huddle',
-                content: matched,
-                id: matched.slice(8),
-            });
-        } else if (matched.startsWith('`') && matched.endsWith('`')) {
-            parts.push({
-                type: 'inline_code',
-                content: matched.slice(1, -1), // Remove backticks
-            });
-        }
-
-        lastIndex = match.index + matched.length;
-    }
-
-    // Add remaining text
-    if (lastIndex < content.length) {
-        parts.push({
-            type: 'text',
-            content: content.slice(lastIndex),
-        });
-    }
-
-    return parts;
-}
-
-export function MessageContent({ content, workspaceMembers, onMentionClick }: MessageContentProps) {
-    const params = useParams();
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const _workspaceSlug = params?.slug as string;
-    const router = useRouter();
-
-    const parts = useMemo(() => parseContent(content), [content]);
-
-    // Check if mentioned user exists (matching logic similar to backend)
-    const getMemberByName = (name: string) => {
-        return workspaceMembers?.find(m => {
-            const nameParts = (m.name || "").toLowerCase().split(" ");
-            const fullNameNoSpaces = (m.name || "").toLowerCase().replace(/\s+/g, '');
-            const searchName = name.toLowerCase();
-            return nameParts.includes(searchName) || fullNameNoSpaces === searchName;
-        });
-    };
-
+/**
+ * Parses message HTML/text content and renders mention nodes as styled badges.
+ *
+ * Supports two formats:
+ * 1. TipTap HTML mention nodes: <span data-type="mention" data-id="..." data-label="...">
+ * 2. Plain text mentions: @Name, #KAN-123
+ */
+export function MessageContent({ content, workspaceMembers, onMentionClick, onCardClick }: MessageContentProps) {
+  // If content contains HTML mention nodes from TipTap, render as HTML with click handlers
+  if (content.includes('data-type="mention"') || content.includes("data-type='mention'")) {
     return (
-        <div className="whitespace-pre-wrap">
-            {parts.map((part, i) => {
-                switch (part.type) {
-                    case 'code':
-                        return (
-                            <CodeBlock
-                                key={i}
-                                code={part.content}
-                                language={part.language}
-                            />
-                        );
-
-                    case 'mention': {
-                        const member = getMemberByName(part.id || '');
-                        if (member) {
-                            return (
-                                <button
-                                    key={i}
-                                    onClick={() => onMentionClick?.(member.id)}
-                                    className="inline-flex items-center font-semibold text-[13px] bg-amber-400/20 text-amber-800 dark:text-amber-300 hover:bg-amber-400/30 rounded px-0.5 -mx-0.5 py-0 transition-colors cursor-pointer"
-                                >
-                                    {part.content}
-                                </button>
-                            );
-                        }
-                        // Unknown mention - still highlight but subtler
-                        return (
-                            <span key={i} className="inline-flex items-center font-semibold text-[13px] bg-muted text-muted-foreground rounded-[4px] px-1 -mx-0.5">
-                                {part.content}
-                            </span>
-                        );
-                    }
-
-                    case 'card':
-                        return (
-                            <CardLinkPreview key={i} cardId={part.id || ''} />
-                        );
-
-                    case 'doc':
-                        return (
-                            <DocLinkPreview key={i} docId={part.id || ''} />
-                        );
-
-                    case 'huddle':
-                        return (
-                            <button
-                                key={i}
-                                onClick={() => router.push(`/workspace/${_workspaceSlug}/video/${part.id}`)}
-                                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition-colors border border-emerald-500/20 font-medium my-1"
-                            >
-                                <Video className="w-4 h-4" />
-                                <span>Join Huddle</span>
-                            </button>
-                        );
-
-                    case 'inline_code':
-                        return (
-                            <code
-                                key={i}
-                                className="px-1.5 py-0.5 mx-0.5 rounded bg-neutral-800 text-neutral-100 text-sm font-mono"
-                            >
-                                {part.content}
-                            </code>
-                        );
-
-                    default:
-                        return <span key={i}>{part.content}</span>;
-                }
-            })}
-        </div>
+      <span
+        dangerouslySetInnerHTML={{ __html: content }}
+        onClick={(e) => {
+          const target = e.target as HTMLElement;
+          const mention = target.closest("[data-type='mention'], [data-mention-type]") as HTMLElement;
+          if (!mention) return;
+          
+          const mentionType = mention.getAttribute("data-mention-type") || mention.getAttribute("data-type");
+          const mentionId = mention.getAttribute("data-id");
+          
+          if (mentionType === "card" && mentionId && onCardClick) {
+            onCardClick(mentionId);
+          } else if (mentionType === "user" && mentionId && onMentionClick) {
+            onMentionClick(mentionId);
+          }
+        }}
+      />
     );
+  }
+
+  // For plain text messages, parse @Name and #KAN-N patterns
+  const parts = content.split(/(@[\w]+|#KAN-\d+)/gi);
+
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (part.startsWith("@")) {
+          const name = part.slice(1);
+          // Try to find the member by name or alias
+          const member = workspaceMembers?.find(
+            (m) => (m.name || "").replace(/\s+/g, "").toLowerCase() === name.toLowerCase()
+              || (m.name || "").toLowerCase() === name.toLowerCase()
+          );
+          return (
+            <span
+              key={i}
+              className="mention"
+              data-type="user"
+              style={{ cursor: member ? "pointer" : "default" }}
+              onClick={() => {
+                if (member && onMentionClick) {
+                  onMentionClick(member.id);
+                }
+              }}
+            >
+              {part}
+            </span>
+          );
+        }
+        if (part.match(/^#KAN-\d+$/i)) {
+          return (
+            <span
+              key={i}
+              className="mention"
+              data-type="card"
+              style={{ cursor: "pointer" }}
+            >
+              {part}
+            </span>
+          );
+        }
+        return <React.Fragment key={i}>{part}</React.Fragment>;
+      })}
+    </>
+  );
 }
+
+export default MessageContent;

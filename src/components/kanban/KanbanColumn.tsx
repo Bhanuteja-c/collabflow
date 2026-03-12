@@ -46,8 +46,8 @@ interface CardType {
     startDate?: string;
     labels?: string[];
     status?: string;
-    assignee?: User;
-    assigneeId?: string;
+    assignee?: User | null;
+    assigneeId?: string | null;
     commentsCount?: number;
     checklistCompleted?: number;
     checklistTotal?: number;
@@ -60,16 +60,21 @@ interface ColumnProps {
     column: {
         id: string;
         title: string;
+        category?: string;
+        color?: string;
+        wipLimit?: number | null;
         cards: CardType[];
     };
     onAddCard: (columnId: string, title: string, extra?: { issueType?: IssueType }) => void;
     onUpdateCard?: (cardId: string, title: string) => void;
     onDeleteCard?: (cardId: string) => void;
     onOpenDetail?: (card: CardType) => void;
-    onRenameColumn?: (columnId: string, title: string) => void;
     onDeleteColumn?: (columnId: string) => void;
     onOpenCreateDialog?: (columnId: string) => void;
+    onOpenSettingsDialog?: (columnId: string) => void;
     canDelete?: boolean;
+    selectedCards?: Set<string>;
+    onSelectCard?: (id: string, e: React.MouseEvent) => void;
 }
 
 // Column accent color config — Jira-style
@@ -91,7 +96,7 @@ const issueTypes: { value: IssueType; label: string; icon: typeof SquareCheck; c
     { value: "feature", label: "Feature", icon: Settings, color: "text-amber-500" },
 ];
 
-const WIP_LIMIT = 5;
+const WIP_LIMIT_DEFAULT = 5;
 
 export default function KanbanColumn({
     column,
@@ -99,25 +104,29 @@ export default function KanbanColumn({
     onUpdateCard,
     onDeleteCard,
     onOpenDetail,
-    onRenameColumn,
     onDeleteColumn,
     onOpenCreateDialog,
+    onOpenSettingsDialog,
     canDelete = true,
+    selectedCards,
+    onSelectCard,
 }: ColumnProps) {
     const [isAdding, setIsAdding] = useState(false);
     const [newCardTitle, setNewCardTitle] = useState("");
     const [newCardType, setNewCardType] = useState<IssueType>("task");
-    const [isRenaming, setIsRenaming] = useState(false);
-    const [renameDraft, setRenameDraft] = useState("");
     const [showTypeDropdown, setShowTypeDropdown] = useState(false);
 
     const { setNodeRef, isOver } = useDroppable({
         id: column.id,
     });
 
+    // Use column color from DB, or fallback to title-based accent
+    const colColor = column.color || "#6366f1";
+    const category = column.category || "todo";
     const accent = columnAccents[column.title] || defaultAccent;
-    const isDone = "isDone" in accent && accent.isDone;
-    const isOverWip = column.cards.length > WIP_LIMIT;
+    const isDone = category === "done";
+    const wipLimit = column.wipLimit ?? null;
+    const isOverWip = wipLimit != null && column.cards.length > wipLimit;
 
     const handleAddCard = () => {
         if (newCardTitle.trim()) {
@@ -137,18 +146,6 @@ export default function KanbanColumn({
         }
     };
 
-    const handleStartRename = () => {
-        setRenameDraft(column.title);
-        setIsRenaming(true);
-    };
-
-    const handleSaveRename = () => {
-        if (renameDraft.trim() && renameDraft.trim() !== column.title) {
-            onRenameColumn?.(column.id, renameDraft.trim());
-        }
-        setIsRenaming(false);
-    };
-
     const SelectedTypeIcon = issueTypes.find((t) => t.value === newCardType)!;
 
     return (
@@ -164,50 +161,36 @@ export default function KanbanColumn({
                     ${isOver ? `ring-2 ${accent.glow}` : ""}
                 `}
             >
-                {/* Top accent gradient strip */}
-                <div className={`h-[3px] w-full bg-gradient-to-r ${accent.gradient}`} />
+                {/* Top accent strip — uses DB color */}
+                <div className="h-[3px] w-full" style={{ background: colColor }} />
 
                 {/* Column Header — Jira style */}
                 <div className="px-3.5 pt-3 pb-2">
                     <div className="flex items-center justify-between">
-                        {isRenaming ? (
-                            <Input
-                                value={renameDraft}
-                                onChange={(e) => setRenameDraft(e.target.value)}
-                                onBlur={handleSaveRename}
-                                onKeyDown={(e) => {
-                                    if (e.key === "Enter") handleSaveRename();
-                                    if (e.key === "Escape") setIsRenaming(false);
-                                }}
-                                autoFocus
-                                className="text-sm font-semibold h-7 w-full uppercase"
-                            />
-                        ) : (
-                            <div className="flex items-center gap-2">
-                                {/* Column title — uppercase like Jira */}
-                                <h3 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-                                    {column.title}
-                                </h3>
-                                {/* Card count */}
-                                <span className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[11px] font-semibold rounded-full ${
-                                    isOverWip
-                                        ? "bg-red-500/15 text-red-600 dark:text-red-400"
-                                        : "bg-muted/80 text-muted-foreground"
-                                }`}>
-                                    {column.cards.length}
+                        <div className="flex items-center gap-2">
+                            {/* Column title — uppercase like Jira */}
+                            <h3 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                                {column.title}
+                            </h3>
+                            {/* Card count */}
+                            <span className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[11px] font-semibold rounded-full ${
+                                isOverWip
+                                    ? "bg-red-500/15 text-red-600 dark:text-red-400"
+                                    : "bg-muted/80 text-muted-foreground"
+                            }`}>
+                                {column.cards.length}
+                            </span>
+                            {/* Done checkmark */}
+                            {isDone && (
+                                <Check className="w-3.5 h-3.5 text-emerald-500" />
+                            )}
+                            {/* WIP warning */}
+                            {isOverWip && (
+                                <span className="text-[9px] font-medium text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded">
+                                    WIP {wipLimit}
                                 </span>
-                                {/* Done checkmark */}
-                                {isDone && (
-                                    <Check className="w-3.5 h-3.5 text-emerald-500" />
-                                )}
-                                {/* WIP warning */}
-                                {isOverWip && (
-                                    <span className="text-[9px] font-medium text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded">
-                                        WIP
-                                    </span>
-                                )}
-                            </div>
-                        )}
+                            )}
+                        </div>
                         <div className="flex items-center gap-0.5">
                             {/* Quick add button */}
                             <Button
@@ -235,10 +218,12 @@ export default function KanbanColumn({
                                             Create Card
                                         </DropdownMenuItem>
                                     )}
-                                    <DropdownMenuItem onClick={handleStartRename} className="gap-2">
-                                        <Pencil className="w-3.5 h-3.5" />
-                                        Rename
-                                    </DropdownMenuItem>
+                                    {onOpenSettingsDialog && (
+                                        <DropdownMenuItem onClick={() => onOpenSettingsDialog(column.id)} className="gap-2">
+                                            <Settings className="w-3.5 h-3.5" />
+                                            Edit Settings
+                                        </DropdownMenuItem>
+                                    )}
                                     {canDelete && (
                                         <>
                                             <DropdownMenuSeparator />
@@ -255,6 +240,8 @@ export default function KanbanColumn({
                             </DropdownMenu>
                         </div>
                     </div>
+
+
                 </div>
 
                 {/* Cards — scrollable */}
@@ -273,9 +260,11 @@ export default function KanbanColumn({
                                 <KanbanCard
                                     key={card.id}
                                     card={card}
+                                    isSelected={selectedCards?.has(card.id)}
                                     onUpdate={onUpdateCard}
                                     onDelete={onDeleteCard}
                                     onOpenDetail={onOpenDetail}
+                                    onSelect={onSelectCard}
                                 />
                             ))
                         )}

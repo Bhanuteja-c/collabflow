@@ -22,6 +22,9 @@ import {
 import * as Y from "yjs";
 import { Awareness } from "y-protocols/awareness";
 import { HistorySidebar } from "./HistorySidebar";
+import Mention from "@tiptap/extension-mention";
+import { createMentionSuggestion } from "@/components/mentions/mentionSuggestion";
+import type { MentionItem } from "@/components/mentions/MentionList";
 
 interface CollaborativeEditorProps {
     ydoc: Y.Doc;
@@ -37,6 +40,8 @@ interface CollaborativeEditorProps {
     onHistoryClose: () => void;
     documentId: string;
     onContentChange?: (content: string) => void;
+    workspaceMembers?: { id: string; name: string | null; image?: string | null }[];
+    workspaceSlug?: string;
 }
 
 export default function CollaborativeEditor({
@@ -52,6 +57,8 @@ export default function CollaborativeEditor({
     onHistoryClose,
     documentId,
     onContentChange,
+    workspaceMembers = [],
+    workspaceSlug = "",
 }: CollaborativeEditorProps) {
     // ... extensions ...
     const extensions = useMemo(() => [
@@ -81,9 +88,55 @@ export default function CollaborativeEditor({
             nested: true,
         }),
         Placeholder.configure({
-            placeholder: 'Type "/" for commands...',
+            placeholder: 'Type "/" for commands, "@" to mention, "#" to link a card...',
         }),
-    ], [ydoc, awareness, userName, userColor]);
+        Mention.configure({
+            HTMLAttributes: {
+                class: "mention",
+                "data-type": "user",
+                "data-mention-type": "user",
+            },
+            suggestion: createMentionSuggestion(
+                ({ query }) => {
+                    return workspaceMembers
+                        .filter((m) => (m.name || "").toLowerCase().includes(query.toLowerCase()))
+                        .slice(0, 8)
+                        .map((m) => ({
+                            id: m.id,
+                            label: m.name || "Unknown",
+                            image: m.image || undefined,
+                        }));
+                },
+                "user"
+            ),
+        }),
+        Mention.extend({ name: "cardMention" }).configure({
+            HTMLAttributes: {
+                class: "mention",
+                "data-type": "card",
+                "data-mention-type": "card",
+            },
+            suggestion: {
+                char: "#",
+                ...createMentionSuggestion(
+                    async ({ query }) => {
+                        if (!workspaceSlug || query.length < 1) return [];
+                        try {
+                            const res = await fetch(
+                                `/api/cards/search?q=${encodeURIComponent(query)}&workspaceSlug=${encodeURIComponent(workspaceSlug)}`
+                            );
+                            if (!res.ok) return [];
+                            const cards: MentionItem[] = await res.json();
+                            return cards;
+                        } catch {
+                            return [];
+                        }
+                    },
+                    "card"
+                ),
+            },
+        }),
+    ], [ydoc, awareness, userName, userColor, workspaceMembers, workspaceSlug]);
 
     const editor = useEditor({
         extensions,

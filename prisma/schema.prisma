@@ -44,9 +44,16 @@ model User {
   // Kanban card relations
   assignedCards Card[]        @relation("AssignedCards")
   cardComments  CardComment[] @relation("CardCommentAuthor")
+  timeLogs      TimeLog[]     @relation("CardTimeLogUser")
+
+  // Epics
+  ownedEpics Epic[] @relation("EpicOwner")
 
   // Activity tracking
   activities Activity[]
+
+  // Whiteboards
+  whiteboards Whiteboard[] @relation("WhiteboardCreator")
 
   // Presence
   lastSeenAt DateTime?
@@ -149,6 +156,9 @@ model Workspace {
   boards     Board[]
   channels   Channel[]
   activities Activity[]
+  epics      Epic[]
+  githubIntegrations GitHubIntegration[]
+  whiteboards Whiteboard[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -227,6 +237,11 @@ model Document {
 
   isPublic Boolean @default(false)
 
+  // Sub-documents support (nested hierarchy)
+  parentId String?
+  parent   Document?  @relation("DocumentHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children Document[] @relation("DocumentHierarchy")
+
   history DocumentHistory[]
   shares  DocumentShare[]
   stars   DocumentStar[]
@@ -236,6 +251,7 @@ model Document {
 
   @@index([authorId])
   @@index([workspaceId])
+  @@index([parentId])
 }
 
 // Document edit history
@@ -289,6 +305,7 @@ model Board {
   workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   columns Column[]
+  cards   Card[]   @relation("BoardCards") // Direct relation for backlog cards
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -297,11 +314,39 @@ model Board {
   @@index([workspaceId])
 }
 
+model Epic {
+  id          String    @id @default(cuid())
+  title       String
+  description String?   @db.Text
+  color       String    @default("#6366f1") // Hex color for badge
+  status      String    @default("active")  // "active" | "completed" | "archived"
+  targetDate  DateTime?
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  ownerId String
+  owner   User   @relation("EpicOwner", fields: [ownerId], references: [id])
+
+  cards Card[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workspaceId])
+  @@index([ownerId])
+}
+
 model Column {
   id       String @id @default(cuid())
   title    String
   order    Int    @default(0)
   orderKey String @default("a0") // Fractional index for concurrent-safe ordering
+
+  // Workflow semantics
+  category String @default("todo")    // "todo" | "in_progress" | "done"
+  color    String @default("#6366f1") // Hex accent color for column header
+  wipLimit Int?                       // Optional Work-In-Progress card limit
 
   boardId String
   board   Board  @relation(fields: [boardId], references: [id], onDelete: Cascade)
@@ -323,11 +368,25 @@ model Card {
   issueNumber Int     @default(0)        // Auto-computed as MAX+1 per board in API
 
   // Enhanced fields for Kanban improvements
-  priority  String    @default("medium") // "low" | "medium" | "high"
-  dueDate   DateTime?
-  startDate DateTime?
-  labels    String[]  @default([])
-  status    String    @default("active") // "active" | "completed" | "archived"
+  priority      String    @default("medium") // "low" | "medium" | "high"
+  dueDate       DateTime?
+  startDate     DateTime?
+  labels        String[]  @default([])
+  status        String    @default("active") // "active" | "completed" | "archived"
+  storyPoints   Int?      // Story points for velocity tracking
+  timeEstimated Int?      // Estimated minutes for the task
+
+  // Backlog — cards with isBacklog=true live in the backlog pane, not in columns
+  isBacklog Boolean @default(false)
+
+  // Subtask hierarchy — self-referencing parent/children (single level only)
+  parentId String?
+  parent   Card?   @relation("CardSubtasks", fields: [parentId], references: [id], onDelete: SetNull)
+  subtasks Card[]  @relation("CardSubtasks")
+
+  // Epic linkage
+  epicId String?
+  epic   Epic?   @relation(fields: [epicId], references: [id], onDelete: SetNull)
 
   // Assignee (single user for simplicity)
   assigneeId String?
@@ -336,15 +395,46 @@ model Card {
   // Relations for collaboration
   comments  CardComment[]
   checklist ChecklistItem[]
+  timeLogs  TimeLog[]
 
-  columnId String
-  column   Column @relation(fields: [columnId], references: [id], onDelete: Cascade)
+  // Dependencies — blocking/relating relationships
+  dependsOn  CardDependency[] @relation("CardDependsOn")
+  dependedBy CardDependency[] @relation("CardDependedBy")
+
+  // Column — optional for backlog cards that aren't in any column yet
+  columnId String?
+  column   Column? @relation(fields: [columnId], references: [id], onDelete: Cascade)
+
+  // Direct board link — needed because backlog cards may have no column
+  boardId String?
+  board   Board?  @relation("BoardCards", fields: [boardId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([columnId])
   @@index([assigneeId])
+  @@index([parentId])
+  @@index([boardId, isBacklog]) // Compound index for backlog queries
+  @@index([epicId])
+}
+
+// Task dependency relationships (blocks, relates_to, duplicates)
+model CardDependency {
+  id            String   @id @default(cuid())
+  type          String   @default("blocks") // "blocks" | "relates_to" | "duplicates"
+
+  predecessorId String
+  predecessor   Card     @relation("CardDependsOn", fields: [predecessorId], references: [id], onDelete: Cascade)
+
+  successorId   String
+  successor     Card     @relation("CardDependedBy", fields: [successorId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime @default(now())
+
+  @@unique([predecessorId, successorId])
+  @@index([predecessorId])
+  @@index([successorId])
 }
 
 // Card comments for collaboration
@@ -364,6 +454,24 @@ model CardComment {
   @@index([authorId])
 }
 
+// Time logs to track detailed effort spent on tasks
+model TimeLog {
+  id          String   @id @default(cuid())
+  duration    Int      // Duration logged in minutes
+  description String?  @db.Text
+
+  cardId      String
+  card        Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  userId      String
+  user        User     @relation("CardTimeLogUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+
+  @@index([cardId])
+  @@index([userId])
+}
+
 // Checklist items within a card
 model ChecklistItem {
   id        String  @id @default(cuid())
@@ -379,6 +487,8 @@ model ChecklistItem {
 
   @@index([cardId])
 }
+
+
 
 // Chat models
 model Channel {
@@ -498,4 +608,41 @@ model Activity {
   @@index([workspaceId])
   @@index([userId])
   @@index([workspaceId, createdAt])
+}
+
+// GitHub Integration for Smart Commits
+model GitHubIntegration {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  
+  webhookSecret String   @unique // Used to verify GitHub HMAC signatures
+  repoName      String?  // Display name of the connected repo, populated on first ping
+  enabled       Boolean  @default(true)
+  
+  lastEventAt   DateTime?
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([workspaceId])
+}
+
+// Collaborative Whiteboards
+model Whiteboard {
+  id       String  @id @default(cuid())
+  title    String  @default("Untitled Whiteboard")
+  yjsState Bytes?  // Persisted tldraw Yjs state
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  createdById String
+  createdBy   User   @relation("WhiteboardCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workspaceId])
+  @@index([createdById])
 }

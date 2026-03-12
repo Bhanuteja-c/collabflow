@@ -35,6 +35,7 @@ import {
   PinOff,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
   Video,
   ListTodo,
   ArrowDown,
@@ -252,6 +253,10 @@ export default function ChatPage() {
   // Channel description state
   const [editingDescription, setEditingDescription] = useState(false);
   const [descriptionDraft, setDescriptionDraft] = useState("");
+
+  // Collapsible sidebar sections
+  const [channelsSectionOpen, setChannelsSectionOpen] = useState(true);
+  const [dmsSectionOpen, setDmsSectionOpen] = useState(true);
 
   // Current user for presence
   const currentUser = useMemo(() => {
@@ -1027,16 +1032,35 @@ export default function ChatPage() {
           <div className="py-2">
             {/* Channels section */}
             <div className="px-3 pb-1">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 px-1 mb-1">Channels</p>
+              <button
+                onClick={() => setChannelsSectionOpen(!channelsSectionOpen)}
+                className="w-full flex items-center gap-1 px-1 mb-1 group hover:text-foreground transition-colors"
+              >
+                {channelsSectionOpen
+                  ? <ChevronDown className="w-3 h-3 text-muted-foreground/60" />
+                  : <ChevronRight className="w-3 h-3 text-muted-foreground/60" />}
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">Channels</span>
+                <span className="text-[9px] text-muted-foreground/40 ml-auto">
+                  {channels.filter((c) => c.type !== "direct").length}
+                </span>
+              </button>
+              <AnimatePresence initial={false}>
+                {channelsSectionOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.15 }}
+                  >
               {channels.filter((c) => c.type !== "direct").length === 0 ? (
-                <div className="text-center py-8 px-4">
-                  <MessageSquare className="w-10 h-10 mx-auto text-muted-foreground mb-2" />
-                  <p className="text-sm text-muted-foreground">No channels yet</p>
+                <div className="text-center py-6 px-4">
+                  <MessageSquare className="w-8 h-8 mx-auto text-muted-foreground/40 mb-2" />
+                  <p className="text-xs text-muted-foreground/60">No channels yet</p>
                   <Button
                     variant="link"
                     size="sm"
                     onClick={() => setShowNewChannel(true)}
-                    className="mt-2"
+                    className="mt-1 text-xs h-7"
                   >
                     Create your first channel
                   </Button>
@@ -1050,14 +1074,13 @@ export default function ChatPage() {
                       onClick={() => {
                         setSelectedChannel(channel);
                         setSidebarOpen(false);
-                        // Clear unread count locally
                         setChannels((prev) =>
                           prev.map((ch) =>
                             ch.id === channel.id ? { ...ch, unreadCount: 0 } : ch,
                           ),
                         );
                       }}
-                      className={`w-full text-left px-3 py-1.5 rounded-md flex items-center gap-2 transition-all relative touch-manipulation active:scale-[0.98] ${selectedChannel?.id === channel.id
+                      className={`w-full text-left px-3 py-2 rounded-md flex items-center gap-2 transition-all relative touch-manipulation active:scale-[0.98] ${selectedChannel?.id === channel.id
                         ? "text-primary-foreground font-medium"
                         : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"
                         }`}
@@ -1071,9 +1094,16 @@ export default function ChatPage() {
                         />
                       )}
                       <Hash className="w-4 h-4 flex-shrink-0 relative z-10" />
-                      <span className="truncate text-sm flex-1 relative z-10">
-                        {channel.name}
-                      </span>
+                      <div className="flex-1 min-w-0 relative z-10">
+                        <span className="truncate text-sm block">
+                          {channel.name}
+                        </span>
+                        {channel.description && selectedChannel?.id !== channel.id && (
+                          <span className="truncate text-[10px] text-muted-foreground/50 block">
+                            {channel.description}
+                          </span>
+                        )}
+                      </div>
                       {(channel.unreadCount ?? 0) > 0 &&
                         selectedChannel?.id !== channel.id && (
                           <Badge
@@ -1088,17 +1118,41 @@ export default function ChatPage() {
                     </button>
                   ))
               )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
 
           {/* Direct Messages Section */}
           <div className="px-3 pt-3 border-t">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 px-1 mb-1">Direct Messages</p>
-            <div className="space-y-1">
+            <button
+              onClick={() => setDmsSectionOpen(!dmsSectionOpen)}
+              className="w-full flex items-center gap-1 px-1 mb-1 group hover:text-foreground transition-colors"
+            >
+              {dmsSectionOpen
+                ? <ChevronDown className="w-3 h-3 text-muted-foreground/60" />
+                : <ChevronRight className="w-3 h-3 text-muted-foreground/60" />}
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">Direct Messages</span>
+              {workspaceOnlineUsers.filter(u => u.user.id !== currentUser?.id).length > 0 && (
+                <span className="ml-auto flex items-center gap-1 text-[9px] text-emerald-500">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  {workspaceOnlineUsers.filter(u => u.user.id !== currentUser?.id).length} online
+                </span>
+              )}
+            </button>
+            <AnimatePresence initial={false}>
+              {dmsSectionOpen && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.15 }}
+                  className="space-y-0.5"
+                >
               {workspaceMembers
                 .filter((m) => m.id !== currentUser?.id)
                 .map((member) => {
-                  // Check if there is already an active direct channel loaded for this user to show active state
                   const activeDmChannel = channels.find(
                     (c) =>
                       c.type === "direct" &&
@@ -1149,10 +1203,15 @@ export default function ChatPage() {
                       <span className="truncate text-sm flex-1 relative z-10">
                         {member.name}
                       </span>
+                      {isOnline && !isSelected && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/60 relative z-10 shrink-0" />
+                      )}
                     </button>
                   );
                 })}
-            </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </ScrollArea>
       </div>
@@ -1429,7 +1488,11 @@ export default function ChatPage() {
                               <>
                                 <div className={`text-[13px] leading-snug break-words ${message.isDeleted ? "italic text-muted-foreground" : ""}`}>
                                   {message.isDeleted ? message.content : (
-                                    <MessageContent content={message.content} workspaceMembers={workspaceMembers} />
+                                    <MessageContent 
+                                      content={message.content} 
+                                      workspaceMembers={workspaceMembers} 
+                                      onMentionClick={handleDirectMessage} 
+                                    />
                                   )}
                                 </div>
 
@@ -1652,6 +1715,7 @@ export default function ChatPage() {
                       <MessageContent
                         content={activeThread.content}
                         workspaceMembers={workspaceMembers}
+                        onMentionClick={handleDirectMessage}
                       />
                       {activeThread.attachments && (
                         <div className="mt-2">
@@ -1703,6 +1767,7 @@ export default function ChatPage() {
                             <MessageContent
                               content={reply.content}
                               workspaceMembers={workspaceMembers}
+                              onMentionClick={handleDirectMessage}
                             />
                             {reply.attachments && (
                               <div className="mt-1">

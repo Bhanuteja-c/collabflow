@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { Logo } from "@/components/ui/Logo";
 import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
+import { DocumentTree } from "@/components/DocumentTree";
 import { useWorkspacePresence } from "@/hooks/useWorkspacePresence";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -23,6 +24,9 @@ import {
     Users,
     Video,
     LogOut,
+    Target,
+    BarChart3,
+    PenTool,
 } from "lucide-react";
 import { avatarFallbackClass } from "@/lib/avatar-colors";
 
@@ -35,10 +39,12 @@ interface WorkspaceSidebarProps {
 
 const navItems = [
     { icon: LayoutDashboard, label: "Dashboard", href: "" },
-    { icon: FileText, label: "Documents", href: "/documents" },
+    { icon: Target, label: "Epics", href: "/epics" },
     { icon: Kanban, label: "Kanban", href: "/kanban" },
     { icon: MessageSquare, label: "Chat", href: "/chat" },
     { icon: Video, label: "Video", href: "/video" },
+    { icon: PenTool, label: "Whiteboard", href: "/whiteboard" },
+    { icon: BarChart3, label: "Analytics", href: "/analytics" },
     { icon: Users, label: "Members", href: "/members" },
     { icon: Settings, label: "Settings", href: "/settings" },
 ];
@@ -99,6 +105,15 @@ function SidebarContent({ workspaceSlug, onItemClick }: { workspaceSlug: string;
                         </Link>
                     );
                 })}
+
+                {/* Render the unified Document Tree representing the Wiki */}
+                {workspaceId && (
+                    <DocumentTree 
+                        workspaceId={workspaceId} 
+                        workspaceSlug={workspaceSlug} 
+                        onItemClick={onItemClick} 
+                    />
+                )}
             </nav>
 
             {/* Online Members Section */}

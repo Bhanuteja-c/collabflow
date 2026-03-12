@@ -7,7 +7,7 @@ import { Activity } from "@/lib/activity";
 import { CrossNotifier } from "@/lib/crossNotifier";
 import { createNotification } from "@/lib/notifications";
 
-// Helper to check workspace access via card -> column -> board -> workspace
+// Helper to check workspace access via card -> column -> board -> workspace OR card -> board -> workspace (backlog)
 async function checkCardAccess(cardId: string, userId: string) {
     const card = await prisma.card.findUnique({
         where: { id: cardId },
@@ -29,14 +29,30 @@ async function checkCardAccess(cardId: string, userId: string) {
                         }
                     }
                 }
+            },
+            board: {
+                include: {
+                    workspace: {
+                        select: {
+                            id: true,
+                            slug: true,
+                            members: {
+                                where: { userId },
+                                select: { id: true }
+                            }
+                        }
+                    }
+                }
             }
         }
     });
 
     if (!card) return null;
 
-    // Check if user is board author OR workspace member
-    const board = card.column.board;
+    // Resolve board from column path or direct board relation (backlog cards)
+    const board = card.column?.board || card.board;
+    if (!board) return null;
+
     const isAuthor = board.authorId === userId;
     const isWorkspaceMember = board.workspace?.members && board.workspace.members.length > 0;
 
@@ -67,7 +83,21 @@ export async function PUT(
         }
 
         const body = await req.json();
-        const { title, description, columnId, order, orderKey, priority, dueDate, assigneeId, startDate, labels, status } = body;
+        const { title, description, columnId, order, orderKey, priority, dueDate, assigneeId, startDate, labels, status, storyPoints, timeEstimated, parentId, epicId } = body;
+
+        // Enforce single-level subtask nesting if parentId is being set
+        if (parentId !== undefined && parentId !== null) {
+            const parentCard = await prisma.card.findUnique({
+                where: { id: parentId },
+                select: { parentId: true },
+            });
+            if (parentCard?.parentId) {
+                return NextResponse.json(
+                    { error: "Cannot create subtask of a subtask. Only one level of nesting is allowed." },
+                    { status: 400 }
+                );
+            }
+        }
 
         const card = await prisma.card.update({
             where: { id },
@@ -83,16 +113,24 @@ export async function PUT(
                 ...(startDate !== undefined && { startDate: startDate ? new Date(startDate) : null }),
                 ...(labels !== undefined && { labels }),
                 ...(status !== undefined && { status }),
+                ...(storyPoints !== undefined && { storyPoints }),
+                ...(timeEstimated !== undefined && { timeEstimated }),
+                ...(parentId !== undefined && { parentId: parentId || null }),
+                ...(epicId !== undefined && { epicId: epicId || null }),
             },
             include: {
                 assignee: {
                     select: { id: true, name: true, image: true }
+                },
+                epic: {
+                    select: { id: true, title: true, color: true }
                 }
             }
         });
 
         // Log activity and cross-feature notifications
-        const workspaceId = existing.column.board.workspace?.id;
+        const board = existing.column?.board || existing.board;
+        const workspaceId = board?.workspace?.id;
         if (workspaceId) {
             // Card assigned → log activity + chat notification
             if (assigneeId !== undefined && assigneeId !== existing.assigneeId) {
@@ -106,7 +144,7 @@ export async function PUT(
                         assigneeName: assignee.name || "someone",
                     });
                     // Personal notification to the assignee
-                    const boardSlug = existing.column.board.workspace?.slug ?? workspaceId;
+                    const boardSlug = board?.workspace?.slug ?? workspaceId;
                     await createNotification({
                         userId: assignee.id,
                         senderId: userId,
@@ -128,7 +166,7 @@ export async function PUT(
                         workspaceId,
                         userId,
                         cardTitle: card.title,
-                        boardName: existing.column.board.title,
+                        boardName: board?.title ?? "Board",
                     });
                 }
             }

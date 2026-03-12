@@ -97,4 +97,14 @@ export function registerKanbanHandlers(io: Server, socket: Socket<any, any, any,
     socket.on("checklist-item-toggled", (data: { boardId: string; cardId: string; itemId: string; completed: boolean }) => {
         socket.to(makeRoomId(ROOM_PREFIX.BOARD, data.boardId)).emit("checklist-item-toggled", data);
     });
+
+    // Backlog
+    socket.on("backlog-updated", (data: { boardId: string; action: string; card?: any; cardId?: string }) => {
+        socket.to(makeRoomId(ROOM_PREFIX.BOARD, data.boardId)).emit("backlog-updated", data);
+    });
+
+    // Subtasks
+    socket.on("subtask-updated", (data: { boardId: string; parentCardId: string; action: string; subtask?: any; subtaskId?: string }) => {
+        socket.to(makeRoomId(ROOM_PREFIX.BOARD, data.boardId)).emit("subtask-updated", data);
+    });
 }

@@ -1,12 +1,13 @@
 // src/app/layout.tsx — Root Layout with NextAuth
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
+import "@/components/mentions/mention-styles.css";
 import { Toaster } from "sonner";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { AuthProvider } from "@/components/providers/AuthProvider";
 
-const inter = Inter({ subsets: ["latin"] });
+// Local fallback to avoid network font fetch during offline builds
+const inter = { className: "font-sans" };
 
 export const metadata: Metadata = {
   title: "CollabFlow - Real-time Collaboration for Modern Teams",

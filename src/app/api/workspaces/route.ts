@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
         // Ensure user exists in database before creating workspace
         const userId = await ensureUser(session.user as any);
         const body = await request.json();
-        const { name, description } = body;
+        const { name, description, isPublic } = body;
 
         if (!name || name.trim().length < 2) {
             return NextResponse.json({ error: "Name must be at least 2 characters" }, { status: 400 });
@@ -80,6 +80,7 @@ export async function POST(request: NextRequest) {
                 name: name.trim(),
                 slug,
                 description: description?.trim() || null,
+                isPublic: isPublic === true,
                 inviteCode,
                 ownerId: userId,
                 members: {

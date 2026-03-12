@@ -1,5 +1,6 @@
 // src/app/workspace/[slug]/page.tsx
 "use client";
+// Force Next.js recompile
 
 import { useState, useEffect, use } from "react";
 import { useSession } from "next-auth/react";
@@ -15,7 +16,10 @@ import {
     Settings,
     Search,
     Calendar,
-    Users
+    Users,
+    MessageSquare,
+    LayoutGrid,
+    PenTool
 } from "lucide-react";
 import { ActivityFeed } from "@/components/dashboard/ActivityFeed";
 import { MyTasks } from "@/components/dashboard/MyTasks";
@@ -32,6 +36,12 @@ export default function WorkspaceDashboard({ params }: WorkspaceDashboardProps) 
     const { data: session } = useSession();
     const [workspace, setWorkspace] = useState<any>(null);
     const [recentDocs, setRecentDocs] = useState<any[]>([]);
+    const [stats, setStats] = useState({
+        docsCount: 0,
+        tasksCount: 0,
+        channelsCount: 0,
+        membersCount: 0
+    });
     const [loading, setLoading] = useState(true);
     const { onlineUsers } = useWorkspacePresence(workspace?.id);
 
@@ -46,11 +56,28 @@ export default function WorkspaceDashboard({ params }: WorkspaceDashboardProps) 
                     setWorkspace(ws);
 
                     if (ws) {
-                        // Fetch recent docs
-                        const docsRes = await fetch(`/api/documents?workspaceId=${ws.id}&limit=5`);
-                        if (docsRes.ok) {
-                            setRecentDocs(await docsRes.json());
-                        }
+                        // Fetch recent docs & metrics in parallel
+                        const [docsRes, allDocsRes, tasksRes, channelsRes, membersRes] = await Promise.all([
+                            fetch(`/api/documents?workspaceId=${ws.id}&limit=5`),
+                            fetch(`/api/documents?workspaceId=${ws.id}`), // for count
+                            fetch(`/api/cards?workspaceId=${ws.id}`), // for count
+                            fetch(`/api/channels?workspaceId=${ws.id}`), // for count
+                            fetch(`/api/workspaces/${slug}/members`) // for count
+                        ]);
+
+                        if (docsRes.ok) setRecentDocs(await docsRes.json());
+                        
+                        const docsData = allDocsRes.ok ? await allDocsRes.json() : [];
+                        const tasksData = tasksRes.ok ? await tasksRes.json() : [];
+                        const channelsData = channelsRes.ok ? await channelsRes.json() : [];
+                        const membersData = membersRes.ok ? await membersRes.json() : [];
+
+                        setStats({
+                            docsCount: docsData.length || 0,
+                            tasksCount: tasksData.length || 0,
+                            channelsCount: channelsData.filter((c: any) => c.type !== "direct").length || 0,
+                            membersCount: membersData.length || 0
+                        });
                     }
                 }
             } catch (e) {
@@ -188,8 +215,8 @@ export default function WorkspaceDashboard({ params }: WorkspaceDashboardProps) 
                                         <Link href={`/workspace/${slug}/editor/${doc.id}`}>
                                             <Card className="hover:shadow-md transition-all border-l-4 border-l-transparent hover:border-l-primary cursor-pointer group h-full">
                                                 <CardContent className="p-4 flex gap-4 items-start">
-                                                    <div className="p-2 bg-muted rounded-lg group-hover:bg-primary/10 transition-colors">
-                                                        <FileText className="w-6 h-6 text-muted-foreground group-hover:text-primary transition-colors" />
+                                                    <div className="p-2 bg-blue-500/10 rounded-lg group-hover:bg-blue-500/20 transition-colors">
+                                                        <FileText className="w-6 h-6 text-blue-500 transition-colors" />
                                                     </div>
                                                     <div className="flex-1 min-w-0">
                                                         <h3 className="font-medium truncate group-hover:text-primary transition-colors">{doc.title}</h3>

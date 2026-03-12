@@ -28,11 +28,33 @@ export async function POST(req: NextRequest) {
         }
 
         const body = await req.json();
-        const { title, description, columnId, priority, assigneeId, dueDate, startDate, labels, status, issueType } = body;
+        const { title, description, columnId, priority, assigneeId, dueDate, startDate, labels, status, issueType, isBacklog, boardId, parentId, storyPoints, epicId } = body;
 
-        // Get the last card for both integer order and fractional orderKey
+        // Enforce single-level subtask nesting
+        if (parentId) {
+            const parentCard = await prisma.card.findUnique({
+                where: { id: parentId },
+                select: { parentId: true },
+            });
+            if (parentCard?.parentId) {
+                return NextResponse.json(
+                    { error: "Cannot create subtask of a subtask. Only one level of nesting is allowed." },
+                    { status: 400 }
+                );
+            }
+        }
+
+        // For backlog cards, columnId is optional
+        if (!isBacklog && !columnId) {
+            return NextResponse.json({ error: "columnId is required for non-backlog cards" }, { status: 400 });
+        }
+
+        // Get the last card for ordering
+        const orderQuery = isBacklog
+            ? { boardId, isBacklog: true }
+            : { columnId };
         const lastCard = await prisma.card.findFirst({
-            where: { columnId },
+            where: orderQuery,
             orderBy: { orderKey: "desc" },
         });
 
@@ -40,20 +62,38 @@ export async function POST(req: NextRequest) {
         const newOrderKey = generateKeyBetween(lastCard?.orderKey ?? null, null);
 
         // Get column and board info for activity logging + issue number
-        const column = await prisma.column.findUnique({
-            where: { id: columnId },
-            include: {
-                board: {
-                    select: { id: true, workspaceId: true }
+        let resolvedBoardId = boardId;
+        let workspaceId: string | undefined;
+
+        if (columnId) {
+            const column = await prisma.column.findUnique({
+                where: { id: columnId },
+                include: {
+                    board: {
+                        select: { id: true, workspaceId: true }
+                    }
                 }
-            }
-        });
+            });
+            resolvedBoardId = column?.board?.id || boardId;
+            workspaceId = column?.board?.workspaceId ?? undefined;
+        } else if (boardId) {
+            const board = await prisma.board.findUnique({
+                where: { id: boardId },
+                select: { workspaceId: true },
+            });
+            workspaceId = board?.workspaceId ?? undefined;
+        }
 
         // Compute MAX+1 issue number across all cards in this board
         let nextIssueNumber = 1;
-        if (column?.board?.id) {
+        if (resolvedBoardId) {
             const maxCard = await prisma.card.findFirst({
-                where: { column: { boardId: column.board.id } },
+                where: {
+                    OR: [
+                        { column: { boardId: resolvedBoardId } },
+                        { boardId: resolvedBoardId },
+                    ],
+                },
                 orderBy: { issueNumber: "desc" },
                 select: { issueNumber: true },
             });
@@ -64,7 +104,10 @@ export async function POST(req: NextRequest) {
             data: {
                 title: title || "New Task",
                 description,
-                columnId,
+                columnId: columnId || null,
+                boardId: resolvedBoardId || null,
+                isBacklog: isBacklog || false,
+                parentId: parentId || null,
                 order: (lastCard?.order ?? -1) + 1,
                 orderKey: newOrderKey,
                 issueType: issueType || "task",
@@ -75,17 +118,25 @@ export async function POST(req: NextRequest) {
                 ...(startDate && { startDate: new Date(startDate) }),
                 ...(labels && { labels }),
                 ...(status && { status }),
+                ...(storyPoints !== undefined && { storyPoints }),
+                ...(epicId && { epicId }),
             },
             include: {
                 assignee: {
                     select: { id: true, name: true, image: true },
                 },
+                epic: {
+                    select: { id: true, title: true, color: true },
+                },
+                _count: {
+                    select: { subtasks: true },
+                },
             },
         });
 
         // Log activity
-        if (column?.board?.workspaceId) {
-            Activity.cardCreated(userId, column.board.workspaceId, card.id, card.title);
+        if (workspaceId) {
+            Activity.cardCreated(userId, workspaceId, card.id, card.title);
         }
 
         // Return enriched card with all fields for consistent client-side state
@@ -101,8 +152,13 @@ export async function POST(req: NextRequest) {
             startDate: card.startDate,
             labels: card.labels,
             status: card.status,
+            storyPoints: card.storyPoints,
+            isBacklog: card.isBacklog,
+            parentId: card.parentId,
             assigneeId: card.assigneeId,
             assignee: card.assignee,
+            epic: card.epic,
+            subtaskCount: card._count.subtasks,
             commentsCount: 0,
             checklistTotal: 0,
             checklistCompleted: 0,

@@ -32,6 +32,16 @@ interface Card {
     order?: number;
 }
 
+interface Column {
+    id: string;
+    title: string;
+    category?: string;
+    color?: string;
+    wipLimit?: number | null;
+    order?: number;
+    orderKey?: string;
+}
+
 interface UseKanbanSyncOptions {
     boardId: string | null;
     currentUser?: User;
@@ -39,9 +49,14 @@ interface UseKanbanSyncOptions {
     onCardCreated?: (data: { columnId: string; card: Card }) => void;
     onCardUpdated?: (data: { cardId: string; updates: Partial<Card> }) => void;
     onCardDeleted?: (data: { cardId: string }) => void;
+    onBacklogUpdated?: (data: { action: "added" | "removed" | "reordered"; card?: Card; cardId?: string }) => void;
+    onSubtaskUpdated?: (data: { parentCardId: string; action: "added" | "removed" | "toggled"; subtask?: Card; subtaskId?: string }) => void;
     onCommentAdded?: (data: { cardId: string; comment: Comment }) => void;
     onCommentDeleted?: (data: { cardId: string; commentId: string }) => void;
     onChecklistToggled?: (data: { cardId: string; itemId: string; completed: boolean }) => void;
+    onColumnCreated?: (data: { column: Column }) => void;
+    onColumnUpdated?: (data: { columnId: string; updates: Partial<Column> }) => void;
+    onColumnDeleted?: (data: { columnId: string }) => void;
 }
 
 interface UseKanbanSyncReturn {
@@ -51,9 +66,14 @@ interface UseKanbanSyncReturn {
     emitCardCreated: (columnId: string, card: Card) => void;
     emitCardUpdated: (cardId: string, updates: Partial<Card>) => void;
     emitCardDeleted: (cardId: string) => void;
+    emitBacklogUpdated: (action: "added" | "removed" | "reordered", card?: Card, cardId?: string) => void;
+    emitSubtaskUpdated: (parentCardId: string, action: "added" | "removed" | "toggled", subtask?: Card, subtaskId?: string) => void;
     emitCommentAdded: (cardId: string, comment: Comment) => void;
     emitCommentDeleted: (cardId: string, commentId: string) => void;
     emitChecklistToggled: (cardId: string, itemId: string, completed: boolean) => void;
+    emitColumnCreated: (column: Column) => void;
+    emitColumnUpdated: (columnId: string, updates: Partial<Column>) => void;
+    emitColumnDeleted: (columnId: string) => void;
 }
 
 export function useKanbanSync({
@@ -63,9 +83,14 @@ export function useKanbanSync({
     onCardCreated,
     onCardUpdated,
     onCardDeleted,
+    onBacklogUpdated,
+    onSubtaskUpdated,
     onCommentAdded,
     onCommentDeleted,
     onChecklistToggled,
+    onColumnCreated,
+    onColumnUpdated,
+    onColumnDeleted,
 }: UseKanbanSyncOptions): UseKanbanSyncReturn {
     const { socket, connected } = useSharedSocket();
     const [viewers, setViewers] = useState<BoardViewer[]>([]);
@@ -76,9 +101,14 @@ export function useKanbanSync({
         onCardCreated,
         onCardUpdated,
         onCardDeleted,
+        onBacklogUpdated,
+        onSubtaskUpdated,
         onCommentAdded,
         onCommentDeleted,
         onChecklistToggled,
+        onColumnCreated,
+        onColumnUpdated,
+        onColumnDeleted,
     });
 
     // Keep refs up to date without triggering effect re-runs
@@ -88,9 +118,14 @@ export function useKanbanSync({
             onCardCreated,
             onCardUpdated,
             onCardDeleted,
+            onBacklogUpdated,
+            onSubtaskUpdated,
             onCommentAdded,
             onCommentDeleted,
             onChecklistToggled,
+            onColumnCreated,
+            onColumnUpdated,
+            onColumnDeleted,
         };
     });
 
@@ -120,6 +155,12 @@ export function useKanbanSync({
         const handleCardDeleted = (data: { cardId: string }) => {
             callbacksRef.current.onCardDeleted?.(data);
         };
+        const handleBacklogUpdated = (data: { action: "added" | "removed" | "reordered"; card?: Card; cardId?: string }) => {
+            callbacksRef.current.onBacklogUpdated?.(data);
+        };
+        const handleSubtaskUpdated = (data: { parentCardId: string; action: "added" | "removed" | "toggled"; subtask?: Card; subtaskId?: string }) => {
+            callbacksRef.current.onSubtaskUpdated?.(data);
+        };
         const handleCommentAdded = (data: { cardId: string; comment: Comment }) => {
             callbacksRef.current.onCommentAdded?.(data);
         };
@@ -129,6 +170,15 @@ export function useKanbanSync({
         const handleChecklistToggled = (data: { cardId: string; itemId: string; completed: boolean }) => {
             callbacksRef.current.onChecklistToggled?.(data);
         };
+        const handleColumnCreated = (data: { column: Column }) => {
+            callbacksRef.current.onColumnCreated?.(data);
+        };
+        const handleColumnUpdated = (data: { columnId: string; updates: Partial<Column> }) => {
+            callbacksRef.current.onColumnUpdated?.(data);
+        };
+        const handleColumnDeleted = (data: { columnId: string }) => {
+            callbacksRef.current.onColumnDeleted?.(data);
+        };
 
         socket.on("board-viewers", handleViewers);
         socket.on("board-viewer-joined", handleViewerJoined);
@@ -137,9 +187,14 @@ export function useKanbanSync({
         socket.on("card-created", handleCardCreated);
         socket.on("card-updated", handleCardUpdated);
         socket.on("card-deleted", handleCardDeleted);
+        socket.on("backlog-updated", handleBacklogUpdated);
+        socket.on("subtask-updated", handleSubtaskUpdated);
         socket.on("card-comment-added", handleCommentAdded);
         socket.on("card-comment-deleted", handleCommentDeleted);
         socket.on("checklist-item-toggled", handleChecklistToggled);
+        socket.on("column-created", handleColumnCreated);
+        socket.on("column-updated", handleColumnUpdated);
+        socket.on("column-deleted", handleColumnDeleted);
 
         return () => {
             socket.off("board-viewers", handleViewers);
@@ -149,9 +204,14 @@ export function useKanbanSync({
             socket.off("card-created", handleCardCreated);
             socket.off("card-updated", handleCardUpdated);
             socket.off("card-deleted", handleCardDeleted);
+            socket.off("backlog-updated", handleBacklogUpdated);
+            socket.off("subtask-updated", handleSubtaskUpdated);
             socket.off("card-comment-added", handleCommentAdded);
             socket.off("card-comment-deleted", handleCommentDeleted);
             socket.off("checklist-item-toggled", handleChecklistToggled);
+            socket.off("column-created", handleColumnCreated);
+            socket.off("column-updated", handleColumnUpdated);
+            socket.off("column-deleted", handleColumnDeleted);
         };
     }, [socket, boardId]);
 
@@ -213,6 +273,18 @@ export function useKanbanSync({
         }
     }, [socket, boardId]);
 
+    const emitBacklogUpdated = useCallback((action: "added" | "removed" | "reordered", card?: Card, cardId?: string) => {
+        if (socket?.connected && boardId) {
+            socket.emit("backlog-updated", { boardId, action, card, cardId });
+        }
+    }, [socket, boardId]);
+
+    const emitSubtaskUpdated = useCallback((parentCardId: string, action: "added" | "removed" | "toggled", subtask?: Card, subtaskId?: string) => {
+        if (socket?.connected && boardId) {
+            socket.emit("subtask-updated", { boardId, parentCardId, action, subtask, subtaskId });
+        }
+    }, [socket, boardId]);
+
     const emitCommentAdded = useCallback((cardId: string, comment: Comment) => {
         if (socket?.connected && boardId) {
             socket.emit("card-comment-added", { boardId, cardId, comment });
@@ -231,6 +303,24 @@ export function useKanbanSync({
         }
     }, [socket, boardId]);
 
+    const emitColumnCreated = useCallback((column: Column) => {
+        if (socket?.connected && boardId) {
+            socket.emit("column-created", { boardId, column });
+        }
+    }, [socket, boardId]);
+
+    const emitColumnUpdated = useCallback((columnId: string, updates: Partial<Column>) => {
+        if (socket?.connected && boardId) {
+            socket.emit("column-updated", { boardId, columnId, updates });
+        }
+    }, [socket, boardId]);
+
+    const emitColumnDeleted = useCallback((columnId: string) => {
+        if (socket?.connected && boardId) {
+            socket.emit("column-deleted", { boardId, columnId });
+        }
+    }, [socket, boardId]);
+
     return {
         connected,
         viewers,
@@ -238,8 +328,13 @@ export function useKanbanSync({
         emitCardCreated,
         emitCardUpdated,
         emitCardDeleted,
+        emitBacklogUpdated,
+        emitSubtaskUpdated,
         emitCommentAdded,
         emitCommentDeleted,
         emitChecklistToggled,
+        emitColumnCreated,
+        emitColumnUpdated,
+        emitColumnDeleted,
     };
 }

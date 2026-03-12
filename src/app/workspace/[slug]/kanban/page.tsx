@@ -31,8 +31,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import KanbanColumn from "@/components/kanban/KanbanColumn";
 import KanbanCard from "@/components/kanban/KanbanCard";
+import { KanbanListView } from "@/components/kanban/KanbanListView";
 import CardDetailModal from "@/components/kanban/CardDetailModal";
 import CreateCardDialog from "@/components/kanban/CreateCardDialog";
+import BacklogPanel from "@/components/kanban/BacklogPanel";
+import ColumnSettingsDialog, { ColumnData } from "@/components/kanban/ColumnSettingsDialog";
 import {
   Plus,
   Loader2,
@@ -50,15 +53,27 @@ import {
   BookOpen,
   Bug,
   Settings,
+  Inbox,
+  ArrowRight,
+  User as UserIcon,
+  Flag,
+  Trash2,
 } from "lucide-react";
 import { TouchSensor } from "@dnd-kit/core";
 import { useKanbanSync } from "@/hooks/useKanbanSync";
 import { format } from "date-fns";
+import { useSharedSocket } from "@/components/providers/SocketProvider";
 
 interface User {
   id: string;
   name: string | null;
   image: string | null;
+}
+
+interface Epic {
+  id: string;
+  title: string;
+  color: string;
 }
 
 interface Card {
@@ -72,18 +87,30 @@ interface Card {
   startDate?: string;
   labels?: string[];
   status?: string;
-  assigneeId?: string;
-  assignee?: User;
+  assigneeId?: string | null;
+  assignee?: User | null;
   commentsCount?: number;
   checklistCompleted?: number;
   checklistTotal?: number;
+  subtaskCount?: number;
+  subtaskCompleted?: number;
+  storyPoints?: number | null;
+  isBacklog?: boolean;
+  parentId?: string | null;
+  epic?: Epic | null;
   order?: number;
+  dependencyCount?: number;
+  isBlocked?: boolean;
+  columnId?: string;
 }
 
 interface Column {
   id: string;
   title: string;
   order: number;
+  category?: string;  // "todo" | "in_progress" | "done"
+  color?: string;     // Hex accent color
+  wipLimit?: number | null;
   cards: Card[];
 }
 
@@ -91,6 +118,7 @@ interface Board {
   id: string;
   title: string;
   columns: Column[];
+  backlogCount?: number;
 }
 
 export default function WorkspaceKanbanPage() {
@@ -103,6 +131,7 @@ export default function WorkspaceKanbanPage() {
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [workspaceMembers, setWorkspaceMembers] = useState<User[]>([]);
+  const [epics, setEpics] = useState<Epic[]>([]);
   const [workspaceId, setWorkspaceId] = useState<string>("");
 
   // Board title editing
@@ -111,6 +140,8 @@ export default function WorkspaceKanbanPage() {
 
   // Add column
   const [addingColumn, setAddingColumn] = useState(false);
+  const [columnSettingsOpen, setColumnSettingsOpen] = useState(false);
+  const [editingColumn, setEditingColumn] = useState<ColumnData | null>(null);
   const [newColumnTitle, setNewColumnTitle] = useState("");
 
   // Filters
@@ -126,6 +157,18 @@ export default function WorkspaceKanbanPage() {
   // Search & view mode
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"board" | "list">("board");
+
+  // Backlog
+  const [backlogOpen, setBacklogOpen] = useState(false);
+  const [backlogCount, setBacklogCount] = useState(0);
+  const [backlogItems, setBacklogItems] = useState<Card[]>([]);
+  const [backlogLoading, setBacklogLoading] = useState(false);
+  const [backlogHasMore, setBacklogHasMore] = useState(false);
+  const [backlogPage, setBacklogPage] = useState(1);
+
+  // Bulk actions
+  const [selectedCards, setSelectedCards] = useState<Set<string>>(new Set());
+  const [bulkActioning, setBulkActioning] = useState(false);
 
   // Current user for presence
   const currentUser = useMemo(() => {
@@ -249,6 +292,13 @@ export default function WorkspaceKanbanPage() {
     emitCardMoved,
     emitCardCreated,
     emitCardDeleted,
+    emitSubtaskUpdated,
+    emitCommentAdded,
+    emitCommentDeleted,
+    emitChecklistToggled,
+    emitColumnCreated,
+    emitColumnUpdated,
+    emitColumnDeleted,
   } = useKanbanSync({
     boardId: board?.id || null,
     currentUser,
@@ -274,14 +324,13 @@ export default function WorkspaceKanbanPage() {
       .filter((col) => doneColumnNames.includes(col.title.toLowerCase()))
       .flatMap((col) => col.cards);
     const overdueCards = allCards.filter(
-      (c) =>
-        c.dueDate &&
-        new Date(c.dueDate) < now &&
-        !doneColumnNames.includes(
-          board.columns
-            .find((col) => col.cards.some((card) => card.id === c.id))
-            ?.title.toLowerCase() || "",
-        ),
+      (c) => {
+        if (!c.dueDate || new Date(c.dueDate) >= now) return false;
+        const parentCol = board.columns.find((col) => col.cards.some((card) => card.id === c.id));
+        if (!parentCol) return true; // Count as overdue if orphaned but has a date
+        const colTitle = parentCol.title ? parentCol.title.toLowerCase() : "";
+        return !doneColumnNames.includes(colTitle);
+      }
     );
     return {
       total: allCards.length,
@@ -369,7 +418,15 @@ export default function WorkspaceKanbanPage() {
     if (!workspaceId) return;
     fetchBoard();
     fetchWorkspaceMembers();
+    fetchEpics();
   }, [workspaceId]);
+
+  // Fetch backlog when panel opens
+  useEffect(() => {
+    if (backlogOpen && board) {
+      fetchBacklog(1);
+    }
+  }, [backlogOpen, board?.id]);
 
   const fetchWorkspaceMembers = async () => {
     if (!params?.slug) return;
@@ -381,6 +438,19 @@ export default function WorkspaceKanbanPage() {
       }
     } catch (error) {
       console.error("Error fetching members:", error);
+    }
+  };
+
+  const fetchEpics = async () => {
+    if (!params?.slug) return;
+    try {
+      const res = await fetch(`/api/workspaces/${params.slug}/epics`);
+      if (res.ok) {
+        const data = await res.json();
+        setEpics(data);
+      }
+    } catch (error) {
+      console.error("Error fetching epics:", error);
     }
   };
 
@@ -397,6 +467,189 @@ export default function WorkspaceKanbanPage() {
       console.error("Error fetching boards:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Socket for workspace-level Epic sync
+  const { socket, connected } = useSharedSocket();
+
+  useEffect(() => {
+    if (!socket || !connected || !workspaceId || !session?.user) return;
+
+    const user = {
+      id: (session.user as any).id,
+      name: session.user.name || "Anonymous",
+      image: session.user.image || undefined,
+    };
+
+    socket.emit("join-workspace", { workspaceId, user });
+
+    const handleEpicCreated = (data: { workspaceId: string; epic: Epic }) => {
+      setEpics((prev) => {
+        if (prev.find((e) => e.id === data.epic.id)) return prev;
+        return [data.epic, ...prev];
+      });
+    };
+
+    const handleEpicUpdated = (data: { workspaceId: string; epic: Epic }) => {
+      setEpics((prev) =>
+        prev.map((e) => (e.id === data.epic.id ? data.epic : e)),
+      );
+      // Update epic data in cards that are already loaded in the board
+      setBoard((prevBoard) => {
+        if (!prevBoard) return prevBoard;
+        return {
+          ...prevBoard,
+          columns: prevBoard.columns.map((col) => ({
+            ...col,
+            cards: col.cards.map((card) =>
+              card.epic?.id === data.epic.id
+                ? { ...card, epic: data.epic }
+                : card,
+            ),
+          })),
+        };
+      });
+    };
+
+    const handleEpicDeleted = (data: { workspaceId: string; epicId: string }) => {
+      setEpics((prev) => prev.filter((e) => e.id !== data.epicId));
+      // Remove epic data from cards that are already loaded in the board
+      setBoard((prevBoard) => {
+        if (!prevBoard) return prevBoard;
+        return {
+          ...prevBoard,
+          columns: prevBoard.columns.map((col) => ({
+            ...col,
+            cards: col.cards.map((card) =>
+              card.epic?.id === data.epicId
+                ? { ...card, epic: null, epicId: null }
+                : card,
+            ),
+          })),
+        };
+      });
+    };
+
+    const handleDependencyUpdated = (data: {
+      cardId: string;
+      dependencyCount: number;
+      isBlocked: boolean;
+      targetCardId?: string;
+      targetDependencyCount?: number;
+      targetIsBlocked?: boolean;
+    }) => {
+      setBoard((prevBoard) => {
+        if (!prevBoard) return prevBoard;
+        return {
+          ...prevBoard,
+          columns: prevBoard.columns.map((col) => ({
+            ...col,
+            cards: col.cards.map((card) => {
+              if (card.id === data.cardId) {
+                return { ...card, dependencyCount: data.dependencyCount, isBlocked: data.isBlocked };
+              }
+              if (data.targetCardId && card.id === data.targetCardId) {
+                return { ...card, dependencyCount: data.targetDependencyCount, isBlocked: data.targetIsBlocked };
+              }
+              return card;
+            }),
+          })),
+        };
+      });
+    };
+
+    socket.on("epic-created", handleEpicCreated);
+    socket.on("epic-updated", handleEpicUpdated);
+    socket.on("epic-deleted", handleEpicDeleted);
+    socket.on("card-dependency-updated", handleDependencyUpdated);
+
+    return () => {
+      socket.off("epic-created", handleEpicCreated);
+      socket.off("epic-updated", handleEpicUpdated);
+      socket.off("epic-deleted", handleEpicDeleted);
+      socket.off("card-dependency-updated", handleDependencyUpdated);
+      socket.emit("leave-workspace", workspaceId);
+    };
+  }, [socket, connected, workspaceId, session]);
+
+  // Fetch backlog items
+  const fetchBacklog = async (page = 1) => {
+    if (!board) return;
+    setBacklogLoading(true);
+    try {
+      const res = await fetch(`/api/boards/${board.id}/backlog?page=${page}&limit=50`);
+      if (res.ok) {
+        const data = await res.json();
+        if (page === 1) {
+          setBacklogItems(data.items || []);
+        } else {
+          setBacklogItems((prev) => [...prev, ...(data.items || [])]);
+        }
+        setBacklogCount(data.total || 0);
+        setBacklogHasMore((data.items?.length || 0) >= 50);
+        setBacklogPage(page);
+      }
+    } catch (error) {
+      console.error("Error fetching backlog:", error);
+    } finally {
+      setBacklogLoading(false);
+    }
+  };
+
+  // Add item to backlog
+  const addBacklogItem = async (title: string) => {
+    if (!board || !title.trim()) return;
+    try {
+      const res = await fetch("/api/cards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: title.trim(),
+          boardId: board.id,
+          isBacklog: true,
+        }),
+      });
+      if (res.ok) {
+        const newCard = await res.json();
+        setBacklogItems((prev) => [newCard, ...prev]);
+        setBacklogCount((prev) => prev + 1);
+        toast.success("Added to backlog");
+      }
+    } catch {
+      toast.error("Failed to add backlog item");
+    }
+  };
+
+  // Move card from backlog to board
+  const moveBacklogToBoard = async (cardId: string, columnId: string) => {
+    if (!board) return;
+    try {
+      const res = await fetch(`/api/cards/${cardId}/move`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          destination: "board",
+          columnId,
+        }),
+      });
+      if (res.ok) {
+        const movedCard = await res.json();
+        setBacklogItems((prev) => prev.filter((c) => c.id !== cardId));
+        setBacklogCount((prev) => Math.max(0, prev - 1));
+        const targetColumn = board.columns.find((c) => c.id === columnId);
+        setBoard({
+          ...board,
+          columns: board.columns.map((col) =>
+            col.id === columnId
+              ? { ...col, cards: [...col.cards, movedCard] }
+              : col
+          ),
+        });
+        toast.success(`Moved to ${targetColumn?.title || "board"}`);
+      }
+    } catch {
+      toast.error("Failed to move card to board");
     }
   };
 
@@ -417,6 +670,64 @@ export default function WorkspaceKanbanPage() {
       toast.error("Failed to create board");
     } finally {
       setCreating(false);
+    }
+  };
+
+  // --- Bulk Actions ---
+  const toggleCardSelection = useCallback((cardId: string, e: React.MouseEvent) => {
+    setSelectedCards(prev => {
+      const next = new Set(prev);
+      if (next.has(cardId)) {
+        next.delete(cardId);
+      } else {
+        next.add(cardId);
+      }
+      return next;
+    });
+  }, []);
+
+  const clearSelection = useCallback(() => {
+    setSelectedCards(new Set());
+  }, []);
+
+  // Escape key clears selection
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && selectedCards.size > 0) {
+        clearSelection();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedCards.size, clearSelection]);
+
+  const executeBulkAction = async (action: string, payload: Record<string, any> = {}) => {
+    if (selectedCards.size === 0 || !board) return;
+    setBulkActioning(true);
+    try {
+      const res = await fetch("/api/cards/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cardIds: Array.from(selectedCards), action, payload }),
+      });
+      if (res.ok) {
+        const result = await res.json();
+        // Refresh the board
+        const boardRes = await fetch(`/api/boards?workspaceId=${workspaceId}`);
+        if (boardRes.ok) {
+          const boards = await boardRes.json();
+          if (boards.length > 0) setBoard(boards[0]);
+        }
+        clearSelection();
+        toast.success(`Bulk ${action}: ${result.count} card${result.count > 1 ? "s" : ""} updated`);
+      } else {
+        const err = await res.json();
+        toast.error(err.error || "Bulk action failed");
+      }
+    } catch {
+      toast.error("Bulk action failed");
+    } finally {
+      setBulkActioning(false);
     }
   };
 
@@ -442,50 +753,110 @@ export default function WorkspaceKanbanPage() {
   };
 
   // Column management
-  const addColumn = async () => {
-    if (!board || !newColumnTitle.trim()) {
-      setAddingColumn(false);
-      return;
-    }
-    try {
-      const res = await fetch(`/api/boards/${board.id}/columns`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: newColumnTitle.trim() }),
-      });
-      if (res.ok) {
-        const newCol = await res.json();
-        setBoard({
-          ...board,
-          columns: [...board.columns, { ...newCol, cards: [] }],
+  const handleSaveColumn = async (data: { title: string; category: string; color: string; wipLimit: number | null }) => {
+    if (!board) return;
+
+    if (editingColumn) {
+      // Update existing column
+      try {
+        await fetch(`/api/boards/${board.id}/columns`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ columnId: editingColumn.id, ...data }),
         });
-        toast.success("Column added");
+        
+        // Optimistic UI update
+        setBoard((prevBoard) => {
+          if (!prevBoard) return prevBoard;
+          return {
+            ...prevBoard,
+            columns: prevBoard.columns.map((col) =>
+              col.id === editingColumn.id ? { ...col, ...data } : col,
+            ),
+          };
+        });
+        emitColumnUpdated(editingColumn.id, data);
+        toast.success("Column settings updated");
+      } catch {
+        toast.error("Failed to update column settings");
       }
-    } catch {
-      toast.error("Failed to add column");
-    } finally {
-      setNewColumnTitle("");
-      setAddingColumn(false);
+    } else {
+      // Create new column
+      try {
+        const res = await fetch(`/api/boards/${board.id}/columns`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+        if (res.ok) {
+          const newCol = await res.json();
+          setBoard({
+            ...board,
+            columns: [...board.columns, { ...newCol, cards: [] }],
+          });
+          emitColumnCreated({ ...newCol, cards: [] });
+          toast.success("Column added");
+        }
+      } catch {
+        toast.error("Failed to add column");
+      }
     }
+    setColumnSettingsOpen(false);
+    setEditingColumn(null);
   };
 
-  const renameColumn = async (columnId: string, title: string) => {
+  const openAddColumnDialog = () => {
+    setEditingColumn(null);
+    setColumnSettingsOpen(true);
+  };
+
+  const openEditColumnDialog = (columnId: string) => {
     if (!board) return;
+    const colToEdit = board.columns.find(c => c.id === columnId);
+    if (!colToEdit) return;
+    
+    setEditingColumn({
+      id: colToEdit.id,
+      title: colToEdit.title,
+      category: colToEdit.category,
+      color: colToEdit.color,
+      wipLimit: colToEdit.wipLimit,
+    });
+    setColumnSettingsOpen(true);
+  };
+
+  const updateColumnSettings = async (columnId: string, updates: Partial<Column>) => {
+    if (!board) return;
+
     try {
-      await fetch(`/api/boards/${board.id}/columns`, {
+      const response = await fetch(`/api/columns/${columnId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ columnId, title }),
+        body: JSON.stringify(updates),
       });
-      setBoard({
-        ...board,
-        columns: board.columns.map((col) =>
-          col.id === columnId ? { ...col, title } : col,
-        ),
-      });
-    } catch {
-      toast.error("Failed to rename column");
+
+      if (response.ok) {
+        const updatedColumn = await response.json();
+        
+        setBoard((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            columns: prev.columns.map(c => c.id === columnId ? { ...c, ...updatedColumn } : c)
+          };
+        });
+        
+        emitColumnUpdated(columnId, updatedColumn);
+        toast.success("Column updated");
+      } else {
+        toast.error("Failed to update column");
+      }
+    } catch (error) {
+      toast.error("Error updating column");
     }
+    
+    setColumnSettingsOpen(false);
+    setEditingColumn(null);
   };
 
   const deleteColumn = async (columnId: string) => {
@@ -495,19 +866,30 @@ export default function WorkspaceKanbanPage() {
       return;
     }
     try {
-      await fetch(`/api/boards/${board.id}/columns?columnId=${columnId}`, {
+      const res = await fetch(`/api/columns/${columnId}`, {
         method: "DELETE",
       });
-      // Remove column and refetch to get updated card positions
-      setBoard({
-        ...board,
-        columns: board.columns.filter((col) => col.id !== columnId),
+
+      if (!res.ok) {
+        let errorMessage = "Failed to delete column";
+        try {
+          const errData = await res.json();
+          if (errData.error) errorMessage = errData.error;
+        } catch (e) {}
+        throw new Error(errorMessage);
+      }
+
+      setBoard((prevBoard) => {
+        if (!prevBoard) return prevBoard;
+        return {
+          ...prevBoard,
+          columns: prevBoard.columns.filter((col) => col.id !== columnId),
+        };
       });
+      emitColumnDeleted(columnId);
       toast.success("Column deleted");
-      // Refetch to get accurate data after card migration
-      setTimeout(() => fetchBoard(), 500);
-    } catch {
-      toast.error("Failed to delete column");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to delete column");
     }
   };
 
@@ -528,6 +910,7 @@ export default function WorkspaceKanbanPage() {
           ...(extra?.startDate && { startDate: extra.startDate }),
           ...(extra?.labels && extra.labels.length > 0 && { labels: extra.labels }),
           ...(extra?.description && { description: extra.description }),
+          ...((extra as any)?.epicId && { epicId: (extra as any).epicId }),
         }),
       });
 
@@ -551,6 +934,7 @@ export default function WorkspaceKanbanPage() {
           commentsCount: newCard.commentsCount ?? 0,
           checklistCompleted: newCard.checklistCompleted ?? 0,
           checklistTotal: newCard.checklistTotal ?? 0,
+          epic: newCard.epic || undefined,
         };
         setBoard({
           ...board,
@@ -566,6 +950,8 @@ export default function WorkspaceKanbanPage() {
       toast.error("Failed to create card");
     }
   };
+
+
 
   const updateCard = async (cardId: string, title: string) => {
     if (!board) return;
@@ -590,6 +976,77 @@ export default function WorkspaceKanbanPage() {
       }
     } catch (error) {
       toast.error("Failed to update card");
+    }
+  };
+
+  const updateCardFields = async (cardId: string, updates: Partial<Card>) => {
+    if (!board) return;
+
+    // Optimistic UI update
+    setBoard((prevBoard) => {
+      if (!prevBoard) return prevBoard;
+      
+      // If moving columns
+      if (updates.columnId) {
+        let movedCard: Card | undefined;
+        const columnsWithoutCard = prevBoard.columns.map((col) => {
+          const found = col.cards.find((c) => c.id === cardId);
+          if (found) {
+            movedCard = { ...found, ...updates };
+            return {
+              ...col,
+              cards: col.cards.filter((c) => c.id !== cardId),
+            };
+          }
+          return col;
+        });
+
+        if (movedCard) {
+          return {
+            ...prevBoard,
+            columns: columnsWithoutCard.map((col) => {
+              if (col.id === updates.columnId) {
+                return { ...col, cards: [...col.cards, movedCard!] };
+              }
+              return col;
+            }),
+          };
+        }
+      }
+
+      // If just updating fields in place
+      return {
+        ...prevBoard,
+        columns: prevBoard.columns.map((col) => ({
+          ...col,
+          cards: col.cards.map((c) =>
+            c.id === cardId ? { ...c, ...updates } : c,
+          ),
+        })),
+      };
+    });
+
+    try {
+      const res = await fetch(`/api/cards/${cardId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) throw new Error("Update failed");
+      
+      // Emit socket event if we moved columns or reassigned, 
+      // but standard refresh will catch it mostly.
+      if (updates.columnId) {
+         // Assuming it appends to the end
+         const targetCol = board.columns.find(c => c.id === updates.columnId);
+         const newIndex = targetCol ? targetCol.cards.length : 0;
+         const sourceCol = board.columns.find(c => c.cards.some(card => card.id === cardId));
+         if (sourceCol) {
+            emitCardMoved(cardId, sourceCol.id, updates.columnId, newIndex);
+         }
+      }
+    } catch (error) {
+      toast.error("Failed to update card fields");
     }
   };
 
@@ -733,6 +1190,16 @@ export default function WorkspaceKanbanPage() {
     if (!activeColumn || !overColumn || activeColumn.id === overColumn.id)
       return;
 
+    // Prevent moving blocked tasks rightward
+    const activeCard = activeColumn.cards.find((c) => c.id === active.id);
+    if (activeCard?.isBlocked) {
+      const activeIdx = board.columns.findIndex(c => c.id === activeColumn.id);
+      const overIdx = board.columns.findIndex(c => c.id === overColumn.id);
+      if (overIdx > activeIdx) {
+        return; // Reject preview
+      }
+    }
+
     setBoard({
       ...board,
       columns: board.columns.map((col) => {
@@ -771,6 +1238,17 @@ export default function WorkspaceKanbanPage() {
     const overColumn = findColumn(over.id as string);
 
     if (!activeColumn || !overColumn) return;
+
+    // Prevent moving blocked tasks rightward
+    const activeCard = activeColumn.cards.find((c) => c.id === active.id);
+    if (activeCard?.isBlocked && activeColumn.id !== overColumn.id) {
+      const activeIdx = board.columns.findIndex(c => c.id === activeColumn.id);
+      const overIdx = board.columns.findIndex(c => c.id === overColumn.id);
+      if (overIdx > activeIdx) {
+        toast.error("Cannot progress a blocked task. Resolve dependencies first.");
+        return;
+      }
+    }
 
     if (activeColumn.id === overColumn.id) {
       const oldIndex = activeColumn.cards.findIndex((c) => c.id === active.id);
@@ -1026,30 +1504,10 @@ export default function WorkspaceKanbanPage() {
 
             {/* Right: Add Column */}
             <div className="flex items-center gap-1.5">
-              {addingColumn ? (
-                <div className="flex items-center gap-1">
-                  <Input
-                    value={newColumnTitle}
-                    onChange={(e) => setNewColumnTitle(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") addColumn();
-                      if (e.key === "Escape") setAddingColumn(false);
-                    }}
-                    placeholder="Column name..."
-                    autoFocus
-                    className="h-8 w-36 text-sm rounded-lg"
-                  />
-                  <Button size="sm" onClick={addColumn} className="h-8 rounded-lg text-xs">Add</Button>
-                  <Button size="sm" variant="ghost" onClick={() => setAddingColumn(false)} className="h-8 w-8 p-0 rounded-lg">
-                    <X className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
-              ) : (
-                <Button onClick={() => setAddingColumn(true)} className="btn-glow flex-shrink-0 rounded-lg h-8 text-xs" size="sm">
-                  <Plus className="w-3.5 h-3.5 sm:mr-1.5" />
-                  <span className="hidden sm:inline">Add Column</span>
-                </Button>
-              )}
+              <Button onClick={openAddColumnDialog} className="btn-glow flex-shrink-0 rounded-lg h-8 text-xs" size="sm">
+                <Plus className="w-3.5 h-3.5 sm:mr-1.5" />
+                <span className="hidden sm:inline">Add Column</span>
+              </Button>
             </div>
           </motion.div>
         </div>
@@ -1058,6 +1516,22 @@ export default function WorkspaceKanbanPage() {
         <div className="px-4 sm:px-5 lg:px-6 pb-2 flex items-center gap-3 flex-wrap">
           {/* View Tabs */}
           <div className="flex items-center bg-muted/40 rounded-lg p-0.5 border border-border/30">
+            <button
+              onClick={() => { setBacklogOpen(!backlogOpen); }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                backlogOpen
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Inbox className="w-3.5 h-3.5" />
+              Backlog
+              {backlogCount > 0 && (
+                <span className="ml-0.5 text-[10px] bg-muted px-1.5 py-0 rounded-full">
+                  {backlogCount}
+                </span>
+              )}
+            </button>
             <button
               onClick={() => setViewMode("board")}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
@@ -1191,7 +1665,26 @@ export default function WorkspaceKanbanPage() {
 
       {/* Board or List view */}
       {viewMode === "board" ? (
-        <div className="flex-1 overflow-x-auto p-4 sm:p-5 pb-5 bg-dots snap-x snap-mandatory sm:snap-none overscroll-x-contain">
+        <div className="flex-1 flex overflow-hidden">
+          {/* Backlog Panel */}
+          {backlogOpen && board && (
+            <div className="flex-shrink-0 w-[340px] border-r border-border/40 overflow-y-auto bg-background/60 p-3">
+              <BacklogPanel
+                boardId={board.id}
+                backlogItems={backlogItems as any}
+                totalCount={backlogCount}
+                loading={backlogLoading}
+                columns={board.columns.map((c) => ({ id: c.id, title: c.title }))}
+                onMoveToBoard={moveBacklogToBoard}
+                onAddItem={addBacklogItem}
+                onOpenDetail={handleOpenDetail as any}
+                onLoadMore={() => fetchBacklog(backlogPage + 1)}
+                hasMore={backlogHasMore}
+              />
+            </div>
+          )}
+
+          <div className="flex-1 overflow-x-auto p-4 sm:p-5 pb-5 bg-dots snap-x snap-mandatory sm:snap-none overscroll-x-contain">
           <DndContext
             sensors={sensors}
             collisionDetection={closestCorners}
@@ -1213,13 +1706,15 @@ export default function WorkspaceKanbanPage() {
                     onUpdateCard={updateCard}
                     onDeleteCard={deleteCard}
                     onOpenDetail={handleOpenDetail}
-                    onRenameColumn={renameColumn}
                     onDeleteColumn={deleteColumn}
                     onOpenCreateDialog={(colId) => {
                       setCreateDialogColumnId(colId);
                       setCreateDialogOpen(true);
                     }}
+                    onOpenSettingsDialog={openEditColumnDialog}
                     canDelete={board.columns.length > 1}
+                    selectedCards={selectedCards}
+                    onSelectCard={toggleCardSelection}
                   />
                 </motion.div>
               ))}
@@ -1229,88 +1724,23 @@ export default function WorkspaceKanbanPage() {
               {activeCard && <KanbanCard card={activeCard} isDragging />}
             </DragOverlay>
           </DndContext>
+          </div>
         </div>
       ) : (
         /* ═══ List View ═══ */
         <div className="flex-1 overflow-auto p-4 sm:p-5">
-          <div className="bg-card/50 rounded-xl border border-border/50 overflow-hidden">
-            {/* Table header */}
-            <div className="grid grid-cols-[60px_40px_1fr_120px_100px_80px_90px] gap-2 px-4 py-2.5 bg-muted/30 border-b border-border/30 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-              <span>ID</span>
-              <span>Type</span>
-              <span>Title</span>
-              <span>Status</span>
-              <span>Assignee</span>
-              <span>Priority</span>
-              <span>Due Date</span>
-            </div>
-            {/* Table rows */}
-            <div className="divide-y divide-border/20">
-              {(filteredBoard || board).columns.flatMap((col) =>
-                col.cards.map((card) => {
-                  const typeConfig: Record<string, { color: string }> = {
-                    task: { color: "text-blue-500" },
-                    story: { color: "text-emerald-500" },
-                    bug: { color: "text-red-500" },
-                    feature: { color: "text-amber-500" },
-                  };
-                  const tc = typeConfig[card.issueType || "task"];
-                  const priorityColors: Record<string, string> = {
-                    low: "text-emerald-500 bg-emerald-500/10",
-                    medium: "text-amber-500 bg-amber-500/10",
-                    high: "text-red-500 bg-red-500/10",
-                  };
-                  const pc = priorityColors[card.priority || "medium"];
-                  return (
-                    <div
-                      key={card.id}
-                      onClick={() => handleOpenDetail(card)}
-                      className="grid grid-cols-[60px_40px_1fr_120px_100px_80px_90px] gap-2 px-4 py-2.5 hover:bg-muted/20 cursor-pointer transition-colors items-center"
-                    >
-                      <span className="text-[11px] font-semibold text-blue-500/80">
-                        {card.issueNumber ? `KAN-${card.issueNumber}` : "—"}
-                      </span>
-                      <span className={`${tc.color}`}>
-                        {card.issueType === "task" && <SquareCheck className="w-4 h-4" />}
-                        {card.issueType === "story" && <BookOpen className="w-4 h-4" />}
-                        {card.issueType === "bug" && <Bug className="w-4 h-4" />}
-                        {card.issueType === "feature" && <Settings className="w-4 h-4" />}
-                        {!card.issueType && <SquareCheck className="w-4 h-4" />}
-                      </span>
-                      <span className="text-sm font-medium text-foreground truncate">{card.title}</span>
-                      <span className="text-[11px] font-medium text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-md truncate text-center">
-                        {col.title}
-                      </span>
-                      <span className="flex items-center gap-1.5">
-                        {card.assignee ? (
-                          <>
-                            <Avatar className="w-5 h-5">
-                              <AvatarImage src={card.assignee.image || undefined} />
-                              <AvatarFallback className="text-[8px] font-semibold bg-primary/10 text-primary">{card.assignee.name?.[0]}</AvatarFallback>
-                            </Avatar>
-                            <span className="text-[11px] text-muted-foreground truncate">{card.assignee.name?.split(" ")[0]}</span>
-                          </>
-                        ) : (
-                          <span className="text-[11px] text-muted-foreground/50">Unassigned</span>
-                        )}
-                      </span>
-                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${pc} text-center capitalize`}>
-                        {card.priority || "medium"}
-                      </span>
-                      <span className="text-[11px] text-muted-foreground">
-                        {card.dueDate ? format(new Date(card.dueDate), "MMM d") : "—"}
-                      </span>
-                    </div>
-                  );
-                })
-              )}
-              {(filteredBoard || board).columns.flatMap((c) => c.cards).length === 0 && (
-                <div className="flex items-center justify-center py-12 text-muted-foreground/60">
-                  <span className="text-sm">No cards match your filters</span>
-                </div>
-              )}
-            </div>
-          </div>
+          <KanbanListView 
+            cards={(filteredBoard || board).columns.flatMap(col => col.cards.map(card => ({ ...card, columnId: col.id }))) as any[]}
+            columns={board.columns.map(c => ({ id: c.id, title: c.title, category: c.category || "todo" }))}
+            members={workspaceMembers}
+            selectedCards={selectedCards}
+            onSelectCard={(id, multi) => toggleCardSelection(id, { ctrlKey: multi } as any)}
+            onCardClick={(cardId: string) => {
+              const card = (filteredBoard || board).columns.flatMap(c => c.cards).find(c => c.id === cardId);
+              if (card) handleOpenDetail(card);
+            }}
+            onUpdateCard={updateCardFields}
+          />
         </div>
       )}
 
@@ -1321,8 +1751,10 @@ export default function WorkspaceKanbanPage() {
         onClose={handleCloseModal}
         onUpdate={handleUpdateCardFromModal}
         onMoveCard={handleMoveCardFromModal}
-        columns={board.columns.map((col) => ({ id: col.id, title: col.title }))}
+        columns={board.columns.map((col) => ({ id: col.id, title: col.title, category: col.category }))}
         workspaceMembers={workspaceMembers}
+        allCards={board.columns.flatMap((col) => col.cards.map((c) => ({ id: c.id, title: c.title, status: c.status, priority: c.priority, issueType: c.issueType, issueNumber: c.issueNumber })))}
+        epics={epics}
         currentUserId={session?.user?.id || ""}
       />
 
@@ -1334,6 +1766,143 @@ export default function WorkspaceKanbanPage() {
         columnId={createDialogColumnId}
         columnTitle={board.columns.find((c) => c.id === createDialogColumnId)?.title || ""}
         workspaceMembers={workspaceMembers}
+        epics={epics}
+      />
+
+      {/* Bulk Action Floating Bar */}
+      <AnimatePresence>
+        {selectedCards.size > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 60 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 60 }}
+            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50"
+          >
+            <div className="flex items-center gap-2 px-4 py-2.5 bg-card/95 backdrop-blur-xl border border-border/60 rounded-2xl shadow-2xl shadow-black/20">
+              {/* Selection count */}
+              <div className="flex items-center gap-2 pr-3 border-r border-border/40">
+                <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-bold">
+                  {selectedCards.size}
+                </div>
+                <span className="text-sm font-medium text-foreground whitespace-nowrap">
+                  card{selectedCards.size > 1 ? "s" : ""} selected
+                </span>
+              </div>
+
+              {/* Move to column */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="gap-1.5 h-8 text-xs rounded-lg" disabled={bulkActioning}>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                    Move
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="center" side="top" className="mb-2">
+                  {board.columns.map((col) => (
+                    <DropdownMenuItem
+                      key={col.id}
+                      onClick={() => executeBulkAction("move", { columnId: col.id })}
+                    >
+                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: col.color || "#6366f1" }} />
+                      {col.title}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Assign */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="gap-1.5 h-8 text-xs rounded-lg" disabled={bulkActioning}>
+                    <UserIcon className="w-3.5 h-3.5" />
+                    Assign
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="center" side="top" className="mb-2">
+                  <DropdownMenuItem onClick={() => executeBulkAction("assign", { assigneeId: null })}>
+                    <X className="w-3.5 h-3.5 text-muted-foreground" />
+                    Unassign
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  {workspaceMembers.map((member) => (
+                    <DropdownMenuItem
+                      key={member.id}
+                      onClick={() => executeBulkAction("assign", { assigneeId: member.id })}
+                    >
+                      <span className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-semibold text-primary flex-shrink-0">
+                        {member.name?.[0]?.toUpperCase() || "?"}
+                      </span>
+                      {member.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Priority */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="gap-1.5 h-8 text-xs rounded-lg" disabled={bulkActioning}>
+                    <Flag className="w-3.5 h-3.5" />
+                    Priority
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="center" side="top" className="mb-2">
+                  <DropdownMenuItem onClick={() => executeBulkAction("priority", { priority: "high" })}>
+                    <span className="w-2 h-2 rounded-full bg-red-500" />
+                    High
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => executeBulkAction("priority", { priority: "medium" })}>
+                    <span className="w-2 h-2 rounded-full bg-amber-500" />
+                    Medium
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => executeBulkAction("priority", { priority: "low" })}>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    Low
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <div className="w-px h-5 bg-border/40" />
+
+              {/* Delete */}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1.5 h-8 text-xs rounded-lg text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                disabled={bulkActioning}
+                onClick={() => {
+                  if (confirm(`Delete ${selectedCards.size} card${selectedCards.size > 1 ? "s" : ""}? This cannot be undone.`)) {
+                    executeBulkAction("delete");
+                  }
+                }}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Delete
+              </Button>
+
+              <div className="w-px h-5 bg-border/40" />
+
+              {/* Clear selection */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground"
+                onClick={clearSelection}
+                title="Clear selection (Esc)"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <ColumnSettingsDialog
+        open={columnSettingsOpen}
+        onOpenChange={setColumnSettingsOpen}
+        onSave={handleSaveColumn}
+        column={editingColumn || undefined}
       />
     </div>
   );

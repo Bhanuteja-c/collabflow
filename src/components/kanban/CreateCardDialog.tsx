@@ -33,6 +33,12 @@ interface UserType {
     image: string | null;
 }
 
+interface Epic {
+    id: string;
+    title: string;
+    color: string;
+}
+
 interface CreateCardData {
     title: string;
     description?: string;
@@ -40,6 +46,7 @@ interface CreateCardData {
     assigneeId?: string;
     dueDate?: string;
     labels?: string[];
+    epicId?: string;
 }
 
 interface CreateCardDialogProps {
@@ -49,6 +56,7 @@ interface CreateCardDialogProps {
     columnId: string;
     columnTitle: string;
     workspaceMembers: UserType[];
+    epics: Epic[];
 }
 
 const priorityConfig = {
@@ -77,12 +85,14 @@ export default function CreateCardDialog({
     columnId,
     columnTitle,
     workspaceMembers,
+    epics,
 }: CreateCardDialogProps) {
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
     const [priority, setPriority] = useState<"low" | "medium" | "high">("medium");
     const [assigneeId, setAssigneeId] = useState("");
     const [dueDate, setDueDate] = useState("");
+    const [epicId, setEpicId] = useState("");
     const [labels, setLabels] = useState<string[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -101,6 +111,7 @@ export default function CreateCardDialog({
         setDescription("");
         setPriority("medium");
         setAssigneeId("");
+        setEpicId("");
         setDueDate("");
         setLabels([]);
     };
@@ -114,6 +125,7 @@ export default function CreateCardDialog({
                 description: description.trim() || undefined,
                 priority,
                 assigneeId: assigneeId || undefined,
+                epicId: epicId || undefined,
                 dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
                 labels: labels.length > 0 ? labels : undefined,
             });
@@ -242,6 +254,52 @@ export default function CreateCardDialog({
                                 ))}
                             </DropdownMenuContent>
                         </DropdownMenu>
+
+                        {/* Epic */}
+                        {epics && epics.length > 0 && (
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" size="sm" className="gap-1.5 h-8 rounded-lg text-xs">
+                                        {epicId ? (
+                                            <>
+                                                <span 
+                                                    className="w-2.5 h-2.5 rounded-full" 
+                                                    style={{ backgroundColor: epics.find(e => e.id === epicId)?.color }} 
+                                                />
+                                                <span className="max-w-24 truncate">
+                                                    {epics.find(e => e.id === epicId)?.title}
+                                                </span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <div className="w-2.5 h-2.5 rounded-full border border-current" />
+                                                No Epic
+                                            </>
+                                        )}
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent>
+                                    <DropdownMenuItem onClick={() => setEpicId("")}>
+                                        <div className="w-2.5 h-2.5 rounded-full border border-current mr-2" />
+                                        None
+                                    </DropdownMenuItem>
+                                    {epics.map((epic) => (
+                                        <DropdownMenuItem
+                                            key={epic.id}
+                                            onClick={() => setEpicId(epic.id)}
+                                            className="gap-2"
+                                        >
+                                            <span 
+                                                className="w-2.5 h-2.5 rounded-full" 
+                                                style={{ backgroundColor: epic.color }} 
+                                            />
+                                            {epic.title}
+                                            {epicId === epic.id && <span className="ml-auto">✓</span>}
+                                        </DropdownMenuItem>
+                                    ))}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        )}
 
                         {/* Due Date */}
                         <div className="inline-flex items-center rounded-lg border border-border h-8 px-2 text-xs">
