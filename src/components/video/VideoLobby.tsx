@@ -83,7 +83,9 @@ export function VideoLobby({
       setError(null);
 
       if (localStream) {
-        localStream.getTracks().forEach((track) => track.stop());
+        localStream.getTracks().forEach((track) => {
+          track.stop();
+        });
       }
 
       try {

@@ -7,7 +7,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
     FileText,
     Plus,
@@ -17,33 +17,57 @@ import {
     Search,
     Calendar,
     Users,
-    MessageSquare,
     LayoutGrid,
-    PenTool
+    PenTool,
+    Sparkles
 } from "lucide-react";
 import { ActivityFeed } from "@/components/dashboard/ActivityFeed";
 import { MyTasks } from "@/components/dashboard/MyTasks";
 import { useWorkspacePresence } from "@/hooks/useWorkspacePresence";
-import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+    DropdownMenuSeparator,
+    DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
+import { CreateProjectModal } from "@/components/workspace/CreateProjectModal";
 
 interface WorkspaceDashboardProps {
     params: Promise<{ slug: string }>;
 }
 
+interface Workspace {
+    id: string;
+    slug: string;
+    name: string;
+    members?: { userId: string, user: { name?: string | null, image?: string | null } }[];
+}
+
+interface User {
+    id: string;
+    name: string | null;
+    image: string | null;
+}
+
+interface Document {
+    id: string;
+    title: string;
+    updatedAt: string;
+    author: { name: string | null, image: string | null };
+}
+
 export default function WorkspaceDashboard({ params }: WorkspaceDashboardProps) {
     const { slug } = use(params);
     const { data: session } = useSession();
-    const [workspace, setWorkspace] = useState<any>(null);
-    const [recentDocs, setRecentDocs] = useState<any[]>([]);
-    const [stats, setStats] = useState({
-        docsCount: 0,
-        tasksCount: 0,
-        channelsCount: 0,
-        membersCount: 0
-    });
+    const [workspace, setWorkspace] = useState<Workspace | null>(null);
+    const [recentDocs, setRecentDocs] = useState<Document[]>([]);
     const [loading, setLoading] = useState(true);
     const { onlineUsers } = useWorkspacePresence(workspace?.id);
+    const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
+    const [workspaceMembers, setWorkspaceMembers] = useState<User[]>([]);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -52,32 +76,20 @@ export default function WorkspaceDashboard({ params }: WorkspaceDashboardProps) 
                 const wsRes = await fetch(`/api/workspaces`);
                 if (wsRes.ok) {
                     const workspaces = await wsRes.json();
-                    const ws = workspaces.find((w: any) => w.slug === slug);
+                    const ws = workspaces.find((w: Workspace) => w.slug === slug);
                     setWorkspace(ws);
 
                     if (ws) {
-                        // Fetch recent docs & metrics in parallel
-                        const [docsRes, allDocsRes, tasksRes, channelsRes, membersRes] = await Promise.all([
+                        // Fetch recent docs & members in parallel
+                        const [docsRes, membersRes] = await Promise.all([
                             fetch(`/api/documents?workspaceId=${ws.id}&limit=5`),
-                            fetch(`/api/documents?workspaceId=${ws.id}`), // for count
-                            fetch(`/api/cards?workspaceId=${ws.id}`), // for count
-                            fetch(`/api/channels?workspaceId=${ws.id}`), // for count
-                            fetch(`/api/workspaces/${slug}/members`) // for count
+                            fetch(`/api/workspaces/${slug}/members`)
                         ]);
 
                         if (docsRes.ok) setRecentDocs(await docsRes.json());
                         
-                        const docsData = allDocsRes.ok ? await allDocsRes.json() : [];
-                        const tasksData = tasksRes.ok ? await tasksRes.json() : [];
-                        const channelsData = channelsRes.ok ? await channelsRes.json() : [];
                         const membersData = membersRes.ok ? await membersRes.json() : [];
-
-                        setStats({
-                            docsCount: docsData.length || 0,
-                            tasksCount: tasksData.length || 0,
-                            channelsCount: channelsData.filter((c: any) => c.type !== "direct").length || 0,
-                            membersCount: membersData.length || 0
-                        });
+                        setWorkspaceMembers(membersData.map((m: { user: User } | User) => 'user' in m ? m.user : m));
                     }
                 }
             } catch (e) {
@@ -174,22 +186,60 @@ export default function WorkspaceDashboard({ params }: WorkspaceDashboardProps) 
                                 <Settings className="w-4 h-4" />
                             </Link>
                         </Button>
-                        <Button asChild className="rounded-full px-4 sm:px-6 shadow-lg shadow-primary/20">
-                            <Link href={`/workspace/${slug}/documents?new=true`}>
-                                <Plus className="w-4 h-4 sm:mr-2" />
-                                <span className="hidden sm:inline">Create Project</span>
-                            </Link>
-                        </Button>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button className="rounded-full px-4 sm:px-6 shadow-lg shadow-primary/20">
+                                    <Plus className="w-4 h-4 sm:mr-2" />
+                                    <span className="hidden sm:inline">Create New</span>
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-56">
+                                <DropdownMenuLabel>Create options</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => setIsProjectModalOpen(true)} className="font-medium text-primary focus:text-primary focus:bg-primary/10">
+                                    <Sparkles className="w-4 h-4 mr-2" />
+                                    Full Project Suite
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem asChild>
+                                    <Link href={`/workspace/${slug}/boards?new=true`}>
+                                        <LayoutGrid className="w-4 h-4 mr-2" />
+                                        Kanban Board
+                                    </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem asChild>
+                                    <Link href={`/workspace/${slug}/documents?new=true`}>
+                                        <FileText className="w-4 h-4 mr-2" />
+                                        Document
+                                    </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem asChild>
+                                    <Link href={`/workspace/${slug}/whiteboard?new=true`}>
+                                        <PenTool className="w-4 h-4 mr-2" />
+                                        Whiteboard
+                                    </Link>
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
                 </div>
             </div>
+
+            {/* Project Wizard Modal */}
+            <CreateProjectModal
+                isOpen={isProjectModalOpen}
+                onClose={() => setIsProjectModalOpen(false)}
+                workspaceId={workspace?.id || ""}
+                workspaceSlug={slug}
+                workspaceMembers={workspaceMembers}
+            />
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-6">
                 {/* Main Content Area */}
                 <div className="lg:col-span-8 space-y-8">
                     {/* My Tasks (Moved here for prominence) */}
                     <div className="flex flex-col gap-4">
-                        <MyTasks workspaceId={workspace?.id} />
+                        <MyTasks workspaceId={workspace?.id || ""} />
                     </div>
 
                     {/* Recent Documents */}
@@ -283,11 +333,11 @@ export default function WorkspaceDashboard({ params }: WorkspaceDashboardProps) 
                                 </div>
                                 
                                 {/* Online Peers */}
-                                {onlineUsers.map((onlineUser: any) => {
+                                {onlineUsers.map((onlineUser: { socketId: string; user: { id: string; name?: string; image?: string } }) => {
                                     const userId = onlineUser.user.id;
-                                    const member = workspace?.members?.find((m: any) => m.userId === userId);
-                                    let name = onlineUser.user.name || member?.user?.name || "Team Member";
-                                    let image = onlineUser.user.image || member?.user?.image;
+                                    const member = workspace?.members?.find((m) => m.userId === userId);
+                                    const name = onlineUser.user.name || member?.user?.name || "Team Member";
+                                    const image = onlineUser.user.image || member?.user?.image;
 
                                     return (
                                         <div key={onlineUser.socketId} className="flex items-center justify-between">

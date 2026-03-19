@@ -35,6 +35,7 @@ export default function WorkspaceEditorPage({ params }: { params: Promise<{ slug
     const [copied, setCopied] = useState(false);
     const [historyOpen, setHistoryOpen] = useState(false);
     const [parent, setParent] = useState<{ id: string; title: string } | null>(null);
+    const [coverImage, setCoverImage] = useState<string | null>(null);
     const [workspaceMembers, setWorkspaceMembers] = useState<{ id: string; name: string | null; image?: string | null }[]>([]);
 
     const userId = (session?.user as any)?.id || "";
@@ -70,6 +71,7 @@ export default function WorkspaceEditorPage({ params }: { params: Promise<{ slug
                     setInitialContent(data.content || "");
                     setPermission(data.permission || "view");
                     setParent(data.parent || null);
+                    setCoverImage(data.coverImage || null);
                 } else {
                     setError("Document not found");
                 }
@@ -117,6 +119,20 @@ export default function WorkspaceEditorPage({ params }: { params: Promise<{ slug
             });
         } catch (e) {
             console.error("Failed to save title:", e);
+        }
+    }, [docId]);
+
+    // Save cover image separately to avoid content conflicts
+    const handleUpdateCoverImage = useCallback(async (url: string | null) => {
+        setCoverImage(url);
+        try {
+            await fetch(`/api/documents/${docId}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ coverImage: url })
+            });
+        } catch (e) {
+            console.error("Failed to save cover image:", e);
         }
     }, [docId]);
 
@@ -337,6 +353,8 @@ export default function WorkspaceEditorPage({ params }: { params: Promise<{ slug
                             onContentChange={handleContentChange}
                             workspaceMembers={workspaceMembers}
                             workspaceSlug={slug}
+                            coverImage={coverImage}
+                            onUpdateCoverImage={handleUpdateCoverImage}
                         />
                     </div>
                 ) : (

@@ -3,7 +3,7 @@
 "use client";
 
 import { useState, useEffect, use } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     PenTool,
@@ -33,6 +33,7 @@ interface Whiteboard {
 export default function WhiteboardListPage({ params }: { params: Promise<{ slug: string }> }) {
     const { slug } = use(params);
     const router = useRouter();
+    const searchParams = useSearchParams();
     const [whiteboards, setWhiteboards] = useState<Whiteboard[]>([]);
     const [loading, setLoading] = useState(true);
     const [creating, setCreating] = useState(false);
@@ -44,6 +45,12 @@ export default function WhiteboardListPage({ params }: { params: Promise<{ slug:
             .catch(() => {})
             .finally(() => setLoading(false));
     }, [slug]);
+
+    useEffect(() => {
+        if (searchParams.get("new") === "true" && !creating && !loading) {
+            handleCreate();
+        }
+    }, [searchParams, creating, loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handleCreate = async () => {
         setCreating(true);

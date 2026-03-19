@@ -126,7 +126,7 @@ export function MainChatInput({
   );
 
   return (
-    <div className="px-4 pb-3 pt-0 bg-background relative">
+    <div className="px-4 pb-3 pt-1.5 bg-background relative">
       {/* Pending attachment chip */}
       {pendingAttachment && (
         <div className="flex items-center gap-2 mb-1.5 px-1">

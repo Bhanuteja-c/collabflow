@@ -44,7 +44,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { AttachmentPreview } from "@/components/chat/AttachmentPreview";
 import { MainChatInput } from "@/components/chat/MainChatInput";
-import { avatarFallbackClass } from "@/lib/avatar-colors";
+import { avatarFallbackClass, getDiceBearAvatar } from "@/lib/avatar-colors";
 
 interface User {
   id: string;
@@ -1034,12 +1034,12 @@ export default function ChatPage() {
             <div className="px-3 pb-1">
               <button
                 onClick={() => setChannelsSectionOpen(!channelsSectionOpen)}
-                className="w-full flex items-center gap-1 px-1 mb-1 group hover:text-foreground transition-colors"
+                className="w-full flex items-center gap-1.5 px-1 mb-1.5 group hover:text-foreground transition-colors"
               >
                 {channelsSectionOpen
-                  ? <ChevronDown className="w-3 h-3 text-muted-foreground/60" />
-                  : <ChevronRight className="w-3 h-3 text-muted-foreground/60" />}
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">Channels</span>
+                  ? <ChevronDown className="w-3 h-3 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors" />
+                  : <ChevronRight className="w-3 h-3 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors" />}
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 group-hover:text-muted-foreground/80 transition-colors">Channels</span>
                 <span className="text-[9px] text-muted-foreground/40 ml-auto">
                   {channels.filter((c) => c.type !== "direct").length}
                 </span>
@@ -1125,15 +1125,15 @@ export default function ChatPage() {
           </div>
 
           {/* Direct Messages Section */}
-          <div className="px-3 pt-3 border-t">
+          <div className="px-3 pt-4 border-t border-border/50">
             <button
               onClick={() => setDmsSectionOpen(!dmsSectionOpen)}
-              className="w-full flex items-center gap-1 px-1 mb-1 group hover:text-foreground transition-colors"
+              className="w-full flex items-center gap-1.5 px-1 mb-1.5 group hover:text-foreground transition-colors"
             >
               {dmsSectionOpen
-                ? <ChevronDown className="w-3 h-3 text-muted-foreground/60" />
-                : <ChevronRight className="w-3 h-3 text-muted-foreground/60" />}
-              <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">Direct Messages</span>
+                ? <ChevronDown className="w-3 h-3 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors" />
+                : <ChevronRight className="w-3 h-3 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors" />}
+              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 group-hover:text-muted-foreground/80 transition-colors">Direct Messages</span>
               {workspaceOnlineUsers.filter(u => u.user.id !== currentUser?.id).length > 0 && (
                 <span className="ml-auto flex items-center gap-1 text-[9px] text-emerald-500">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
@@ -1191,7 +1191,7 @@ export default function ChatPage() {
                       )}
                       <div className="relative z-10">
                         <Avatar className="w-5 h-5 flex-shrink-0">
-                          <AvatarImage src={member.image || ""} />
+                          <AvatarImage src={member.image || getDiceBearAvatar(member.name)} />
                           <AvatarFallback className={avatarFallbackClass(member.name, "text-[10px] font-semibold")}>
                             {member.name?.[0]?.toUpperCase() || "?"}
                           </AvatarFallback>
@@ -1231,7 +1231,7 @@ export default function ChatPage() {
                 {isDirectMessage ? (
                   <div className="relative flex-shrink-0">
                     <Avatar className="w-9 h-9 border">
-                      <AvatarImage src={displayAvatar || ""} />
+                      <AvatarImage src={displayAvatar || getDiceBearAvatar(displayName)} />
                       <AvatarFallback className={avatarFallbackClass(displayName, "text-sm font-semibold")}>{displayName[0]}</AvatarFallback>
                     </Avatar>
                     {workspaceOnlineUsers.some((u) => u.user.id === targetUser?.id) && (
@@ -1263,7 +1263,7 @@ export default function ChatPage() {
                   <div className="hidden sm:flex -space-x-1.5">
                     {onlineUsers.slice(0, 3).map((viewer) => (
                       <Avatar key={viewer.socketId} className="w-6 h-6 border-2 border-background ring-1 ring-emerald-500/40" title={viewer.user.name}>
-                        <AvatarImage src={viewer.user.image} />
+                        <AvatarImage src={viewer.user.image || getDiceBearAvatar(viewer.user.name)} />
                         <AvatarFallback className="text-[9px]">{viewer.user.name?.[0] || "?"}</AvatarFallback>
                       </Avatar>
                     ))}
@@ -1402,12 +1402,29 @@ export default function ChatPage() {
                 ) : (
                   allMessages.map((message, i) => {
                     const prevMessage = allMessages[i - 1];
-                    const showAvatar =
-                      i === 0 || prevMessage?.author.id !== message.author.id;
-                    const isOwnMessage =
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      message.author.id === (session?.user as any)?.id;
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const isOwnMessage = message.author.id === (session?.user as any)?.id;
                     const isEditing = editingMessageId === message.id;
+
+                    // ── System message detection ──
+                    const systemPatterns = [
+                      /^📋\s/,   // Assigned
+                      /^✅\s/,   // Completed
+                      /^📊\s/,   // Board created
+                      /^🎥\s/,   // Huddle started
+                    ];
+                    const isSystemMessage = systemPatterns.some((p) => p.test(message.content));
+
+                    // ── Improved message grouping (same author within 3 minutes) ──
+                    const timeDiff = prevMessage
+                      ? (new Date(message.createdAt).getTime() - new Date(prevMessage.createdAt).getTime()) / 1000
+                      : Infinity;
+                    const showAvatar =
+                      !isSystemMessage &&
+                      (i === 0 ||
+                        prevMessage?.author.id !== message.author.id ||
+                        timeDiff > 180 ||
+                        systemPatterns.some((p) => p.test(prevMessage?.content || "")));
 
                     // Date separator logic
                     const showDateSep = i === 0 || (
@@ -1415,6 +1432,41 @@ export default function ChatPage() {
                       new Date(allMessages[i - 1].createdAt).toDateString()
                     );
 
+                    // ── System message (compact inline event) ──
+                    if (isSystemMessage) {
+                      return (
+                        <div key={message.id}>
+                          {showDateSep && (
+                            <div className="sticky top-0 z-20 flex justify-center my-2 pointer-events-none">
+                              <span className="pointer-events-auto text-[11px] font-semibold text-foreground bg-background border shadow-sm rounded-full px-3 py-0.5 cursor-pointer hover:shadow-md transition-shadow">
+                                {formatDateSeparator(message.createdAt)} ▾
+                              </span>
+                            </div>
+                          )}
+                          <motion.div
+                            initial={{ opacity: 0, y: 2 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="flex items-center gap-2.5 px-4 -mx-4 py-1.5 my-0.5 rounded-md bg-muted/20 hover:bg-muted/30 transition-colors border-l-2 border-primary/30"
+                          >
+                            <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                              <span className="text-xs leading-none">{message.content.charAt(0)}</span>
+                            </div>
+                            <div className="flex-1 min-w-0 text-[12px] text-muted-foreground leading-snug">
+                              <MessageContent
+                                content={message.content.slice(2)}
+                                workspaceMembers={workspaceMembers}
+                                onMentionClick={handleDirectMessage}
+                              />
+                            </div>
+                            <span className="text-[10px] text-muted-foreground/50 flex-shrink-0 tabular-nums">
+                              {formatTime(message.createdAt)}
+                            </span>
+                          </motion.div>
+                        </div>
+                      );
+                    }
+
+                    // ── Regular message ──
                     return (
                       <div key={message.id}>
                         {/* Date separator */}
@@ -1428,12 +1480,12 @@ export default function ChatPage() {
                         <motion.div
                           initial={{ opacity: 0, y: 3 }}
                           animate={{ opacity: 1, y: 0 }}
-                          className={`relative group flex items-start gap-2 px-4 -mx-4 py-0.5 hover:bg-muted/30 transition-colors ${showAvatar ? "mt-2" : ""} ${message.status === "pending" ? "opacity-50" : ""} ${message.status === "failed" ? "bg-red-500/5" : ""}`}
+                          className={`relative group flex items-start gap-2 px-4 -mx-4 py-0.5 hover:bg-muted/30 transition-colors ${showAvatar ? "mt-3 pt-1" : ""} ${message.status === "pending" ? "opacity-50" : ""} ${message.status === "failed" ? "bg-red-500/5" : ""}`}
                         >
                           {/* Avatar gutter */}
                           {showAvatar ? (
                             <Avatar className="h-8 w-8 mt-0.5 flex-shrink-0">
-                              <AvatarImage src={message.author.image || ""} />
+                              <AvatarImage src={message.author.image || getDiceBearAvatar(message.author.name)} />
                               <AvatarFallback className={avatarFallbackClass(message.author.name, "text-[11px] font-semibold")}>
                                 {message.author.name?.[0]?.toUpperCase() || "?"}
                               </AvatarFallback>
@@ -1581,7 +1633,7 @@ export default function ChatPage() {
                     className="flex items-end gap-2 mt-3 px-1"
                   >
                     <Avatar className="h-6 w-6 flex-shrink-0">
-                      <AvatarImage src={typingUsers[0].image || ""} />
+                      <AvatarImage src={typingUsers[0].image || getDiceBearAvatar(typingUsers[0].name)} />
                       <AvatarFallback className={avatarFallbackClass(typingUsers[0].name, "text-[10px] font-semibold")}>{typingUsers[0].name?.[0] || "?"}</AvatarFallback>
                     </Avatar>
                     <div className="bg-muted rounded-2xl rounded-bl-sm px-3 py-2 flex items-center gap-1.5">
@@ -1696,7 +1748,7 @@ export default function ChatPage() {
               <div className="px-4 py-3 border-b bg-muted/30">
                 <div className="flex items-start gap-3">
                   <Avatar className="h-8 w-8 flex-shrink-0">
-                    <AvatarImage src={activeThread.author.image || ""} />
+                    <AvatarImage src={activeThread.author.image || getDiceBearAvatar(activeThread.author.name)} />
                     <AvatarFallback className="text-xs">
                       {activeThread.author.name?.[0]?.toUpperCase() || "?"}
                     </AvatarFallback>
@@ -1748,7 +1800,7 @@ export default function ChatPage() {
                     threadReplies.map((reply) => (
                       <div key={reply.id} className="flex items-start gap-2">
                         <Avatar className="h-6 w-6 flex-shrink-0 mt-0.5">
-                          <AvatarImage src={reply.author.image || ""} />
+                          <AvatarImage src={reply.author.image || getDiceBearAvatar(reply.author.name)} />
                           <AvatarFallback className="text-[10px]">
                             {reply.author.name?.[0]?.toUpperCase() || "?"}
                           </AvatarFallback>

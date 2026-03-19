@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import React, { useState, useEffect, use } from "react";
 import { toast } from "sonner";
 import { useSession, signOut } from "next-auth/react";
 import { useTheme } from "next-themes";
@@ -12,10 +12,11 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { avatarFallbackClass } from "@/lib/avatar-colors";
+import { ImageCropperModal } from "@/components/ui/ImageCropperModal";
+import { avatarFallbackClass, getDiceBearAvatar, getRandomDiceBearAvatar } from "@/lib/avatar-colors";
 import {
     Sun, Moon, Monitor, Loader2, Save, Trash2, LogOut, Globe,
-    User, Palette, Settings2, Shield, Bell, ChevronRight, Mail, Crown, Users, Key, RefreshCw, Copy
+    User, Palette, Settings2, Shield, Bell, ChevronRight, Mail, Crown, Users, Key, RefreshCw, Copy, Camera, Dices
 } from "lucide-react";
 
 type SettingsTab = "profile" | "appearance" | "workspace" | "integrations" | "notifications" | "danger";
@@ -31,7 +32,7 @@ const tabs = [
 
 export default function WorkspaceSettingsPage({ params }: { params: Promise<{ slug: string }> }) {
     const { slug } = use(params);
-    const { data: session } = useSession();
+    const { data: session, update } = useSession();
     const { theme, setTheme, resolvedTheme } = useTheme();
 
     const [activeTab, setActiveTab] = useState<SettingsTab>("profile");
@@ -48,6 +49,10 @@ export default function WorkspaceSettingsPage({ params }: { params: Promise<{ sl
     const [mounted, setMounted] = useState(false);
     const [githubIntegration, setGithubIntegration] = useState<any>(null);
     const [webhookUrl, setWebhookUrl] = useState("");
+    const [avatarUrl, setAvatarUrl] = useState("");
+    const [uploadingAvatar, setUploadingAvatar] = useState(false);
+    const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
+    const avatarInputRef = React.useRef<HTMLInputElement>(null);
 
     // Notification preferences (local state — no backend for these)
     const [notifMentions, setNotifMentions] = useState(true);
@@ -236,36 +241,173 @@ export default function WorkspaceSettingsPage({ params }: { params: Promise<{ sl
                         <Separator />
 
                         {/* Avatar + Info */}
-                        <div className="flex items-start gap-5">
-                            <div className="relative group">
-                                <Avatar className="h-20 w-20 border-2 border-border">
-                                    <AvatarImage src={session?.user?.image || ""} />
-                                    <AvatarFallback className={avatarFallbackClass(session?.user?.name, "text-2xl font-bold")}>
-                                        {session?.user?.name?.[0]?.toUpperCase() || "?"}
-                                    </AvatarFallback>
-                                </Avatar>
+                        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
+                            <div className="flex flex-col items-center gap-3">
+                                <div className="relative group cursor-pointer" onClick={() => avatarInputRef.current?.click()}>
+                                    <Avatar className="h-24 w-24 border-4 border-background shadow-sm ring-1 ring-border">
+                                        <AvatarImage src={avatarUrl || session?.user?.image || getDiceBearAvatar(session?.user?.name)} />
+                                        <AvatarFallback className={avatarFallbackClass(session?.user?.name, "text-3xl font-bold")}>
+                                            {session?.user?.name?.[0]?.toUpperCase() || "?"}
+                                        </AvatarFallback>
+                                    </Avatar>
+                                    {/* Upload overlay */}
+                                    <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                        {uploadingAvatar ? (
+                                            <Loader2 className="w-6 h-6 text-white animate-spin" />
+                                        ) : (
+                                            <Camera className="w-6 h-6 text-white" />
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="flex flex-col gap-2 w-full mt-1">
+                                    <Button variant="outline" size="sm" className="w-full text-xs h-8" onClick={() => avatarInputRef.current?.click()} disabled={uploadingAvatar}>
+                                        <Camera className="w-3.5 h-3.5 mr-2" /> Upload Photo
+                                    </Button>
+                                    <Button 
+                                        variant="secondary" 
+                                        size="sm" 
+                                        className="w-full text-xs h-8 bg-indigo-500/10 text-indigo-600 hover:bg-indigo-500/20 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
+                                        disabled={uploadingAvatar}
+                                        onClick={async () => {
+                                            const randomUrl = getRandomDiceBearAvatar(120);
+                                            setUploadingAvatar(true);
+                                            try {
+                                                const profileRes = await fetch("/api/user/profile", {
+                                                    method: "PATCH",
+                                                    headers: { "Content-Type": "application/json" },
+                                                    body: JSON.stringify({ image: randomUrl }),
+                                                });
+                                                if (!profileRes.ok) throw new Error("Update failed");
+                                                await update({ image: randomUrl });
+                                                setAvatarUrl(randomUrl);
+                                                toast.success("Avatar randomized!");
+                                            } catch(e) { toast.error("Failed to update avatar"); }
+                                            finally { setUploadingAvatar(false); }
+                                        }}
+                                    >
+                                        <Dices className="w-3.5 h-3.5 mr-2" /> Randomize
+                                    </Button>
+                                    <input
+                                        ref={avatarInputRef}
+                                        type="file"
+                                        accept="image/jpeg,image/png,image/gif,image/webp"
+                                        className="hidden"
+                                        onChange={async (e) => {
+                                            const file = e.target.files?.[0];
+                                            if (!file) return;
+                                            if (file.size > 5 * 1024 * 1024) {
+                                                toast.error("Image must be under 5MB");
+                                                return;
+                                            }
+                                            
+                                            const reader = new FileReader();
+                                            reader.addEventListener("load", () => {
+                                                setCropImageSrc(reader.result?.toString() || null);
+                                            });
+                                            reader.readAsDataURL(file);
+                                            e.target.value = "";
+                                        }}
+                                    />
+                                    <ImageCropperModal
+                                        isOpen={!!cropImageSrc}
+                                        imageSrc={cropImageSrc}
+                                        onClose={() => setCropImageSrc(null)}
+                                        onCropCompleteAction={async (croppedFile) => {
+                                            setCropImageSrc(null);
+                                            setUploadingAvatar(true);
+                                            try {
+                                                const formData = new FormData();
+                                                formData.append("file", croppedFile);
+                                                const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
+                                                if (!uploadRes.ok) throw new Error("Upload failed");
+                                                const { url } = await uploadRes.json();
+                                                
+                                                const profileRes = await fetch("/api/user/profile", {
+                                                    method: "PATCH",
+                                                    headers: { "Content-Type": "application/json" },
+                                                    body: JSON.stringify({ image: url }),
+                                                });
+                                                if (!profileRes.ok) throw new Error("Profile update failed");
+
+                                                await update({ image: url });
+                                                setAvatarUrl(url);
+                                                toast.success("Profile picture updated!");
+                                            } catch (err) {
+                                                toast.error(err instanceof Error ? err.message : "Failed to upload");
+                                            } finally {
+                                                setUploadingAvatar(false);
+                                            }
+                                        }}
+                                    />
+                                </div>
                             </div>
-                            <div className="flex-1 space-y-3">
-                                <div>
-                                    <Label className="text-xs text-muted-foreground uppercase tracking-wide">Display Name</Label>
-                                    <p className="text-lg font-semibold mt-0.5">{session?.user?.name}</p>
-                                </div>
-                                <div>
-                                    <Label className="text-xs text-muted-foreground uppercase tracking-wide">Email</Label>
-                                    <div className="flex items-center gap-2 mt-0.5">
-                                        <Mail className="w-3.5 h-3.5 text-muted-foreground" />
-                                        <p className="text-sm">{session?.user?.email}</p>
+                            <div className="flex-1 w-full space-y-3">
+                                <form onSubmit={async (e) => {
+                                    e.preventDefault();
+                                    const formData = new FormData(e.currentTarget);
+                                    const name = formData.get("name") as string;
+                                    const handle = formData.get("handle") as string;
+                                    const bio = formData.get("bio") as string;
+                                    
+                                    try {
+                                        const res = await fetch("/api/user/profile", {
+                                            method: "PATCH",
+                                            headers: { "Content-Type": "application/json" },
+                                            body: JSON.stringify({ name, handle, bio })
+                                        });
+                                        if (!res.ok) {
+                                            const error = await res.json();
+                                            throw new Error(error.error || "Failed to update profile");
+                                        }
+                                        await update({ name, handle, bio });
+                                        toast.success("Profile saved successfully!");
+                                    } catch (err: any) {
+                                        toast.error(err.message);
+                                    }
+                                }} className="space-y-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Display Name</Label>
+                                            <Input name="name" defaultValue={session?.user?.name || ""} placeholder="Your name" />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Username Handle</Label>
+                                            <div className="relative">
+                                                <span className="absolute left-3 top-2.5 text-muted-foreground text-sm font-medium">@</span>
+                                                <Input name="handle" className="pl-7" defaultValue={(session?.user as any)?.handle || ""} placeholder="john_doe" />
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                                <div>
-                                    <Label className="text-xs text-muted-foreground uppercase tracking-wide">Role</Label>
-                                    <div className="flex items-center gap-2 mt-0.5">
-                                        <Badge variant={isOwner ? "default" : "secondary"} className="text-xs capitalize">
-                                            {isOwner && <Crown className="w-3 h-3 mr-1" />}
-                                            {userRole || "member"}
-                                        </Badge>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Bio</Label>
+                                        <Textarea name="bio" rows={3} defaultValue={(session?.user as any)?.bio || ""} placeholder="A short bio about yourself... (max 160 chars)" maxLength={160} className="resize-none" />
                                     </div>
-                                </div>
+                                    
+                                    <div className="flex items-center justify-between pt-2 border-t mt-4">
+                                        <div className="flex items-center gap-4">
+                                            <div className="flex flex-col">
+                                                <Label className="text-[10px] text-muted-foreground uppercase tracking-wide">Email Linked</Label>
+                                                <div className="flex items-center gap-1.5 mt-0.5">
+                                                    <Mail className="w-3.5 h-3.5 text-muted-foreground" />
+                                                    <p className="text-xs font-medium">{session?.user?.email}</p>
+                                                </div>
+                                            </div>
+                                            <div className="w-px h-8 bg-border hidden sm:block" />
+                                            <div className="flex flex-col hidden sm:flex">
+                                                <Label className="text-[10px] text-muted-foreground uppercase tracking-wide">Workspace Role</Label>
+                                                <div className="mt-0.5">
+                                                    <Badge variant={isOwner ? "default" : "secondary"} className="text-[10px] capitalize px-1.5 py-0 h-4">
+                                                        {isOwner && <Crown className="w-2.5 h-2.5 mr-1" />}
+                                                        {userRole || "member"}
+                                                    </Badge>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <Button type="submit" size="sm" className="gap-2 h-8">
+                                            <Save className="w-3.5 h-3.5" /> Save Changes
+                                        </Button>
+                                    </div>
+                                </form>
                             </div>
                         </div>
 
@@ -285,7 +427,7 @@ export default function WorkspaceSettingsPage({ params }: { params: Promise<{ sl
                                     {members.map((m: any) => (
                                         <div key={m.id || m.userId} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted/40 transition-colors">
                                             <Avatar className="h-8 w-8">
-                                                <AvatarImage src={m.user?.image || m.image || ""} />
+                                                <AvatarImage src={m.user?.image || m.image || getDiceBearAvatar(m.user?.name || m.name)} />
                                                 <AvatarFallback className={avatarFallbackClass(m.user?.name || m.name, "text-[11px] font-semibold")}>
                                                     {(m.user?.name || m.name)?.[0]?.toUpperCase() || "?"}
                                                 </AvatarFallback>

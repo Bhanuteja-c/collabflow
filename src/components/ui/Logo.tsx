@@ -40,11 +40,20 @@ export default function Logo({ className = "", showText = true, size = "md" }: L
                 className="flex-shrink-0"
             >
                 <defs>
-                    {/* Main gradient */}
-                    <linearGradient id="logoGradientPrimary" x1="0%" y1="0%" x2="100%" y2="100%">
+                    {/* Animated gradient — slow shimmer cycle */}
+                    <linearGradient id="logoGradientPrimary" x1="0%" y1="0%" x2="200%" y2="200%" gradientUnits="userSpaceOnUse">
                         <stop offset="0%" stopColor="#3B82F6" />
-                        <stop offset="50%" stopColor="#6366F1" />
-                        <stop offset="100%" stopColor="#8B5CF6" />
+                        <stop offset="25%" stopColor="#6366F1" />
+                        <stop offset="50%" stopColor="#8B5CF6" />
+                        <stop offset="75%" stopColor="#6366F1" />
+                        <stop offset="100%" stopColor="#3B82F6" />
+                        <animateTransform
+                            attributeName="gradientTransform"
+                            type="translate"
+                            values="0 0; -48 -48"
+                            dur="4s"
+                            repeatCount="indefinite"
+                        />
                     </linearGradient>
 
                     {/* Glow filter */}
@@ -77,7 +86,7 @@ export default function Logo({ className = "", showText = true, size = "md" }: L
                     fill="none"
                     stroke="white"
                     strokeWidth="1"
-                    opacity="0.2"
+                    opacity="0.25"
                 />
 
                 {/* Flow symbol - stylized arrow/wave representing collaboration flow */}

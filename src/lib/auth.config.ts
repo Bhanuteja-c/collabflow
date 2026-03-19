@@ -53,6 +53,9 @@ export const authConfig = {
                     email: user.email,
                     name: user.name,
                     image: user.image,
+                    status: user.status as string,
+                    bio: user.bio || undefined,
+                    handle: user.handle || undefined,
                 };
             },
         }),
@@ -80,15 +83,30 @@ export const authConfig = {
 
             return true;
         },
-        jwt({ token, user }) {
+        jwt({ token, user, trigger, session }) {
             if (user) {
-                token.id = user.id;
+                token.id = user.id!;
+                token.image = user.image ?? undefined;
+                token.status = user.status || undefined;
+                token.bio = user.bio || undefined;
+                token.handle = user.handle || undefined;
+            }
+            if (trigger === "update" && session) {
+                if (session.image !== undefined) token.image = session.image;
+                if (session.status !== undefined) token.status = session.status;
+                if (session.bio !== undefined) token.bio = session.bio;
+                if (session.handle !== undefined) token.handle = session.handle;
+                if (session.name !== undefined) token.name = session.name;
             }
             return token;
         },
         session({ session, token }) {
             if (session.user && token.id) {
                 session.user.id = token.id as string;
+                if (token.image) session.user.image = token.image as string;
+                if (token.status) session.user.status = token.status as string;
+                if (token.bio) session.user.bio = token.bio as string;
+                if (token.handle) session.user.handle = token.handle as string;
             }
             return session;
         },

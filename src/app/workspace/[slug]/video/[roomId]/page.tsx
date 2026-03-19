@@ -361,6 +361,14 @@ export default function WorkspaceVideoRoomPage({
     } else {
       // Turning ON: Request a new camera stream
       try {
+        // Ensure old tracks are completely stopped to prevent NotReadableError hardware locks
+        if (originalVideoTrackRef.current) {
+          originalVideoTrackRef.current.stop();
+        }
+        if (localStream) {
+          localStream.getVideoTracks().forEach(t => t.stop());
+        }
+
         const s = await navigator.mediaDevices.getUserMedia({ video: true });
         const newVideoTrack = s.getVideoTracks()[0];
         originalVideoTrackRef.current = newVideoTrack;
@@ -441,8 +449,15 @@ export default function WorkspaceVideoRoomPage({
     setTimeout(() => setCopiedLink(false), 2000);
   }, [slug, roomId]);
   const handleLeave = useCallback(() => {
-    localStream?.getTracks().forEach((t) => t.stop());
-    screenStreamRef.current?.getTracks().forEach((t) => t.stop());
+    if (localStream) {
+      localStream.getTracks().forEach((t) => t.stop());
+    }
+    if (originalVideoTrackRef.current) {
+      originalVideoTrackRef.current.stop();
+    }
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach((t) => t.stop());
+    }
     recognitionRef.current?.stop();
     setPhase("summary");
   }, [localStream]);
@@ -473,21 +488,30 @@ export default function WorkspaceVideoRoomPage({
     async (kind: "audioinput" | "videoinput" | "audiooutput", deviceId: string) => {
       try {
         if (kind === "audioinput") {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: deviceId } } });
-          const newAudioTrack = stream.getAudioTracks()[0];
+          // Stop old track first
           if (localStream) {
             const oldAudio = localStream.getAudioTracks()[0];
             if (oldAudio) { oldAudio.stop(); localStream.removeTrack(oldAudio); }
+          }
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: deviceId } } });
+          const newAudioTrack = stream.getAudioTracks()[0];
+          if (localStream) {
             localStream.addTrack(newAudioTrack);
             replaceAudioTrack(newAudioTrack);
             setLocalStream(new MediaStream(localStream.getTracks()));
           }
         } else if (kind === "videoinput") {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: deviceId } } });
-          const newVideoTrack = stream.getVideoTracks()[0];
+          // Stop old track first to release hardware lock
+          if (originalVideoTrackRef.current) {
+            originalVideoTrackRef.current.stop();
+          }
           if (localStream) {
             const oldVideo = localStream.getVideoTracks()[0];
             if (oldVideo) { oldVideo.stop(); localStream.removeTrack(oldVideo); }
+          }
+          const stream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: deviceId } } });
+          const newVideoTrack = stream.getVideoTracks()[0];
+          if (localStream) {
             localStream.addTrack(newVideoTrack);
             originalVideoTrackRef.current = newVideoTrack;
             replaceVideoTrack(newVideoTrack);

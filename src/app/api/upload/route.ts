@@ -62,6 +62,8 @@ export async function POST(req: NextRequest) {
         // Initialize Azure Blob Client
         const blobServiceClient = BlobServiceClient.fromConnectionString(AZURE_STORAGE_CONNECTION_STRING);
         const containerClient = blobServiceClient.getContainerClient("uploads");
+        // Ensure the container exists (auto-create on first upload)
+        await containerClient.createIfNotExists({ access: "blob" });
 
         // Convert file to buffer
         const bytes = await file.arrayBuffer();

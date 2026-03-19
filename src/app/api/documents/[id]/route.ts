@@ -107,7 +107,7 @@ export async function PUT(
         const userId = await ensureUser(session.user as any);
 
         const body = await req.json();
-        const { title, content, isPublic, parentId } = body;
+        const { title, content, isPublic, parentId, coverImage } = body;
 
         // Check ownership OR edit permission OR workspace membership
         const existing = await prisma.document.findUnique({
@@ -155,6 +155,7 @@ export async function PUT(
                 ...(content !== undefined && { content }),
                 ...(isPublic !== undefined && { isPublic }),
                 ...(parentId !== undefined && { parentId }),
+                ...(coverImage !== undefined && { coverImage }),
             },
         });
 

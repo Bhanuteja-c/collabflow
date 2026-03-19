@@ -28,7 +28,9 @@ import {
     BarChart3,
     PenTool,
 } from "lucide-react";
-import { avatarFallbackClass } from "@/lib/avatar-colors";
+import { avatarFallbackClass, getDiceBearAvatar } from "@/lib/avatar-colors";
+import { UserAvatar } from "@/components/ui/UserAvatar";
+import { DropdownMenuTrigger } from "@radix-ui/react-dropdown-menu";
 
 interface WorkspaceSidebarProps {
     workspaceSlug: string;
@@ -138,13 +140,7 @@ function SidebarContent({ workspaceSlug, onItemClick }: { workspaceSlug: string;
                         {onlineUsers.slice(0, 5).map((u) => (
                             <div key={u.socketId} className="flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-muted/50 transition-colors">
                                 <div className="relative flex-shrink-0">
-                                    <Avatar className="h-6 w-6">
-                                        {u.user.image && <AvatarImage src={u.user.image} />}
-                                        <AvatarFallback className="text-[10px] bg-primary/15 text-primary">
-                                            {u.user.name?.[0]?.toUpperCase() || "?"}
-                                        </AvatarFallback>
-                                    </Avatar>
-                                    <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-card" />
+                                    <UserAvatar user={{ ...u.user, status: (u.user as any).status || "AVAILABLE" }} className="h-6 w-6" />
                                 </div>
                                 <span className="text-xs text-foreground truncate">{u.user.name}</span>
                             </div>
@@ -161,12 +157,7 @@ function SidebarContent({ workspaceSlug, onItemClick }: { workspaceSlug: string;
             {/* User Profile + Sign Out */}
             <div className="border-t p-3">
                 <div className="flex items-center gap-2.5">
-                    <Avatar className="h-8 w-8 flex-shrink-0">
-                        <AvatarImage src={session?.user?.image || ""} />
-                        <AvatarFallback className={avatarFallbackClass(session?.user?.name, "text-xs font-semibold")}>
-                            {session?.user?.name?.[0]?.toUpperCase() || "?"}
-                        </AvatarFallback>
-                    </Avatar>
+                    <UserAvatar user={{ ...session?.user, status: (session?.user as any)?.status || "AVAILABLE" } as any} className="h-8 w-8 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium truncate">{session?.user?.name}</p>
                         <p className="text-[10px] text-muted-foreground truncate">{session?.user?.email}</p>
