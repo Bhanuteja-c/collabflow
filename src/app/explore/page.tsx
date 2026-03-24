@@ -10,7 +10,7 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { Badge } from "@/components/ui/badge";
 import {
     Search,
@@ -178,12 +178,7 @@ export default function ExplorePage() {
                                     <CardContent className="p-6">
                                         {/* Header */}
                                         <div className="flex items-start gap-4 mb-4">
-                                            <Avatar className="h-12 w-12 rounded-lg">
-                                                <AvatarImage src={ws.image || undefined} />
-                                                <AvatarFallback className="rounded-lg bg-primary/10 text-primary font-bold">
-                                                    {ws.name[0]?.toUpperCase()}
-                                                </AvatarFallback>
-                                            </Avatar>
+                                            <UserAvatar user={ws} className="h-12 w-12 rounded-lg" showStatus={false} />
                                             <div className="flex-1 min-w-0">
                                                 <h3 className="font-semibold text-lg truncate group-hover:text-primary transition-colors">
                                                     {ws.name}

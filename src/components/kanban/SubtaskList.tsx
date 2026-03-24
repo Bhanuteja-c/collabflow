@@ -3,7 +3,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -273,12 +273,7 @@ export default function SubtaskList({
 
               {/* Assignee avatar */}
               {subtask.assignee && (
-                <Avatar className="h-5 w-5 shrink-0">
-                  <AvatarImage src={subtask.assignee.image || undefined} />
-                  <AvatarFallback className="text-[9px]">
-                    {subtask.assignee.name?.[0] || "?"}
-                  </AvatarFallback>
-                </Avatar>
+                <UserAvatar user={subtask.assignee} className="h-5 w-5" showStatus={false} />
               )}
 
               {/* Open detail */}
@@ -336,10 +331,7 @@ export default function SubtaskList({
                         <Button variant="outline" size="sm" className="h-7 px-2 text-xs gap-1.5 focus-visible:ring-0">
                           {selectedAssignee ? (
                             <>
-                              <Avatar className="w-4 h-4">
-                                <AvatarImage src={selectedAssignee.image || undefined} />
-                                <AvatarFallback className="text-[8px]">{selectedAssignee.name?.[0] || "?"}</AvatarFallback>
-                              </Avatar>
+                              <UserAvatar user={selectedAssignee} className="w-4 h-4" showStatus={false} />
                               <span className="hidden sm:inline w-16 truncate text-left">{selectedAssignee.name?.split(" ")[0]}</span>
                             </>
                           ) : (
@@ -356,10 +348,7 @@ export default function SubtaskList({
                         </DropdownMenuItem>
                         {workspaceMembers.map(member => (
                           <DropdownMenuItem key={member.id} onClick={() => setAddingAssigneeId(member.id)} className="text-xs gap-2">
-                            <Avatar className="w-4 h-4">
-                              <AvatarImage src={member.image || undefined} />
-                              <AvatarFallback className="text-[8px]">{member.name?.[0] || "?"}</AvatarFallback>
-                            </Avatar>
+                            <UserAvatar user={member} className="w-4 h-4" showStatus={false} />
                             {member.name}
                           </DropdownMenuItem>
                         ))}

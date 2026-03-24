@@ -17,7 +17,8 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { Check, ChevronsUpDown, Plus, Building2, LogIn, Search, Loader2, Users, Globe, Hash } from "lucide-react";
 import { toast } from "sonner";
 
@@ -95,12 +96,7 @@ export function WorkspaceSwitcher({ currentSlug }: WorkspaceSwitcherProps) {
                         <div className="flex items-center gap-2 truncate">
                             {currentWorkspace ? (
                                 <>
-                                    <Avatar className="h-6 w-6">
-                                        <AvatarImage src={currentWorkspace.image || ""} />
-                                        <AvatarFallback className="text-xs bg-primary/10 text-primary">
-                                            {currentWorkspace.name[0]}
-                                        </AvatarFallback>
-                                    </Avatar>
+                                    <UserAvatar user={{ name: currentWorkspace.name, image: currentWorkspace.image }} className="h-6 w-6" showStatus={false} />
                                     <span className="truncate font-medium">{currentWorkspace.name}</span>
                                 </>
                             ) : (
@@ -125,12 +121,7 @@ export function WorkspaceSwitcher({ currentSlug }: WorkspaceSwitcherProps) {
                                 onClick={() => handleSelect(workspace.slug)}
                                 className="flex items-center gap-2 cursor-pointer"
                             >
-                                <Avatar className="h-6 w-6">
-                                    <AvatarImage src={workspace.image || ""} />
-                                    <AvatarFallback className="text-xs bg-primary/10 text-primary">
-                                        {workspace.name[0]}
-                                    </AvatarFallback>
-                                </Avatar>
+                                <UserAvatar user={{ name: workspace.name, image: workspace.image }} className="h-6 w-6" showStatus={false} />
                                 <div className="flex-1 truncate">
                                     <p className="truncate font-medium">{workspace.name}</p>
                                     <p className="text-xs text-muted-foreground">
@@ -361,12 +352,7 @@ function JoinWorkspaceDialog({
                                         key={ws.id}
                                         className="flex items-start gap-3 p-3 rounded-lg border hover:bg-muted/30 transition-colors"
                                     >
-                                        <Avatar className="h-10 w-10 flex-shrink-0 mt-0.5">
-                                            <AvatarImage src={ws.image || ""} />
-                                            <AvatarFallback className="bg-primary/10 text-primary font-semibold">
-                                                {ws.name[0]?.toUpperCase()}
-                                            </AvatarFallback>
-                                        </Avatar>
+                                        <UserAvatar user={{ name: ws.name, image: ws.image }} className="h-10 w-10" showStatus={false} />
                                         <div className="flex-1 min-w-0">
                                             <p className="font-medium text-sm truncate">{ws.name}</p>
                                             {ws.description && (

@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -215,12 +215,7 @@ export default function CreateCardDialog({
                                 <Button variant="outline" size="sm" className="gap-1.5 h-8 rounded-lg text-xs">
                                     {selectedAssignee ? (
                                         <>
-                                            <Avatar className="w-4 h-4">
-                                                <AvatarImage src={selectedAssignee.image || undefined} />
-                                                <AvatarFallback className="text-[8px]">
-                                                    {selectedAssignee.name?.[0] || "?"}
-                                                </AvatarFallback>
-                                            </Avatar>
+                                            <UserAvatar user={selectedAssignee} className="w-4 h-4" showStatus={false} />
                                             <span className="max-w-24 truncate">{selectedAssignee.name}</span>
                                         </>
                                     ) : (
@@ -242,12 +237,7 @@ export default function CreateCardDialog({
                                         onClick={() => setAssigneeId(member.id)}
                                         className="gap-2"
                                     >
-                                        <Avatar className="w-5 h-5">
-                                            <AvatarImage src={member.image || undefined} />
-                                            <AvatarFallback className="text-xs">
-                                                {member.name?.[0] || "?"}
-                                            </AvatarFallback>
-                                        </Avatar>
+                                        <UserAvatar user={member} className="w-5 h-5" showStatus={false} />
                                         {member.name}
                                         {assigneeId === member.id && <span className="ml-auto">✓</span>}
                                     </DropdownMenuItem>

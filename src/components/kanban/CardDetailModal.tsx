@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -42,8 +43,9 @@ import {
     Hexagon,
     Timer,
     Play,
+    GitBranch,
 } from "lucide-react";
-import { format, isBefore, addDays } from "date-fns";
+import { format, isBefore, addDays, formatDistanceToNow } from "date-fns";
 import SubtaskList from "@/components/kanban/SubtaskList";
 import { ChevronRight, ArrowLeft } from "lucide-react";
 
@@ -202,6 +204,85 @@ function formatMinutesToInput(mins: number): string {
     return `${h}h ${m}m`;
 }
 
+// ── GitHub Activity Sub-component ─────────────────────────────────────
+interface GitHubActivity {
+    id: string;
+    type: string;
+    action: string;
+    metadata: {
+        source: string;
+        event: string;
+        commitSha?: string;
+        prNumber?: number;
+        prTitle?: string;
+        prUrl?: string;
+        fromColumn?: string;
+        toColumn?: string;
+    };
+    createdAt: string;
+}
+
+function GitHubActivitySection({ cardId }: { cardId: string }) {
+    const [activities, setActivities] = useState<GitHubActivity[]>([]);
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        if (!cardId) return;
+        let cancelled = false;
+        setLoading(true);
+        fetch(`/api/cards/${cardId}/github-activity`)
+            .then(res => res.ok ? res.json() : [])
+            .then(data => {
+                if (!cancelled) setActivities(data || []);
+            })
+            .catch(() => {})
+            .finally(() => { if (!cancelled) setLoading(false); });
+        return () => { cancelled = true; };
+    }, [cardId]);
+
+    if (loading) return null; // Don't show skeleton for this secondary info
+    if (activities.length === 0) return null; // Hide section entirely if no activity
+
+    return (
+        <div className="px-6 py-3 border-t border-border/40">
+            <h4 className="font-medium text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-2 mb-2.5">
+                <GitBranch className="w-3.5 h-3.5" />
+                GitHub Activity
+                <span className="normal-case tracking-normal text-[11px]">({activities.length})</span>
+            </h4>
+            <div className="space-y-2">
+                {activities.map((activity) => {
+                    const meta = activity.metadata;
+                    return (
+                        <div key={activity.id} className="flex items-start gap-2.5 text-sm py-1">
+                            <GitBranch className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                                <span className="text-foreground">
+                                    Moved to <strong>{meta.toColumn}</strong>
+                                    {meta.prNumber
+                                        ? <> via <a href={meta.prUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">PR #{meta.prNumber}</a></>
+                                        : meta.commitSha
+                                            ? <> via commit <code className="text-xs bg-muted px-1 py-0.5 rounded">{meta.commitSha.slice(0, 7)}</code></>
+                                            : null
+                                    }
+                                </span>
+                                {meta.fromColumn && (
+                                    <span className="text-muted-foreground text-xs ml-1">
+                                        (from {meta.fromColumn})
+                                    </span>
+                                )}
+                            </div>
+                            <span className="text-xs text-muted-foreground flex-shrink-0 mt-0.5">
+                                {formatDistanceToNow(new Date(activity.createdAt), { addSuffix: true })}
+                            </span>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
+
 function parseTimeInput(input: string): number | null {
     const trimmed = input.trim().toLowerCase();
     if (!trimmed) return null;
@@ -217,6 +298,14 @@ function parseTimeInput(input: string): number | null {
     return totalMinutes > 0 ? totalMinutes : null;
 }
 
+const formatDateForInput = (date: Date | string | null | undefined): string => {
+  if (!date) return "";
+  try {
+    return new Date(date).toISOString().split("T")[0];
+  } catch {
+    return "";
+  }
+};
 
 export default function CardDetailModal({
     card,
@@ -264,7 +353,7 @@ export default function CardDetailModal({
     const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     // Time tracking state
-    const [storyPoints, setStoryPoints] = useState<number | null>(currentCard?.storyPoints ?? null);
+    const [localStoryPoints, setLocalStoryPoints] = useState<number | "">(currentCard?.storyPoints ?? "");
     const [timeEstimated, setTimeEstimated] = useState<number | null>(currentCard?.timeEstimated ?? null);
     const [timeLogs, setTimeLogs] = useState<any[]>([]);
     const [isTimeLogOpen, setIsTimeLogOpen] = useState(false);
@@ -277,6 +366,7 @@ export default function CardDetailModal({
     useEffect(() => {
         if (isOpen && card) {
             setCardStack([card]);
+            // Verification logs removed for production
         } else if (!isOpen) {
             setCardStack([]);
         }
@@ -294,7 +384,7 @@ export default function CardDetailModal({
             setStatus(currentCard.status || "active");
             setAssigneeId(currentCard.assigneeId || "");
             setSelectedEpicId(currentCard.epic?.id || currentCard.epicId || null);
-            setStoryPoints(currentCard.storyPoints ?? null);
+            setLocalStoryPoints(currentCard.storyPoints ?? "");
             setTimeEstimated(currentCard.timeEstimated ?? null);
             setEstimateInput(currentCard.timeEstimated ? formatMinutesToInput(currentCard.timeEstimated) : "");
             fetchCardDetails();
@@ -351,7 +441,7 @@ export default function CardDetailModal({
     const timeProgress = timeEstimated && timeEstimated > 0 ? (totalLoggedMinutes / timeEstimated) * 100 : 0;
 
     const handleStoryPointsChange = async (pts: number | null) => {
-        setStoryPoints(pts);
+        setLocalStoryPoints(pts ?? "");
         saveField("storyPoints", pts);
     };
 
@@ -711,8 +801,8 @@ export default function CardDetailModal({
     const totalItems = checklist.length;
     const checklistProgress = totalItems > 0 ? (completedItems / totalItems) * 100 : 0;
 
-    const isOverdue = dueDate && isBefore(new Date(dueDate), new Date());
-    const isDueSoon = dueDate && !isOverdue && isBefore(new Date(dueDate), addDays(new Date(), 1));
+    const isOverdue = currentCard?.dueDate != null && isBefore(new Date(currentCard.dueDate), new Date()) && status !== "completed";
+    const isDueSoon = currentCard?.dueDate != null && !isOverdue && isBefore(new Date(currentCard.dueDate), addDays(new Date(), 1)) && status !== "completed";
 
     const selectedAssignee = workspaceMembers.find(m => m.id === assigneeId);
 
@@ -803,7 +893,7 @@ export default function CardDetailModal({
                         {/* Due Date */}
                         <div className="flex items-center gap-1.5">
                             <div className={`inline-flex items-center rounded-lg border h-8 px-2 text-xs font-medium ${isOverdue
-                                    ? "border-red-500/50 text-red-600 dark:text-red-400 bg-red-500/5"
+                                    ? "border-red-500/50 text-red-600 dark:text-red-400 bg-red-500/5 text-red-500"
                                     : isDueSoon
                                         ? "border-amber-500/50 text-amber-600 dark:text-amber-400 bg-amber-500/5"
                                         : "border-border"
@@ -811,7 +901,7 @@ export default function CardDetailModal({
                                 <Calendar className="w-3.5 h-3.5 mr-1.5 text-muted-foreground" />
                                 <Input
                                     type="date"
-                                    value={dueDate}
+                                    value={formatDateForInput(currentCard.dueDate ?? null)}
                                     onChange={(e) => handleDueDateChange(e.target.value)}
                                     className="border-0 bg-transparent p-0 h-auto text-xs w-[110px] focus-visible:ring-0 shadow-none"
                                 />
@@ -828,7 +918,7 @@ export default function CardDetailModal({
                             <Clock className="w-3.5 h-3.5 mr-1.5 text-muted-foreground" />
                             <Input
                                 type="date"
-                                value={startDate}
+                                value={formatDateForInput(currentCard.startDate ?? null)}
                                 onChange={(e) => handleStartDateChange(e.target.value)}
                                 className="border-0 bg-transparent p-0 h-auto text-xs w-[110px] focus-visible:ring-0 shadow-none"
                                 title="Start date"
@@ -841,12 +931,7 @@ export default function CardDetailModal({
                                 <Button variant="outline" size="sm" className="gap-1.5 h-8 rounded-lg text-xs">
                                     {selectedAssignee ? (
                                         <>
-                                            <Avatar className="w-4 h-4">
-                                                <AvatarImage src={selectedAssignee.image || undefined} />
-                                                <AvatarFallback className="text-[8px]">
-                                                    {selectedAssignee.name?.[0] || "?"}
-                                                </AvatarFallback>
-                                            </Avatar>
+                                            <UserAvatar user={selectedAssignee} className="w-4 h-4" showStatus={false} />
                                             <span className="max-w-24 truncate">{selectedAssignee.name}</span>
                                         </>
                                     ) : (
@@ -868,12 +953,7 @@ export default function CardDetailModal({
                                         onClick={() => handleAssigneeChange(member.id)}
                                         className="gap-2"
                                     >
-                                        <Avatar className="w-5 h-5">
-                                            <AvatarImage src={member.image || undefined} />
-                                            <AvatarFallback className="text-xs">
-                                                {member.name?.[0] || "?"}
-                                            </AvatarFallback>
-                                        </Avatar>
+                                        <UserAvatar user={member} className="w-5 h-5" showStatus={false} />
                                         {member.name}
                                     </DropdownMenuItem>
                                 ))}
@@ -988,31 +1068,27 @@ export default function CardDetailModal({
                                 {/* Story Points */}
                                 <div className="flex items-center gap-2">
                                     <span className="text-xs text-muted-foreground">Points</span>
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                            <Button variant="outline" size="sm" className="h-7 min-w-[52px] rounded-lg text-xs gap-1.5 font-semibold">
-                                                <Hexagon className="w-3 h-3" />
-                                                {storyPoints ?? "\u2014"}
-                                            </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="start">
-                                            {[1, 2, 3, 5, 8, 13, 21].map((pt) => (
-                                                <DropdownMenuItem
-                                                    key={pt}
-                                                    onClick={() => handleStoryPointsChange(pt)}
-                                                    className={`text-xs font-medium ${storyPoints === pt ? "bg-primary/10" : ""}`}
-                                                >
-                                                    {pt} {pt === 1 ? "point" : "points"}
-                                                </DropdownMenuItem>
-                                            ))}
-                                            <DropdownMenuItem
-                                                onClick={() => handleStoryPointsChange(null)}
-                                                className="text-xs text-muted-foreground"
-                                            >
-                                                Clear
-                                            </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max="100"
+                                      placeholder="—"
+                                      value={localStoryPoints}
+                                      onChange={(e) => {
+                                        const val = e.target.value
+                                        setLocalStoryPoints(val === "" ? "" : parseInt(val, 10))
+                                      }}
+                                      onBlur={() => {
+                                        saveField("storyPoints",
+                                          localStoryPoints === "" ? null 
+                                          : Number(localStoryPoints))
+                                      }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") e.currentTarget.blur()
+                                      }}
+                                      className="w-16 text-center border rounded-md px-2 py-1 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                    />
+                                    <span className="text-xs text-muted-foreground">pts</span>
                                 </div>
 
                                 <div className="w-[1px] h-4 bg-border/50" />
@@ -1128,10 +1204,7 @@ export default function CardDetailModal({
                                     <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">History</span>
                                     {timeLogs.map((log: any) => (
                                         <div key={log.id} className="flex items-center gap-2 group py-1 px-2 -mx-2 rounded-lg hover:bg-muted/30 transition-colors">
-                                            <Avatar className="w-5 h-5">
-                                                <AvatarImage src={log.user?.image || undefined} />
-                                                <AvatarFallback className="text-[8px]">{log.user?.name?.[0] || "?"}</AvatarFallback>
-                                            </Avatar>
+                                            <UserAvatar user={{ name: log.user?.name, image: log.user?.image }} className="w-5 h-5" showStatus={false} />
                                             <span className="text-xs font-medium">{formatMinutesToDisplay(log.duration)}</span>
                                             {log.description && (
                                                 <span className="text-xs text-muted-foreground truncate flex-1">\u2014 {log.description}</span>
@@ -1393,6 +1466,9 @@ export default function CardDetailModal({
                         )}
                     </div>
 
+                    {/* GitHub Activity */}
+                    {card && <GitHubActivitySection cardId={card.id} />}
+
                     {/* Comments */}
                     <div className="px-6 py-4">
                         <h4 className="font-medium text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-2 mb-3">
@@ -1418,12 +1494,7 @@ export default function CardDetailModal({
                                             exit={{ opacity: 0, y: -10 }}
                                             className="flex gap-3 group p-2.5 -mx-2 rounded-xl hover:bg-muted/20 transition-colors"
                                         >
-                                            <Avatar className="w-7 h-7 flex-shrink-0 ring-1 ring-border/30">
-                                                <AvatarImage src={comment.author.image || undefined} />
-                                                <AvatarFallback className="text-[10px] font-semibold">
-                                                    {comment.author.name?.[0] || "?"}
-                                                </AvatarFallback>
-                                            </Avatar>
+                                            <UserAvatar user={comment.author} className="w-7 h-7" showStatus={false} />
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-2">
                                                     <span className="font-medium text-sm">

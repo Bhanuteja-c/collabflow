@@ -19,6 +19,20 @@ export async function GET(
 
         const userId = await ensureUser(session.user as any);
 
+        const searchParams = req.nextUrl.searchParams;
+        const dateStartStr = searchParams.get("dateStart");
+        const dateEndStr = searchParams.get("dateEnd");
+        
+        let dateStart = new Date();
+        dateStart.setDate(dateStart.getDate() - 30);
+        let dateEnd = new Date();
+
+        if (dateStartStr) dateStart = new Date(dateStartStr);
+        if (dateEndStr) {
+            dateEnd = new Date(dateEndStr);
+            dateEnd.setHours(23, 59, 59, 999);
+        }
+
         // Support both id and slug lookup
         const isCuid = slug.length === 25 && /^[a-z0-9]+$/.test(slug);
         const workspace = await prisma.workspace.findFirst({
@@ -69,7 +83,14 @@ export async function GET(
 
         // Get all cards for this board (non-backlog)
         const cards = await prisma.card.findMany({
-            where: { boardId: board.id, isBacklog: false },
+            where: { 
+                boardId: board.id, 
+                isBacklog: false,
+                updatedAt: {
+                    gte: dateStart,
+                    lte: dateEnd
+                }
+            },
             select: {
                 id: true,
                 title: true,
@@ -95,7 +116,13 @@ export async function GET(
         // Get time logs for the board's cards
         const cardIds = cards.map((c) => c.id);
         const timeLogs = await prisma.timeLog.findMany({
-            where: { cardId: { in: cardIds } },
+            where: { 
+                cardId: { in: cardIds },
+                createdAt: {
+                    gte: dateStart,
+                    lte: dateEnd
+                }
+            },
             select: {
                 duration: true,
                 userId: true,
@@ -140,7 +167,7 @@ export async function GET(
         }));
 
         // --- Velocity: Story points completed per week (last 8 weeks) ---
-        const now = new Date();
+        const now = dateEnd;
         const velocity: { week: string; points: number; completed: number }[] = [];
         for (let i = 7; i >= 0; i--) {
             const weekStart = new Date(now);

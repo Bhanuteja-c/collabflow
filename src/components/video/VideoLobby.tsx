@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import {
   Select,
   SelectContent,
@@ -216,12 +216,7 @@ export function VideoLobby({
                 />
                 {isVideoOff && (
                   <div className="absolute inset-0 flex items-center justify-center bg-[#3c4043]">
-                    <Avatar className="h-20 w-20 ring-2 ring-white/10">
-                      <AvatarImage src={userImage} />
-                      <AvatarFallback className="text-3xl bg-[#5f6368] text-white font-medium">
-                        {displayName?.[0]?.toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
+                    <UserAvatar user={{ name: displayName, image: userImage }} className="h-20 w-20" showStatus={false} />
                   </div>
                 )}
               </>

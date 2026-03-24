@@ -10,7 +10,7 @@ import {
     HoverCardContent,
     HoverCardTrigger,
 } from "@/components/ui/hover-card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { FileText, User, Clock } from "lucide-react";
 
 interface DocData {
@@ -96,12 +96,7 @@ export function DocLinkPreview({ docId }: DocLinkPreviewProps) {
                         <div className="flex items-center justify-between pt-2 border-t">
                             {doc.author ? (
                                 <div className="flex items-center gap-2">
-                                    <Avatar className="h-5 w-5">
-                                        <AvatarImage src={doc.author.image} />
-                                        <AvatarFallback className="text-[10px]">
-                                            {doc.author.name?.[0]?.toUpperCase()}
-                                        </AvatarFallback>
-                                    </Avatar>
+                                    <UserAvatar user={{ name: doc.author.name, image: doc.author.image }} className="h-5 w-5" showStatus={false} />
                                     <span className="text-xs text-muted-foreground">
                                         {doc.author.name}
                                     </span>

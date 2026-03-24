@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ensureUser } from "@/lib/ensureUser";
-import { pusherServer } from "@/lib/pusher";
 
 // POST /api/reactions - Add or remove reaction
 export async function POST(req: NextRequest) {
@@ -49,15 +48,6 @@ export async function POST(req: NextRequest) {
             await prisma.reaction.delete({
                 where: { id: existingReaction.id },
             });
-
-            // Trigger Pusher update
-            await pusherServer.trigger(`channel-${message.channelId}`, "message-reaction", {
-                messageId,
-                emoji,
-                userId,
-                action: "removed"
-            });
-
             return NextResponse.json({ action: "removed" });
         } else {
             // Add reaction
@@ -68,16 +58,6 @@ export async function POST(req: NextRequest) {
                     emoji,
                 },
             });
-
-            // Trigger Pusher update
-            await pusherServer.trigger(`channel-${message.channelId}`, "message-reaction", {
-                messageId,
-                emoji,
-                userId,
-                id: reaction.id,
-                action: "added"
-            });
-
             return NextResponse.json({ action: "added", reaction });
         }
 

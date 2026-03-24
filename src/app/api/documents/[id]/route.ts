@@ -148,6 +148,8 @@ export async function PUT(
             details = `Changed title from "${existing.title}" to "${title}"`;
         }
 
+        const isSnapshot = req.nextUrl.searchParams.get("snapshot") === "true";
+
         const document = await prisma.document.update({
             where: { id },
             data: {
@@ -159,16 +161,18 @@ export async function PUT(
             },
         });
 
-        // Record history entry
-        await prisma.documentHistory.create({
-            data: {
-                documentId: id,
-                userId,
-                action,
-                details,
-                snapshot: content ?? existing.content, // Save current content state
-            },
-        });
+        // Record history entry only if snapshot mode
+        if (isSnapshot) {
+            await prisma.documentHistory.create({
+                data: {
+                    documentId: id,
+                    userId,
+                    action,
+                    details,
+                    snapshot: content ?? existing.content, // Save current content state
+                },
+            });
+        }
 
         return NextResponse.json(document);
     } catch (error) {

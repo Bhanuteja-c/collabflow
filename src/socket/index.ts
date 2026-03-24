@@ -7,6 +7,7 @@ import { registerChatHandlers } from "./handlers/chat";
 import { registerDocumentHandlers } from "./handlers/document";
 import { registerKanbanHandlers } from "./handlers/kanban";
 import { registerVideoHandlers } from "./handlers/video";
+import { registerWhiteboardHandlers } from "./handlers/whiteboard";
 import { handleDisconnect } from "./disconnect";
 
 /**
@@ -34,6 +35,7 @@ export function registerSocketHandlers(io: SocketIOServer) {
         registerDocumentHandlers(io, socket);
         registerKanbanHandlers(io, socket);
         registerVideoHandlers(io, socket);
+        registerWhiteboardHandlers(io, socket);
 
         // TASK 4: Universal disconnect cleanup
         handleDisconnect(socket);

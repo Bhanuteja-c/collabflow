@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, History, RotateCcw, Calendar, User as UserIcon } from "lucide-react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
@@ -125,10 +125,7 @@ export function HistorySidebar({ isOpen, onClose, documentId, onRestore }: Histo
                                         </div>
 
                                         <div className="flex items-center gap-2 mt-1">
-                                            <Avatar className="w-5 h-5">
-                                                <AvatarImage src={entry.user.image || ""} />
-                                                <AvatarFallback className="text-[9px]">{entry.user.name?.[0]}</AvatarFallback>
-                                            </Avatar>
+                                            <UserAvatar user={{ name: entry.user?.name, image: entry.user?.image }} className="w-5 h-5" showStatus={false} />
                                             <span className="text-xs text-muted-foreground truncate">
                                                 {entry.user.name}
                                             </span>

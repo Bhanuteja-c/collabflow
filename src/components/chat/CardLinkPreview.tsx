@@ -11,7 +11,7 @@ import {
     HoverCardTrigger,
 } from "@/components/ui/hover-card";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { Calendar, User, Flag, CheckSquare } from "lucide-react";
 
 interface CardData {
@@ -136,12 +136,7 @@ export function CardLinkPreview({ cardId }: CardLinkPreviewProps) {
                         <div className="flex items-center justify-between pt-2 border-t">
                             {card.assignee ? (
                                 <div className="flex items-center gap-2">
-                                    <Avatar className="h-5 w-5">
-                                        <AvatarImage src={card.assignee.image} />
-                                        <AvatarFallback className="text-[10px]">
-                                            {card.assignee.name?.[0]?.toUpperCase()}
-                                        </AvatarFallback>
-                                    </Avatar>
+                                    <UserAvatar user={{ name: card.assignee.name, image: card.assignee.image }} className="h-5 w-5" showStatus={false} />
                                     <span className="text-xs text-muted-foreground">
                                         {card.assignee.name}
                                     </span>

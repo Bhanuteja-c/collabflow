@@ -27,10 +27,13 @@ import {
     Target,
     BarChart3,
     PenTool,
+    ChevronDown,
+    ChevronRight,
 } from "lucide-react";
 import { avatarFallbackClass, getDiceBearAvatar } from "@/lib/avatar-colors";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { DropdownMenuTrigger } from "@radix-ui/react-dropdown-menu";
+import { useSidebarUnread } from "@/hooks/useSidebarUnread";
 
 interface WorkspaceSidebarProps {
     workspaceSlug: string;
@@ -39,24 +42,52 @@ interface WorkspaceSidebarProps {
     isMobile?: boolean;
 }
 
-const navItems = [
-    { icon: LayoutDashboard, label: "Dashboard", href: "" },
-    { icon: Target, label: "Epics", href: "/epics" },
-    { icon: Kanban, label: "Kanban", href: "/kanban" },
-    { icon: MessageSquare, label: "Chat", href: "/chat" },
-    { icon: Video, label: "Video", href: "/video" },
-    { icon: PenTool, label: "Whiteboard", href: "/whiteboard" },
-    { icon: BarChart3, label: "Analytics", href: "/analytics" },
-    { icon: Users, label: "Members", href: "/members" },
-    { icon: Settings, label: "Settings", href: "/settings" },
+const navGroups = [
+    {
+        label: "MAIN",
+        items: [
+            { icon: LayoutDashboard, label: "Dashboard", href: "" },
+        ]
+    },
+    {
+        label: "COLLABORATE",
+        items: [
+            { icon: MessageSquare, label: "Chat", href: "/chat" },
+            { icon: Video, label: "Video", href: "/video" },
+            { icon: PenTool, label: "Whiteboard", href: "/whiteboard" },
+        ]
+    },
+    {
+        label: "PLAN",
+        items: [
+            { icon: Target, label: "Epics", href: "/epics" },
+            { icon: Kanban, label: "Kanban", href: "/kanban" },
+        ]
+    },
+    {
+        label: "INSIGHTS",
+        items: [
+            { icon: BarChart3, label: "Analytics", href: "/analytics" },
+        ]
+    },
+    {
+        label: "WORKSPACE",
+        items: [
+            { icon: Users, label: "Members", href: "/members" },
+            { icon: Settings, label: "Settings", href: "/settings" },
+        ]
+    }
 ];
 
 function SidebarContent({ workspaceSlug, onItemClick }: { workspaceSlug: string; onItemClick?: () => void }) {
     const pathname = usePathname();
     const { data: session } = useSession();
     const baseUrl = `/workspace/${workspaceSlug}`;
-    const [workspaceId, setWorkspaceId] = useState<string | undefined>();
+    const [workspaceId, setWorkspaceId] = useState<string>("");
     const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(true);
+    const [dmsOpen, setDmsOpen] = useState(true);
+
+    const { unreadCounts } = useSidebarUnread(workspaceId);
 
     // Fetch workspace ID from slug
     useEffect(() => {
@@ -86,27 +117,99 @@ function SidebarContent({ workspaceSlug, onItemClick }: { workspaceSlug: string;
 
             {/* Navigation */}
             <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-                {navItems.map((item) => {
-                    const href = `${baseUrl}${item.href}`;
-                    const isActive = item.href === ""
-                        ? pathname === baseUrl
-                        : pathname.startsWith(href);
+                {navGroups.map((group, groupIndex) => (
+                    <div key={group.label} className="flex flex-col">
+                        {groupIndex > 0 && <div className="mx-3 border-t my-1 border-border/50" />}
+                        <div className="px-3 pb-1 pt-1.5 text-[10px] font-semibold tracking-wider text-muted-foreground/60 uppercase">
+                            {group.label}
+                        </div>
+                        <div className="space-y-0.5">
+                            {group.items.map((item) => {
+                                const href = `${baseUrl}${item.href}`;
+                                const isActive = item.href === ""
+                                    ? pathname === baseUrl
+                                    : pathname.startsWith(href);
 
-                    return (
-                        <Link
-                            key={item.label}
-                            href={href}
-                            onClick={onItemClick}
-                            className={`flex items-center gap-3 px-3 py-3 rounded-lg text-sm transition-all active:scale-[0.98] touch-manipulation ${isActive
-                                ? "bg-primary/10 text-primary font-medium"
-                                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                                }`}
+                                return (
+                                    <Link
+                                        key={item.label}
+                                        href={href}
+                                        onClick={onItemClick}
+                                        className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all active:scale-[0.98] touch-manipulation ${
+                                            isActive
+                                                ? "bg-primary/10 text-primary font-medium"
+                                                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                                        }`}
+                                    >
+                                        <item.icon className="w-4 h-4 flex-shrink-0" />
+                                        <span className="flex-1 flex items-center min-w-0">
+                                            <span className="truncate">{item.label}</span>
+                                            {item.label === "Chat" && unreadCounts.totalUnreadMessages > 0 && (
+                                                <span className="ml-auto bg-primary text-primary-foreground text-[10px] sm:text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center flex-shrink-0">
+                                                    {unreadCounts.totalUnreadMessages > 99 ? "99+" : unreadCounts.totalUnreadMessages}
+                                                </span>
+                                            )}
+                                        </span>
+                                    </Link>
+                                );
+                            })}
+                        </div>
+                    </div>
+                ))}
+                <div className="mx-3 border-t my-1 border-border/50" />
+
+                {/* Direct Messages */}
+                {workspaceId && (
+                    <div className="pt-2 pb-1">
+                        <button
+                            onClick={() => setDmsOpen(!dmsOpen)}
+                            className="flex items-center w-full gap-1 px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground group transition-colors"
                         >
-                            <item.icon className="w-5 h-5 flex-shrink-0" />
-                            <span className="truncate">{item.label}</span>
-                        </Link>
-                    );
-                })}
+                            {dmsOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                            <span>Direct Messages</span>
+                            {unreadCounts.totalUnreadDMs > 0 && !dmsOpen && (
+                                <span className="ml-auto flex h-2 w-2 rounded-full bg-primary" />
+                            )}
+                        </button>
+                        
+                        {dmsOpen && (
+                            <div className="mt-1 space-y-0.5">
+                                {unreadCounts.channels.filter(c => c.type === 'direct' || c.type === 'DIRECT').slice(0, 5).map((channel) => {
+                                    const displayName = channel.otherUser?.name || "Deleted User";
+                                    const avatarImage = channel.otherUser?.image || null;
+                                    const href = `${baseUrl}/chat?dm=${channel.id}`;
+                                    
+                                    // Use basic pathname matching for DMs without assuming URLSearchParams scope since we're in a regular component rendering cycle
+                                    const isActive = false; 
+
+                                    return (
+                                        <Link
+                                            key={channel.id}
+                                            href={href}
+                                            onClick={onItemClick}
+                                            className={`flex items-center gap-2.5 px-3 py-1.5 text-sm rounded-lg group transition-all ${
+                                                isActive ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                                            }`}
+                                        >
+                                            <div className="relative flex-shrink-0">
+                                                <UserAvatar user={{ name: displayName, image: avatarImage, status: "AVAILABLE" } as any} className="h-5 w-5" showStatus={false} />
+                                            </div>
+                                            <span className="truncate flex-1 text-[13px]">{displayName}</span>
+                                            {channel.unreadCount > 0 && (
+                                                <span className="ml-auto bg-primary text-primary-foreground text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[16px] text-center flex-shrink-0">
+                                                    {channel.unreadCount > 99 ? "99+" : channel.unreadCount}
+                                                </span>
+                                            )}
+                                        </Link>
+                                    );
+                                })}
+                                {unreadCounts.channels.filter(c => c.type === 'direct' || c.type === 'DIRECT').length === 0 && (
+                                    <p className="px-5 py-2 text-xs text-muted-foreground italic">No recent messages</p>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {/* Render the unified Document Tree representing the Wiki */}
                 {workspaceId && (

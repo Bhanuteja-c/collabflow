@@ -137,12 +137,6 @@ export async function PUT(
                 const assignee = card.assignee;
                 if (assignee) {
                     Activity.cardAssigned(userId, workspaceId, id, card.title, assignee.name || "someone");
-                    CrossNotifier.cardAssigned({
-                        workspaceId,
-                        userId,
-                        cardTitle: card.title,
-                        assigneeName: assignee.name || "someone",
-                    });
                     // Personal notification to the assignee
                     const boardSlug = board?.workspace?.slug ?? workspaceId;
                     await createNotification({

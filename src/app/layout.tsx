@@ -32,7 +32,13 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.className} antialiased`} suppressHydrationWarning>
         <AuthProvider>
-          <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="light"
+            enableSystem={false}
+            themes={["light", "dark", "midnight", "forest", "sunset", "nord", "catppuccin"]}
+            disableTransitionOnChange={false}
+          >
             {children}
             <Toaster richColors position="top-center" />
           </ThemeProvider>

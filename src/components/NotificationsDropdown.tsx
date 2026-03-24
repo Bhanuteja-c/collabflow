@@ -32,30 +32,15 @@ function getTimeGroup(dateStr: string): string {
 
 export function NotificationsDropdown() {
     const router = useRouter();
-    const { notifications, unreadCount, markAsRead } = useNotifications();
+    const { notifications, unreadCount, markAsRead, filter, setFilter, nextCursor, loadMore, loading } = useNotifications("all");
     const [open, setOpen] = useState(false);
-    const [filter, setFilter] = useState<FilterType>("all");
-
-    // Filter notifications
-    const filtered = useMemo(() => {
-        switch (filter) {
-            case "unread":
-                return notifications.filter((n) => !n.isRead);
-            case "mentions":
-                return notifications.filter((n) => n.type === "mention" || n.type === "message");
-            case "invites":
-                return notifications.filter((n) => n.type === "workspace_invite" || n.type === "new_member");
-            default:
-                return notifications;
-        }
-    }, [notifications, filter]);
 
     // Group by time
     const grouped = useMemo(() => {
         const groups: Record<string, Notification[]> = {};
         const order = ["Today", "Yesterday", "This Week", "Earlier"];
 
-        filtered.forEach((n) => {
+        notifications.forEach((n) => {
             const group = getTimeGroup(n.createdAt);
             if (!groups[group]) groups[group] = [];
             groups[group].push(n);
@@ -63,7 +48,7 @@ export function NotificationsDropdown() {
 
         // Return in chronological order
         return order.filter((g) => groups[g]?.length).map((g) => ({ label: g, items: groups[g] }));
-    }, [filtered]);
+    }, [notifications]);
 
     const handleMarkAllAsRead = async () => {
         await markAsRead();
@@ -198,6 +183,19 @@ export function NotificationsDropdown() {
                                 ))}
                             </div>
                         ))
+                    )}
+                    {nextCursor && (
+                        <div className="p-2 border-t text-center">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => { e.stopPropagation(); loadMore(); }}
+                                disabled={loading}
+                                className="w-full text-xs text-muted-foreground hover:text-foreground"
+                            >
+                                {loading ? "Loading..." : "Load more"}
+                            </Button>
+                        </div>
                     )}
                 </div>
             </DropdownMenuContent>

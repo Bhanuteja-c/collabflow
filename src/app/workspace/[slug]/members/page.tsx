@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -197,10 +197,7 @@ export default function WorkspaceMembersPage({ params }: { params: Promise<{ slu
                                             {userSuggestions.map((u) => (
                                                 <button key={u.id} className="w-full flex items-center gap-3 px-3 py-2 hover:bg-muted text-left transition-colors"
                                                     onClick={() => { setInviteEmail(u.email); setUserSuggestions([]); }}>
-                                                    <Avatar className="h-7 w-7">
-                                                        <AvatarImage src={u.image} />
-                                                        <AvatarFallback className={avatarFallbackClass(u.name, "text-[10px] font-semibold")}>{u.name?.[0]?.toUpperCase()}</AvatarFallback>
-                                                    </Avatar>
+                                                    <UserAvatar user={u} className="h-7 w-7" showStatus={false} />
                                                     <div className="min-w-0">
                                                         <p className="text-sm font-medium truncate">{u.name}</p>
                                                         <p className="text-xs text-muted-foreground truncate">{u.email}</p>
@@ -304,12 +301,7 @@ export default function WorkspaceMembersPage({ params }: { params: Promise<{ slu
                                 className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/40 transition-colors group"
                             >
                                 {/* Avatar */}
-                                <Avatar className="h-9 w-9 flex-shrink-0">
-                                    <AvatarImage src={member.user?.image || ""} />
-                                    <AvatarFallback className={avatarFallbackClass(member.user?.name, "text-sm font-semibold")}>
-                                        {member.user?.name?.[0]?.toUpperCase() || "?"}
-                                    </AvatarFallback>
-                                </Avatar>
+                                <UserAvatar user={{ name: member.user?.name, image: member.user?.image }} className="h-9 w-9 flex-shrink-0" showStatus={false} />
 
                                 {/* Name + Email */}
                                 <div className="flex-1 min-w-0">

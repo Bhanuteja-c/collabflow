@@ -14,6 +14,7 @@ export const ROOM_PREFIX = {
     DOCUMENT: "doc",
     BOARD: "board",
     VIDEO: "video",
+    WHITEBOARD: "whiteboard",
 } as const;
 
 export type RoomPrefix = (typeof ROOM_PREFIX)[keyof typeof ROOM_PREFIX];

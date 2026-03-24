@@ -198,6 +198,62 @@ export async function PUT(req: NextRequest) {
             }
         });
 
+        // Log activity if column changed (card was moved)
+        if (oldCard && oldCard.columnId !== columnId) {
+            let card;
+            try {
+                card = await prisma.$transaction(async (tx) => {
+                    const targetColumn = await tx.column.findUnique({
+                        where: { id: columnId },
+                        include: {
+                            _count: { select: { cards: true } }
+                        }
+                    });
+
+                    if (
+                        targetColumn?.wipLimit && 
+                        (targetColumn._count?.cards ?? 0) >= targetColumn.wipLimit
+                    ) {
+                        throw new Error("WIP_LIMIT_REACHED");
+                    }
+
+                    return await tx.card.update({
+                        where: { id: cardId },
+                        data: {
+                            columnId,
+                            order,
+                            ...(orderKey && { orderKey }),
+                        },
+                        include: {
+                            column: { select: { title: true } }
+                        }
+                    });
+                }, { isolationLevel: "Serializable" });
+            } catch (error: any) {
+                if (error.message === "WIP_LIMIT_REACHED") {
+                    return NextResponse.json(
+                        { error: "WIP_LIMIT_REACHED", message: "Column WIP limit reached" },
+                        { status: 422 }
+                    );
+                }
+                throw error;
+            }
+
+            if (oldCard.column?.board?.workspaceId) {
+                Activity.cardMoved(
+                    userId,
+                    oldCard.column.board.workspaceId,
+                    cardId,
+                    card.title,
+                    oldCard.column.title,
+                    card.column?.title || "Unknown"
+                );
+            }
+
+            return NextResponse.json(card);
+        }
+
+        // If no column change, just update order
         const card = await prisma.card.update({
             where: { id: cardId },
             data: {
@@ -209,22 +265,6 @@ export async function PUT(req: NextRequest) {
                 column: { select: { title: true } }
             }
         });
-
-        // Log activity if column changed (card was moved)
-        if (oldCard && oldCard.columnId !== columnId && oldCard.column?.board?.workspaceId) {
-            const newColumn = await prisma.column.findUnique({
-                where: { id: columnId },
-                select: { title: true }
-            });
-            Activity.cardMoved(
-                userId,
-                oldCard.column.board.workspaceId,
-                cardId,
-                card.title,
-                oldCard.column.title,
-                newColumn?.title || "Unknown"
-            );
-        }
 
         return NextResponse.json(card);
     } catch (error) {

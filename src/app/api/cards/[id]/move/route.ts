@@ -111,43 +111,70 @@ export async function PATCH(
 
             return NextResponse.json(updated);
         } else if (targetColumnId) {
-            // Move card FROM backlog TO a column
-            const targetColumn = await prisma.column.findUnique({
-                where: { id: targetColumnId },
-                select: { id: true, title: true, boardId: true },
-            });
+            // Move card TO a column atomically to prevent concurrent WIP bypass
+            let updated;
+            try {
+                updated = await prisma.$transaction(async (tx) => {
+                    const targetColumn = await tx.column.findUnique({
+                        where: { id: targetColumnId },
+                        include: { _count: { select: { cards: true } } }
+                    });
 
-            if (!targetColumn || targetColumn.boardId !== board.id) {
-                return NextResponse.json({ error: "Target column not found" }, { status: 404 });
+                    if (!targetColumn || targetColumn.boardId !== board.id) {
+                        throw new Error("Target column not found");
+                    }
+
+                    // Enforce WIP limits for moves between different columns inside transaction
+                    const currentCount = targetColumn._count?.cards ?? 0;
+                    if (
+                        card.columnId !== targetColumnId &&
+                        targetColumn.wipLimit &&
+                        currentCount >= targetColumn.wipLimit
+                    ) {
+                        throw new Error("WIP_LIMIT_REACHED");
+                    }
+
+                    // Generate orderKey at the end of the column
+                    const lastCard = await tx.card.findFirst({
+                        where: { columnId: targetColumnId },
+                        orderBy: { orderKey: "desc" },
+                        select: { orderKey: true, order: true },
+                    });
+                    const newOrderKey = generateKeyBetween(lastCard?.orderKey ?? null, null);
+                    const newOrder = (lastCard?.order ?? -1) + 1;
+
+                    return await tx.card.update({
+                        where: { id: cardId },
+                        data: {
+                            isBacklog: false,
+                            columnId: targetColumnId,
+                            boardId: board.id,
+                            orderKey: newOrderKey,
+                            order: newOrder,
+                        },
+                        include: {
+                            assignee: { select: { id: true, name: true, image: true } },
+                            column: { select: { title: true } },
+                        },
+                    });
+                }, { isolationLevel: "Serializable" });
+            } catch (error: any) {
+                if (error.message === "WIP_LIMIT_REACHED") {
+                    return NextResponse.json(
+                        { error: "WIP_LIMIT_REACHED", message: "Column WIP limit reached" },
+                        { status: 422 }
+                    );
+                }
+                if (error.message === "Target column not found") {
+                    return NextResponse.json({ error: "Target column not found" }, { status: 404 });
+                }
+                throw error;
             }
-
-            // Generate orderKey at the end of the column
-            const lastCard = await prisma.card.findFirst({
-                where: { columnId: targetColumnId },
-                orderBy: { orderKey: "desc" },
-                select: { orderKey: true, order: true },
-            });
-            const newOrderKey = generateKeyBetween(lastCard?.orderKey ?? null, null);
-            const newOrder = (lastCard?.order ?? -1) + 1;
-
-            const updated = await prisma.card.update({
-                where: { id: cardId },
-                data: {
-                    isBacklog: false,
-                    columnId: targetColumnId,
-                    boardId: board.id,
-                    orderKey: newOrderKey,
-                    order: newOrder,
-                },
-                include: {
-                    assignee: { select: { id: true, name: true, image: true } },
-                },
-            });
 
             // Log activity
             const wId = board.workspace?.id;
             if (wId) {
-                Activity.cardMoved(userId, wId, cardId, card.title, "Backlog", targetColumn.title);
+                Activity.cardMoved(userId, wId, cardId, card.title, "Backlog", updated.column?.title || "Board");
             }
 
             return NextResponse.json(updated);

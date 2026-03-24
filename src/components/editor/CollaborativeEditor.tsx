@@ -50,7 +50,7 @@ interface CollaborativeEditorProps {
     permission: "owner" | "edit" | "view";
     userName: string;
     userColor: string;
-    onSave: (content: string) => void;
+    onSave: (content: string, isSnapshot?: boolean) => void;
     saving: boolean;
     historyOpen: boolean;
     onHistoryClose: () => void;
@@ -353,6 +353,15 @@ export default function CollaborativeEditor({
             clearTimeout(timeoutId);
             editor.off("update", handleUpdate);
         };
+    }, [editor, onSave]);
+
+    // 10-minute periodic snapshot
+    useEffect(() => {
+        if (!editor) return;
+        const intervalId = setInterval(() => {
+            onSave(editor.getHTML(), true);
+        }, 10 * 60 * 1000);
+        return () => clearInterval(intervalId);
     }, [editor, onSave]);
 
     const setLink = useCallback(() => {

@@ -3,7 +3,7 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { X, Users, Mic, MicOff, Video, VideoOff, Crown } from "lucide-react";
 
 interface Participant {
@@ -56,12 +56,7 @@ export function ParticipantList({ isOpen, onClose, participants, currentUserId }
                                         className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[#3c4043] transition-colors group"
                                     >
                                         <div className="relative shrink-0">
-                                            <Avatar className="h-8 w-8">
-                                                <AvatarImage src={participant.image} />
-                                                <AvatarFallback className="text-xs bg-[#5f6368] text-white">
-                                                    {participant.name?.[0]?.toUpperCase()}
-                                                </AvatarFallback>
-                                            </Avatar>
+                                            <UserAvatar user={participant} className="h-8 w-8" showStatus={false} />
                                             {participant.isHost && (
                                                 <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-[#fdd663] rounded-full flex items-center justify-center border border-[#2d2e30]">
                                                     <Crown className="w-2.5 h-2.5 text-[#202124]" />

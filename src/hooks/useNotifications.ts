@@ -18,10 +18,13 @@ export interface AppNotification {
 
 const SOUND_PREF_KEY = "collabflow:notif-sound";
 
-export function useNotifications() {
+export function useNotifications(initialFilter: string = "all") {
     const { socket, connected } = useSharedSocket();
     const [notifications, setNotifications] = useState<AppNotification[]>([]);
     const [unreadCount, setUnreadCount] = useState(0);
+    const [filter, setFilter] = useState(initialFilter);
+    const [nextCursor, setNextCursor] = useState<string | null>(null);
+    const [loading, setLoading] = useState(false);
     const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
         if (typeof window === "undefined") return true;
         const stored = localStorage.getItem(SOUND_PREF_KEY);
@@ -37,28 +40,71 @@ export function useNotifications() {
         });
     }, []);
 
-    const fetchNotifications = useCallback(async () => {
+    const fetchUnreadCount = useCallback(async () => {
         try {
-            const res = await fetch("/api/notifications");
+            const res = await fetch("/api/notifications/count");
             if (res.ok) {
                 const data = await res.json();
-                setNotifications(data.notifications || []);
+                setUnreadCount(data.unreadCount || 0);
+            }
+        } catch (error) {
+            console.error("Failed to fetch unread count", error);
+        }
+    }, []);
+
+    const fetchNotifications = useCallback(async (cursor?: string, currentFilter?: string) => {
+        try {
+            setLoading(true);
+            const activeFilter = currentFilter || filter;
+            const res = await fetch(`/api/notifications?filter=${activeFilter}&take=20${cursor ? `&cursor=${cursor}` : ""}`);
+            if (res.ok) {
+                const data = await res.json();
+                if (cursor) {
+                    setNotifications(prev => [...prev, ...(data.notifications || [])]);
+                } else {
+                    setNotifications(data.notifications || []);
+                }
+                setNextCursor(data.nextCursor || null);
                 setUnreadCount(data.unreadCount || 0);
             }
         } catch (error) {
             console.error("Failed to fetch notifications", error);
+        } finally {
+            setLoading(false);
         }
-    }, []);
+    }, [filter]);
 
     useEffect(() => {
-        fetchNotifications();
-    }, [fetchNotifications]);
+        fetchNotifications(undefined, filter);
+    }, [filter, fetchNotifications]);
+
+    useEffect(() => {
+        // Poll count every 30s
+        const interval = setInterval(fetchUnreadCount, 30000);
+        return () => clearInterval(interval);
+    }, [fetchUnreadCount]);
+
+    const loadMore = useCallback(() => {
+        if (nextCursor && !loading) {
+            fetchNotifications(nextCursor);
+        }
+    }, [nextCursor, loading, fetchNotifications]);
 
     useEffect(() => {
         if (!socket || !connected) return;
 
         const handleNewNotification = (notification: AppNotification) => {
-            setNotifications(prev => [notification, ...prev]);
+            // Only prepend if it matches the current filter
+            const matchesFilter = 
+                filter === "all" ||
+                (filter === "unread") || // New notifications are always unread
+                (filter === "mentions" && ["mention", "message", "new_message"].includes(notification.type)) ||
+                (filter === "invites" && ["workspace_invite", "new_member"].includes(notification.type));
+
+            if (matchesFilter) {
+                setNotifications(prev => [notification, ...prev]);
+            }
+            
             setUnreadCount(prev => prev + 1);
 
             // Soft notification chime using Web Audio API — only if sound is enabled
@@ -128,5 +174,16 @@ export function useNotifications() {
         }
     };
 
-    return { notifications, unreadCount, markAsRead, soundEnabled, toggleSound };
+    return { 
+        notifications, 
+        unreadCount, 
+        markAsRead, 
+        soundEnabled, 
+        toggleSound,
+        filter,
+        setFilter,
+        nextCursor,
+        loadMore,
+        loading
+    };
 }

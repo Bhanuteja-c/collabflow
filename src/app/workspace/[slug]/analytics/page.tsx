@@ -6,17 +6,19 @@ import { useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import {
-  BarChart3,
-  TrendingUp,
-  CheckCircle2,
-  Clock,
-  Loader2,
-  Zap,
-  Users,
-  Target,
-  AlertTriangle,
+  BarChart3, TrendingUp, TrendingDown, CheckCircle2, Clock,
+  Loader2, Zap, Users, Target, AlertTriangle, ArrowUpRight,
+  Activity, Flame, Award,
 } from "lucide-react";
+import { DateRangePicker, DateRange } from "@/components/analytics/DateRangePicker";
+import { format } from "date-fns";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, AreaChart, Area, Legend, RadialBarChart, RadialBar,
+} from "recharts";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 
+// ── Types ─────────────────────────────────────────────────────────────
 interface Analytics {
   summary: {
     total: number;
@@ -49,26 +51,131 @@ interface Analytics {
   timeTracking: { week: string; minutes: number }[];
 }
 
+// ── Constants ─────────────────────────────────────────────────────────
 const priorityColors: Record<string, string> = {
-  high: "#ef4444",
-  medium: "#f59e0b",
-  low: "#10b981",
+  high: "#ef4444", medium: "#f59e0b", low: "#10b981", none: "#94a3b8",
+};
+
+const priorityLabels: Record<string, string> = {
+  high: "High", medium: "Medium", low: "Low", none: "None",
 };
 
 const issueTypeLabels: Record<string, string> = {
-  task: "Tasks",
-  story: "Stories",
-  bug: "Bugs",
-  feature: "Features",
+  task: "Tasks", story: "Stories", bug: "Bugs", feature: "Features",
 };
 
 const issueTypeColors: Record<string, string> = {
-  task: "#6366f1",
-  story: "#22c55e",
-  bug: "#ef4444",
-  feature: "#f59e0b",
+  task: "#6366f1", story: "#22c55e", bug: "#ef4444", feature: "#f59e0b",
 };
 
+const CHART_COLORS = [
+  "#6366f1", "#8b5cf6", "#06b6d4", "#10b981",
+  "#f59e0b", "#ef4444", "#ec4899", "#14b8a6",
+];
+
+// ── Custom Tooltip ────────────────────────────────────────────────────
+interface TooltipPayloadItem {
+  name: string;
+  value: number;
+  color: string;
+  dataKey: string;
+}
+
+function ChartTooltip({
+  active, payload, label, formatter,
+}: {
+  active?: boolean;
+  payload?: TooltipPayloadItem[];
+  label?: string;
+  formatter?: (value: number, name: string) => string;
+}) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-popover/95 backdrop-blur-md border border-border/60 rounded-lg shadow-xl px-3.5 py-2.5 text-sm">
+      {label && <p className="text-[11px] text-muted-foreground font-medium mb-1.5">{label}</p>}
+      {payload.map((item, i) => (
+        <div key={i} className="flex items-center gap-2 py-0.5">
+          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+          <span className="text-muted-foreground text-xs">{item.name}:</span>
+          <span className="font-semibold text-foreground text-xs">
+            {formatter ? formatter(item.value, item.name) : item.value}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Stat Card ─────────────────────────────────────────────────────────
+function StatCard({
+  label, value, subtitle, icon: Icon, color, bg, trend, delay,
+}: {
+  label: string;
+  value: string | number;
+  subtitle?: string;
+  icon: React.ComponentType<{ className?: string }>;
+  color: string;
+  bg: string;
+  trend?: number;
+  delay: number;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay }}
+      className="relative overflow-hidden rounded-xl border border-border/50 bg-card/80 backdrop-blur-sm p-5 group hover:shadow-lg hover:shadow-primary/5 transition-shadow"
+    >
+      <div className="flex items-start justify-between">
+        <div className="space-y-1.5">
+          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{label}</p>
+          <p className="text-2xl font-bold text-foreground">{value}</p>
+          {subtitle && (
+            <p className="text-[11px] text-muted-foreground">{subtitle}</p>
+          )}
+        </div>
+        <div className={`p-2.5 rounded-xl ${bg} group-hover:scale-110 transition-transform`}>
+          <Icon className={`w-5 h-5 ${color}`} />
+        </div>
+      </div>
+      {trend !== undefined && (
+        <div className={`flex items-center gap-1 mt-2 text-xs font-medium ${trend >= 0 ? "text-emerald-500" : "text-red-500"}`}>
+          {trend >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+          <span>{Math.abs(trend)}% vs last period</span>
+        </div>
+      )}
+      <div className={`absolute bottom-0 left-0 right-0 h-[2px] ${bg} opacity-0 group-hover:opacity-100 transition-opacity`} />
+    </motion.div>
+  );
+}
+
+// ── Section Card Wrapper ──────────────────────────────────────────────
+function ChartCard({
+  children, title, icon, delay, className = "",
+}: {
+  children: React.ReactNode;
+  title: string;
+  icon: React.ReactNode;
+  delay: number;
+  className?: string;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay }}
+      className={`rounded-xl border border-border/50 bg-card/80 backdrop-blur-sm p-5 ${className}`}
+    >
+      <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+        {icon}
+        {title}
+      </h3>
+      {children}
+    </motion.div>
+  );
+}
+
+// ── Main Component ────────────────────────────────────────────────────
 export default function AnalyticsPage() {
   const params = useParams();
   const { data: session } = useSession();
@@ -76,17 +183,20 @@ export default function AnalyticsPage() {
 
   const [data, setData] = useState<Analytics | null>(null);
   const [loading, setLoading] = useState(true);
+  const [dateRange, setDateRange] = useState<DateRange | null>(null);
 
   useEffect(() => {
     if (!slug) return;
     const fetchAnalytics = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/workspaces/${slug}/analytics`);
-        if (res.ok) {
-          const json = await res.json();
-          setData(json);
+        const queryParams = new URLSearchParams();
+        if (dateRange) {
+          queryParams.append("dateStart", dateRange.start);
+          queryParams.append("dateEnd", dateRange.end);
         }
+        const res = await fetch(`/api/workspaces/${slug}/analytics?${queryParams.toString()}`);
+        if (res.ok) setData(await res.json());
       } catch (error) {
         console.error("Failed to fetch analytics:", error);
       } finally {
@@ -94,9 +204,31 @@ export default function AnalyticsPage() {
       }
     };
     fetchAnalytics();
-  }, [slug]);
+  }, [slug, dateRange]);
 
-  if (loading) {
+  // ── Computed stats ──────────────────────────────────────────────────
+  const stats = useMemo(() => {
+    if (!data) return null;
+    const { summary, velocity, memberWorkload } = data;
+    const completionRate = summary.total > 0 ? Math.round((summary.completed / summary.total) * 100) : 0;
+    const avgVelocity = velocity.length > 0
+      ? Math.round(velocity.reduce((sum, v) => sum + v.points, 0) / velocity.length)
+      : 0;
+    const topContributor = memberWorkload.reduce((top, m) =>
+      m.completedCards > (top?.completedCards ?? 0) ? m : top, memberWorkload[0]);
+
+    return { completionRate, avgVelocity, topContributor };
+  }, [data]);
+
+  const formatTime = (minutes: number) => {
+    if (minutes < 60) return `${minutes}m`;
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  };
+
+  // ── Loading / Error ─────────────────────────────────────────────────
+  if (loading && !data) {
     return (
       <div className="flex-1 flex items-center justify-center min-h-screen bg-background">
         <div className="flex flex-col items-center gap-3">
@@ -107,7 +239,7 @@ export default function AnalyticsPage() {
     );
   }
 
-  if (!data) {
+  if (!data || !stats) {
     return (
       <div className="flex-1 flex items-center justify-center min-h-screen bg-background">
         <div className="text-center space-y-2">
@@ -119,100 +251,140 @@ export default function AnalyticsPage() {
   }
 
   const { summary, columnDistribution, priorityDistribution, issueTypeDistribution, velocity, memberWorkload, timeTracking } = data;
-  const completionRate = summary.total > 0 ? Math.round((summary.completed / summary.total) * 100) : 0;
+  const { completionRate, avgVelocity, topContributor } = stats;
   const maxColCount = Math.max(...columnDistribution.map((c) => c.count), 1);
-  const maxVelocityPoints = Math.max(...velocity.map((v) => v.points), 1);
-  const maxVelocityCompleted = Math.max(...velocity.map((v) => v.completed), 1);
-  const maxMemberCards = Math.max(...memberWorkload.map((m) => m.totalCards), 1);
-  const maxTimeMinutes = Math.max(...timeTracking.map((t) => t.minutes), 1);
 
-  const formatTime = (minutes: number) => {
-    if (minutes < 60) return `${minutes}m`;
-    const h = Math.floor(minutes / 60);
-    const m = minutes % 60;
-    return m > 0 ? `${h}h ${m}m` : `${h}h`;
-  };
+  // Prepare velocity data with cumulative points
+  const velocityWithCumulative = velocity.map((v, i) => ({
+    ...v,
+    cumulative: velocity.slice(0, i + 1).reduce((sum, w) => sum + w.points, 0),
+  }));
+
+  // Prepare priority data for donut
+  const priorityPieData = priorityDistribution.filter(p => p.count > 0).map(p => ({
+    name: priorityLabels[p.priority] || p.priority,
+    value: p.count,
+    fill: priorityColors[p.priority] || "#94a3b8",
+  }));
+
+  // Prepare issue type pie data
+  const typePieData = issueTypeDistribution.filter(t => t.count > 0).map(t => ({
+    name: issueTypeLabels[t.type] || t.type,
+    value: t.count,
+    fill: issueTypeColors[t.type] || "#94a3b8",
+  }));
+
+  // Prepare team workload with completion percentage
+  const teamData = memberWorkload.map(m => ({
+    ...m,
+    remaining: m.totalCards - m.completedCards,
+    completionPct: m.totalCards > 0 ? Math.round((m.completedCards / m.totalCards) * 100) : 0,
+  }));
 
   return (
     <div className="flex-1 overflow-auto bg-background">
-      {/* Header */}
-      <div className="px-6 pt-6 pb-4 border-b border-border/30">
+      {/* ── Header ─────────────────────────────────────────────────── */}
+      <div className="px-6 pt-6 pb-4 border-b border-border/30 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           className="flex items-center gap-3"
         >
-          <div className="p-2 rounded-xl bg-primary/10">
+          <div className="p-2.5 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5">
             <BarChart3 className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-foreground">Analytics</h1>
-            <p className="text-xs text-muted-foreground">Project insights and performance metrics</p>
+            <h1 className="text-xl font-bold text-foreground">Analytics Dashboard</h1>
+            <p className="text-xs text-muted-foreground lg:max-w-md line-clamp-2">
+              {dateRange
+                ? `${format(new Date(dateRange.start + "T00:00:00"), "MMM d, yyyy")} — ${format(new Date(dateRange.end + "T00:00:00"), "MMM d, yyyy")}`
+                : "Last 30 days · All boards"}
+            </p>
           </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.1 }}
+          className="w-full xl:w-auto"
+        >
+          <DateRangePicker onChange={setDateRange} defaultRange={dateRange || undefined} />
         </motion.div>
       </div>
 
       <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
-        {/* Summary Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[
-            { label: "Total Tasks", value: summary.total, icon: Target, color: "text-blue-500", bg: "bg-blue-500/10" },
-            { label: "Completed", value: `${summary.completed} (${completionRate}%)`, icon: CheckCircle2, color: "text-emerald-500", bg: "bg-emerald-500/10" },
-            { label: "Story Points", value: `${summary.completedPoints} / ${summary.totalPoints}`, icon: Zap, color: "text-amber-500", bg: "bg-amber-500/10" },
-            { label: "Time Logged", value: formatTime(summary.totalTimeLogged), icon: Clock, color: "text-violet-500", bg: "bg-violet-500/10" },
-          ].map((card, i) => (
-            <motion.div
-              key={card.label}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.08 }}
-              className="relative overflow-hidden rounded-xl border border-border/50 bg-card/80 backdrop-blur-sm p-4"
-            >
-              <div className="flex items-start justify-between">
-                <div className="space-y-1">
-                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{card.label}</p>
-                  <p className="text-2xl font-bold text-foreground">{card.value}</p>
-                </div>
-                <div className={`p-2 rounded-lg ${card.bg}`}>
-                  <card.icon className={`w-4 h-4 ${card.color}`} />
-                </div>
-              </div>
-              {/* Subtle gradient accent */}
-              <div className={`absolute bottom-0 left-0 right-0 h-[2px] ${card.bg}`} />
-            </motion.div>
-          ))}
+        {/* ── Summary Cards ────────────────────────────────────────── */}
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          <StatCard
+            label="Total Tasks"
+            value={summary.total}
+            subtitle={`${summary.inProgress} in progress`}
+            icon={Target} color="text-blue-500" bg="bg-blue-500/10"
+            delay={0}
+          />
+          <StatCard
+            label="Completed"
+            value={`${completionRate}%`}
+            subtitle={`${summary.completed} of ${summary.total} tasks`}
+            icon={CheckCircle2} color="text-emerald-500" bg="bg-emerald-500/10"
+            delay={0.05}
+          />
+          <StatCard
+            label="Story Points"
+            value={`${summary.completedPoints}`}
+            subtitle={`of ${summary.totalPoints} total points`}
+            icon={Zap} color="text-amber-500" bg="bg-amber-500/10"
+            delay={0.1}
+          />
+          <StatCard
+            label="Avg Velocity"
+            value={`${avgVelocity} pts`}
+            subtitle="per week"
+            icon={Activity} color="text-primary" bg="bg-primary/10"
+            delay={0.15}
+          />
+          <StatCard
+            label="Time Logged"
+            value={formatTime(summary.totalTimeLogged)}
+            subtitle={`across ${timeTracking.filter(t => t.minutes > 0).length} weeks`}
+            icon={Clock} color="text-violet-500" bg="bg-violet-500/10"
+            delay={0.2}
+          />
         </div>
 
-        {/* Charts Row 1: Column Distribution + Priority/Type */}
+        {/* ── Row 1: Status Distribution + Priority / Type Donut ──── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Column Distribution */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="lg:col-span-2 rounded-xl border border-border/50 bg-card/80 backdrop-blur-sm p-5"
+          {/* Column Distribution Bar */}
+          <ChartCard
+            title="Task Distribution by Status"
+            icon={<BarChart3 className="w-4 h-4 text-primary" />}
+            delay={0.25}
+            className="lg:col-span-2"
           >
-            <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-primary" />
-              Task Distribution by Status
-            </h3>
             <div className="space-y-3">
               {columnDistribution.map((col) => (
-                <div key={col.columnId} className="space-y-1">
+                <div key={col.columnId} className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-foreground">{col.title}</span>
-                    <span className="text-xs text-muted-foreground">{col.count} cards · {col.points} pts</span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: col.color }} />
+                      <span className="text-xs font-medium text-foreground">{col.title}</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground font-medium">
+                      {col.count} cards · {col.points} pts
+                    </span>
                   </div>
-                  <div className="h-6 bg-muted/30 rounded-lg overflow-hidden">
+                  <div className="h-7 bg-muted/30 rounded-lg overflow-hidden">
                     <motion.div
                       initial={{ width: 0 }}
-                      animate={{ width: `${Math.max((col.count / maxColCount) * 100, 2)}%` }}
-                      transition={{ delay: 0.5, duration: 0.6, ease: "easeOut" }}
-                      className="h-full rounded-lg flex items-center pl-2"
+                      animate={{ width: `${Math.max((col.count / maxColCount) * 100, 3)}%` }}
+                      transition={{ delay: 0.5, duration: 0.7, ease: "easeOut" }}
+                      className="h-full rounded-lg flex items-center px-2.5 relative overflow-hidden"
                       style={{ backgroundColor: col.color }}
                     >
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent to-white/10" />
                       {col.count > 0 && (
-                        <span className="text-[10px] font-bold text-white drop-shadow-sm">{col.count}</span>
+                        <span className="text-[10px] font-bold text-white drop-shadow-sm relative z-10">{col.count}</span>
                       )}
                     </motion.div>
                   </div>
@@ -222,238 +394,289 @@ export default function AnalyticsPage() {
                 <p className="text-sm text-muted-foreground text-center py-8">No columns yet</p>
               )}
             </div>
-          </motion.div>
+          </ChartCard>
 
-          {/* Priority & Type Distribution */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="rounded-xl border border-border/50 bg-card/80 backdrop-blur-sm p-5 space-y-6"
+          {/* Priority + Type + Completion Ring */}
+          <ChartCard
+            title="Breakdown"
+            icon={<Flame className="w-4 h-4 text-orange-500" />}
+            delay={0.3}
           >
-            {/* Priority */}
-            <div>
-              <h3 className="text-sm font-semibold text-foreground mb-3">By Priority</h3>
-              <div className="space-y-2">
-                {priorityDistribution.map((p) => (
-                  <div key={p.priority} className="flex items-center gap-3">
-                    <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: priorityColors[p.priority] }} />
-                    <span className="text-xs font-medium text-foreground capitalize flex-1">{p.priority}</span>
-                    <span className="text-xs font-bold text-foreground">{p.count}</span>
+            <div className="space-y-5">
+              {/* Completion Donut */}
+              <div className="flex justify-center">
+                {summary.total === 0 ? (
+                  <div className="w-[160px] h-[160px] flex items-center justify-center text-xs text-muted-foreground">No data</div>
+                ) : (
+                  <div className="relative">
+                    <PieChart width={160} height={160}>
+                      <Pie
+                        data={[
+                          { name: "Completed", value: summary.completed },
+                          { name: "Remaining", value: summary.total - summary.completed },
+                        ]}
+                        cx={80} cy={80}
+                        innerRadius={52} outerRadius={72}
+                        dataKey="value" strokeWidth={0}
+                        startAngle={90} endAngle={-270}
+                      >
+                        <Cell fill="#6366f1" />
+                        <Cell fill="#e2e8f0" />
+                      </Pie>
+                    </PieChart>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                      <span className="text-2xl font-bold text-foreground">{completionRate}%</span>
+                      <span className="text-[10px] text-muted-foreground font-medium">complete</span>
+                    </div>
                   </div>
-                ))}
+                )}
+              </div>
+
+              {/* Priority */}
+              <div>
+                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">By Priority</h4>
+                <div className="space-y-1.5">
+                  {priorityDistribution.map((p) => {
+                    const total = priorityDistribution.reduce((s, x) => s + x.count, 0);
+                    const pct = total > 0 ? Math.round((p.count / total) * 100) : 0;
+                    return (
+                      <div key={p.priority} className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: priorityColors[p.priority] }} />
+                        <span className="text-xs text-foreground capitalize flex-1">{priorityLabels[p.priority] || p.priority}</span>
+                        <span className="text-[11px] text-muted-foreground">{pct}%</span>
+                        <span className="text-xs font-bold text-foreground w-6 text-right">{p.count}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Issue Type */}
+              <div>
+                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">By Type</h4>
+                <div className="space-y-1.5">
+                  {issueTypeDistribution.map((t) => (
+                    <div key={t.type} className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: issueTypeColors[t.type] }} />
+                      <span className="text-xs text-foreground flex-1">{issueTypeLabels[t.type] || t.type}</span>
+                      <span className="text-xs font-bold text-foreground w-6 text-right">{t.count}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
-
-            {/* Issue Type */}
-            <div>
-              <h3 className="text-sm font-semibold text-foreground mb-3">By Type</h3>
-              <div className="space-y-2">
-                {issueTypeDistribution.map((t) => (
-                  <div key={t.type} className="flex items-center gap-3">
-                    <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: issueTypeColors[t.type] }} />
-                    <span className="text-xs font-medium text-foreground flex-1">{issueTypeLabels[t.type] || t.type}</span>
-                    <span className="text-xs font-bold text-foreground">{t.count}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Completion ring */}
-            <div className="flex flex-col items-center pt-2">
-              <svg width="100" height="100" viewBox="0 0 100 100">
-                <circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" className="text-muted/20" strokeWidth="8" />
-                <circle
-                  cx="50" cy="50" r="40" fill="none" stroke="currentColor"
-                  className="text-emerald-500"
-                  strokeWidth="8" strokeLinecap="round"
-                  strokeDasharray={`${completionRate * 2.51} ${251 - completionRate * 2.51}`}
-                  strokeDashoffset="63"
-                  style={{ transition: "stroke-dasharray 1s ease-out" }}
-                />
-                <text x="50" y="46" textAnchor="middle" className="fill-foreground text-lg font-bold" fontSize="18">{completionRate}%</text>
-                <text x="50" y="62" textAnchor="middle" className="fill-muted-foreground" fontSize="9">complete</text>
-              </svg>
-            </div>
-          </motion.div>
+          </ChartCard>
         </div>
 
-        {/* Charts Row 2: Velocity + Time Tracking */}
+        {/* ── Row 2: Velocity Area + Time Tracking ─────────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Velocity Chart */}
+          {/* Velocity Chart — Area + Bar combination */}
+          <ChartCard
+            title="Sprint Velocity"
+            icon={<TrendingUp className="w-4 h-4 text-emerald-500" />}
+            delay={0.35}
+          >
+            <div className="h-[300px]">
+              {velocity.every(v => v.points === 0) ? (
+                <div className="h-full flex items-center justify-center text-sm text-muted-foreground">No velocity data</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <AreaChart data={velocityWithCumulative}>
+                    <defs>
+                      <linearGradient id="velocityGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="completedGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                    <XAxis dataKey="week" fontSize={10} tickMargin={10} />
+                    <YAxis fontSize={10} width={35} />
+                    <Tooltip
+                      content={<ChartTooltip />}
+                    />
+                    <Legend
+                      wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }}
+                    />
+                    <Area
+                      type="monotone" dataKey="points" name="Story Points"
+                      stroke="#6366f1" strokeWidth={2}
+                      fill="url(#velocityGradient)"
+                      dot={{ r: 3, fill: "#6366f1", strokeWidth: 0 }}
+                      activeDot={{ r: 5, stroke: "#6366f1", strokeWidth: 2, fill: "#fff" }}
+                    />
+                    <Area
+                      type="monotone" dataKey="completed" name="Tasks Done"
+                      stroke="#10b981" strokeWidth={2}
+                      fill="url(#completedGradient)"
+                      dot={{ r: 3, fill: "#10b981", strokeWidth: 0 }}
+                      activeDot={{ r: 5, stroke: "#10b981", strokeWidth: 2, fill: "#fff" }}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </ChartCard>
+
+          {/* Time Tracking — Gradient Bar */}
+          <ChartCard
+            title="Time Logged per Week"
+            icon={<Clock className="w-4 h-4 text-violet-500" />}
+            delay={0.4}
+          >
+            <div className="h-[300px]">
+              {timeTracking.every(t => t.minutes === 0) ? (
+                <div className="h-full flex items-center justify-center text-sm text-muted-foreground">No time data</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={timeTracking}>
+                    <defs>
+                      <linearGradient id="timeGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#8b5cf6" stopOpacity={1} />
+                        <stop offset="100%" stopColor="#6366f1" stopOpacity={0.7} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                    <XAxis dataKey="week" fontSize={10} tickMargin={10} />
+                    <YAxis
+                      fontSize={10}
+                      width={40}
+                      tickFormatter={(val) => Math.floor(val / 60) + "h"}
+                    />
+                    <Tooltip
+                      content={
+                        <ChartTooltip formatter={(val) => `${Math.floor(val / 60)}h ${val % 60}m`} />
+                      }
+                    />
+                    <Bar dataKey="minutes" name="Time Logged" fill="url(#timeGradient)" radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </ChartCard>
+        </div>
+
+        {/* ── Row 3: Team Workload ─────────────────────────────────── */}
+        <ChartCard
+          title="Team Workload"
+          icon={<Users className="w-4 h-4 text-blue-500" />}
+          delay={0.45}
+        >
+          {memberWorkload.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">No team members yet</p>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Stacked Bar Chart */}
+              <div className="lg:col-span-2 h-[300px]">
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={teamData} layout="vertical" margin={{ left: 0, right: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.15} horizontal={false} />
+                    <XAxis type="number" fontSize={10} />
+                    <YAxis
+                      dataKey="name" type="category" width={100} fontSize={11}
+                      tick={{ fill: "#a1a1aa" }}
+                    />
+                    <Tooltip
+                      content={<ChartTooltip />}
+                      cursor={{ fill: "#d4d4d8", opacity: 0.15 }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }} />
+                    <Bar dataKey="completedCards" name="Completed" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} />
+                    <Bar dataKey="remaining" name="Remaining" stackId="a" fill="#e2e8f0" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Member Cards */}
+              <div className="space-y-3 overflow-y-auto max-h-[300px] pr-1">
+                {teamData.map((member, i) => (
+                  <div
+                    key={member.userId}
+                    className="flex items-center gap-3 p-3 rounded-lg border border-border/50 hover:border-border bg-card/50 transition-colors"
+                  >
+                    <UserAvatar user={member} className="h-8 w-8 border border-border/50" showStatus={false} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold truncate">{member.name}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[10px] text-muted-foreground">
+                          {member.completedCards}/{member.totalCards} tasks
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">·</span>
+                        <span className="text-[10px] text-muted-foreground">{member.totalPoints} pts</span>
+                      </div>
+                      {/* Mini progress bar */}
+                      <div className="w-full bg-muted rounded-full h-1.5 mt-1.5">
+                        <div
+                          className="h-full bg-emerald-500 rounded-full transition-all"
+                          style={{ width: `${member.completionPct}%` }}
+                        />
+                      </div>
+                    </div>
+                    <span className={`text-sm font-bold ${member.completionPct >= 80 ? "text-emerald-500" : member.completionPct >= 50 ? "text-amber-500" : "text-muted-foreground"}`}>
+                      {member.completionPct}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </ChartCard>
+
+        {/* ── Row 4: Quick Insights ────────────────────────────────── */}
+        {(summary.total > 0) && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5 }}
-            className="rounded-xl border border-border/50 bg-card/80 backdrop-blur-sm p-5"
+            className="grid grid-cols-1 sm:grid-cols-3 gap-4"
           >
-            <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-emerald-500" />
-              Velocity (Story Points / Week)
-            </h3>
-            <div className="h-[200px]">
-              <svg width="100%" height="100%" viewBox="0 0 400 200" preserveAspectRatio="none">
-                {/* Grid lines */}
-                {[0, 1, 2, 3, 4].map((i) => (
-                  <line key={i} x1="40" y1={20 + i * 40} x2="390" y2={20 + i * 40} stroke="currentColor" className="text-border/30" strokeWidth="1" />
-                ))}
-                {/* Y-axis labels */}
-                {[0, 1, 2, 3, 4].map((i) => (
-                  <text key={i} x="35" y={24 + i * 40} textAnchor="end" className="fill-muted-foreground" fontSize="9">
-                    {Math.round(maxVelocityPoints * (1 - i / 4))}
-                  </text>
-                ))}
-                {/* Bars */}
-                {velocity.map((v, i) => {
-                  const barWidth = 30;
-                  const gap = (350 - barWidth * 8) / 9;
-                  const x = 40 + gap + i * (barWidth + gap);
-                  const barHeight = maxVelocityPoints > 0 ? (v.points / maxVelocityPoints) * 160 : 0;
-                  return (
-                    <g key={i}>
-                      <rect
-                        x={x} y={180 - barHeight} width={barWidth} height={barHeight}
-                        rx="4" fill="#6366f1" opacity="0.8"
-                      />
-                      {v.points > 0 && (
-                        <text x={x + barWidth / 2} y={175 - barHeight} textAnchor="middle" className="fill-foreground" fontSize="9" fontWeight="600">
-                          {v.points}
-                        </text>
-                      )}
-                      <text x={x + barWidth / 2} y={196} textAnchor="middle" className="fill-muted-foreground" fontSize="7">
-                        {v.week}
-                      </text>
-                    </g>
-                  );
-                })}
-              </svg>
+            {/* Insight: Top Contributor */}
+            {topContributor && topContributor.completedCards > 0 && (
+              <div className="rounded-xl border border-border/50 bg-gradient-to-br from-amber-500/5 to-transparent p-4 flex items-center gap-3">
+                <div className="p-2 bg-amber-500/10 rounded-lg">
+                  <Award className="w-5 h-5 text-amber-500" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Top Contributor</p>
+                  <p className="text-sm font-bold truncate">{topContributor.name}</p>
+                  <p className="text-[11px] text-muted-foreground">{topContributor.completedCards} tasks completed</p>
+                </div>
+              </div>
+            )}
+
+            {/* Insight: Avg Velocity */}
+            <div className="rounded-xl border border-border/50 bg-gradient-to-br from-primary/5 to-transparent p-4 flex items-center gap-3">
+              <div className="p-2 bg-primary/10 rounded-lg">
+                <Activity className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Avg Velocity</p>
+                <p className="text-sm font-bold">{avgVelocity} points/week</p>
+                <p className="text-[11px] text-muted-foreground">over {velocity.length} week{velocity.length !== 1 ? "s" : ""}</p>
+              </div>
+            </div>
+
+            {/* Insight: Burn rate */}
+            <div className="rounded-xl border border-border/50 bg-gradient-to-br from-emerald-500/5 to-transparent p-4 flex items-center gap-3">
+              <div className="p-2 bg-emerald-500/10 rounded-lg">
+                <ArrowUpRight className="w-5 h-5 text-emerald-500" />
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Points Done</p>
+                <p className="text-sm font-bold">
+                  {summary.totalPoints > 0
+                    ? `${Math.round((summary.completedPoints / summary.totalPoints) * 100)}%`
+                    : "—"
+                  }
+                </p>
+                <p className="text-[11px] text-muted-foreground">{summary.completedPoints} of {summary.totalPoints} points</p>
+              </div>
             </div>
           </motion.div>
-
-          {/* Time Tracking Chart */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6 }}
-            className="rounded-xl border border-border/50 bg-card/80 backdrop-blur-sm p-5"
-          >
-            <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-              <Clock className="w-4 h-4 text-violet-500" />
-              Time Logged (Hours / Week)
-            </h3>
-            <div className="h-[200px]">
-              <svg width="100%" height="100%" viewBox="0 0 400 200" preserveAspectRatio="none">
-                {/* Grid lines */}
-                {[0, 1, 2, 3, 4].map((i) => (
-                  <line key={i} x1="40" y1={20 + i * 40} x2="390" y2={20 + i * 40} stroke="currentColor" className="text-border/30" strokeWidth="1" />
-                ))}
-                {/* Y-axis labels */}
-                {[0, 1, 2, 3, 4].map((i) => (
-                  <text key={i} x="35" y={24 + i * 40} textAnchor="end" className="fill-muted-foreground" fontSize="9">
-                    {formatTime(Math.round(maxTimeMinutes * (1 - i / 4)))}
-                  </text>
-                ))}
-                {/* Bars */}
-                {timeTracking.map((t, i) => {
-                  const barWidth = 30;
-                  const gap = (350 - barWidth * 8) / 9;
-                  const x = 40 + gap + i * (barWidth + gap);
-                  const barHeight = maxTimeMinutes > 0 ? (t.minutes / maxTimeMinutes) * 160 : 0;
-                  return (
-                    <g key={i}>
-                      <rect
-                        x={x} y={180 - barHeight} width={barWidth} height={barHeight}
-                        rx="4" fill="#8b5cf6" opacity="0.8"
-                      />
-                      {t.minutes > 0 && (
-                        <text x={x + barWidth / 2} y={175 - barHeight} textAnchor="middle" className="fill-foreground" fontSize="9" fontWeight="600">
-                          {formatTime(t.minutes)}
-                        </text>
-                      )}
-                      <text x={x + barWidth / 2} y={196} textAnchor="middle" className="fill-muted-foreground" fontSize="7">
-                        {t.week}
-                      </text>
-                    </g>
-                  );
-                })}
-              </svg>
-            </div>
-          </motion.div>
-        </div>
-
-        {/* Member Workload */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.7 }}
-          className="rounded-xl border border-border/50 bg-card/80 backdrop-blur-sm p-5"
-        >
-          <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-            <Users className="w-4 h-4 text-blue-500" />
-            Team Workload
-          </h3>
-          {memberWorkload.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">No team members yet</p>
-          ) : (
-            <div className="space-y-4">
-              {memberWorkload.map((member) => {
-                const completionPct = member.totalCards > 0 ? Math.round((member.completedCards / member.totalCards) * 100) : 0;
-                return (
-                  <div key={member.userId} className="flex items-center gap-4">
-                    {/* Avatar */}
-                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary overflow-hidden">
-                      {member.image ? (
-                        <img src={member.image} alt={member.name} className="w-full h-full object-cover" />
-                      ) : (
-                        member.name[0]?.toUpperCase() || "?"
-                      )}
-                    </div>
-
-                    {/* Name + stats */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-semibold text-foreground truncate">{member.name}</span>
-                        <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
-                          <span>{member.totalCards} cards</span>
-                          <span>{member.totalPoints} pts</span>
-                          {member.timeLogged > 0 && <span>{formatTime(member.timeLogged)}</span>}
-                        </div>
-                      </div>
-                      {/* Progress bar */}
-                      <div className="h-4 bg-muted/30 rounded-full overflow-hidden flex">
-                        <motion.div
-                          initial={{ width: 0 }}
-                          animate={{ width: `${Math.max((member.totalCards / maxMemberCards) * 100, 3)}%` }}
-                          transition={{ delay: 0.8, duration: 0.6, ease: "easeOut" }}
-                          className="h-full rounded-full relative overflow-hidden"
-                          style={{ backgroundColor: "#6366f1" }}
-                        >
-                          {/* Completed portion inside the bar */}
-                          <div
-                            className="absolute inset-y-0 left-0 rounded-full"
-                            style={{
-                              width: `${completionPct}%`,
-                              backgroundColor: "#22c55e",
-                            }}
-                          />
-                        </motion.div>
-                      </div>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-[9px] text-muted-foreground">{completionPct}% done</span>
-                        <div className="flex items-center gap-1">
-                          <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                          <span className="text-[9px] text-muted-foreground">Completed</span>
-                          <div className="w-2 h-2 rounded-full bg-indigo-500 ml-1" />
-                          <span className="text-[9px] text-muted-foreground">In Progress</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </motion.div>
+        )}
       </div>
     </div>
   );

@@ -27,8 +27,7 @@ import {
     Users,
     ArrowRight
 } from "lucide-react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-
+import { UserAvatar } from "@/components/ui/UserAvatar";
 interface User {
     id: string;
     name: string | null;
@@ -359,12 +358,7 @@ export function CreateProjectModal({
                                                             : 'bg-background hover:bg-muted border-border'
                                                     }`}
                                                 >
-                                                    <Avatar className="w-5 h-5">
-                                                        <AvatarImage src={member.image || ""} />
-                                                        <AvatarFallback className="text-[10px] bg-background text-foreground">
-                                                            {member.name?.charAt(0) || "U"}
-                                                        </AvatarFallback>
-                                                    </Avatar>
+                                                    <UserAvatar user={member} className="w-5 h-5" showStatus={false} />
                                                     {member.name}
                                                 </button>
                                             ))}

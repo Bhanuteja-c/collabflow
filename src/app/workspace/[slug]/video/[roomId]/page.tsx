@@ -13,7 +13,7 @@ import React, {
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { VideoLobby } from "@/components/video/VideoLobby";
 import { VideoControls } from "@/components/video/VideoControls";
 import { VideoChat } from "@/components/video/VideoChat";
@@ -849,12 +849,7 @@ export default function WorkspaceVideoRoomPage({
           }
           className="flex items-center gap-1.5 bg-[#3c4043] rounded-full pl-1.5 pr-3 py-1 hover:bg-[#4a4d51] transition-colors"
         >
-          <Avatar className="h-6 w-6">
-            <AvatarImage src={myImage} />
-            <AvatarFallback className="text-[10px] bg-[#5f6368] text-white">
-              {myName[0]?.toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
+            <UserAvatar user={{ name: myName, image: myImage }} className="h-6 w-6" showStatus={false} />
           <span className="text-sm text-[#e8eaed] font-medium">
             {totalParticipants}
           </span>
@@ -969,15 +964,7 @@ export default function WorkspaceVideoRoomPage({
                 className="w-full h-full flex items-center justify-center"
                 style={{ background: getUserGradient(myName) }}
               >
-                <Avatar className="h-12 w-12">
-                  <AvatarImage src={myImage} />
-                  <AvatarFallback
-                    className="text-lg font-medium text-white"
-                    style={{ backgroundColor: getUserColor(myName) }}
-                  >
-                    {myName[0]?.toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
+                <UserAvatar user={{ name: myName, image: myImage }} className="h-12 w-12" showStatus={false} />
               </div>
             ) : (
               <video
@@ -1450,15 +1437,7 @@ function MeetTile({
                 }}
               />
             )}
-            <Avatar className="h-[72px] w-[72px] relative z-10 shadow-lg">
-              <AvatarImage src={image} />
-              <AvatarFallback
-                className="text-3xl font-medium text-white"
-                style={{ backgroundColor: avatarColor }}
-              >
-                {name?.[0]?.toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
+            <UserAvatar user={{ name, image }} className="h-[72px] w-[72px]" showStatus={false} />
           </div>
         </div>
       ) : (

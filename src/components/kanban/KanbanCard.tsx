@@ -6,7 +6,8 @@ import { useState, useRef, useEffect } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Check } from "lucide-react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -411,20 +412,12 @@ export default function KanbanCard({
                             <HoverCard openDelay={200} closeDelay={100}>
                                 <HoverCardTrigger asChild>
                                     <Avatar className="w-6 h-6 ring-2 ring-background cursor-pointer hover:ring-primary/50 transition-all">
-                                        <AvatarImage src={card.assignee.image || undefined} />
-                                        <AvatarFallback className="text-[9px] font-semibold bg-primary/10 text-primary">
-                                            {card.assignee.name?.[0] || "?"}
-                                        </AvatarFallback>
+                                        <UserAvatar user={card.assignee} className="w-6 h-6" showStatus={false} />
                                     </Avatar>
                                 </HoverCardTrigger>
                                 <HoverCardContent side="bottom" align="end" className="w-auto p-3">
                                     <div className="flex items-center gap-3">
-                                        <Avatar className="w-9 h-9">
-                                            <AvatarImage src={card.assignee.image || undefined} />
-                                            <AvatarFallback className="text-sm font-semibold bg-primary/10 text-primary">
-                                                {card.assignee.name?.[0] || "?"}
-                                            </AvatarFallback>
-                                        </Avatar>
+                                        <UserAvatar user={card.assignee} className="w-9 h-9" showStatus={false} />
                                         <div className="flex flex-col">
                                             <span className="text-sm font-semibold leading-none">{card.assignee.name}</span>
                                             <span className="text-[11px] text-muted-foreground mt-1">Assignee</span>

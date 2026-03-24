@@ -230,9 +230,19 @@ export function useVideoCall({ roomId, userId, userName, userImage, localStream 
         const retries = iceRestartCountRef.current.get(socketId) || 0;
         const MAX_RETRIES = 4;
 
+        const cleanupDeadPeer = () => {
+            peer.connection.close();
+            // @ts-ignore - forcefully release reference
+            peer.connection = null;
+            setReconnectingPeers(prev => { const n = new Set(prev); n.delete(socketId); return n; });
+            peersRef.current.delete(socketId);
+            socketRef.current?.emit("peer-disconnected", { peerId: socketId });
+            setPeers(prev => prev.filter(p => p.socketId !== socketId));
+        };
+
         if (retries >= MAX_RETRIES) {
             console.warn(`[WebRTC] Max ICE restart retries reached for ${socketId}`);
-            setReconnectingPeers(prev => { const n = new Set(prev); n.delete(socketId); return n; });
+            cleanupDeadPeer();
             return;
         }
 
@@ -251,7 +261,10 @@ export function useVideoCall({ roomId, userId, userName, userImage, localStream 
                     });
                 }
             })
-            .catch(err => console.error("[WebRTC] ICE restart failed:", err));
+            .catch(err => {
+                console.error("[WebRTC] ICE restart failed:", err);
+                cleanupDeadPeer();
+            });
     }, []);
 
     // Monitor connection quality

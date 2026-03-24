@@ -5,7 +5,7 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import {
@@ -193,12 +193,7 @@ export function ActivityFeed() {
                                 className="flex items-start gap-3 px-4 py-3 hover:bg-muted/30 transition-colors border-b last:border-0"
                             >
                                 {/* User Avatar */}
-                                <Avatar className="h-8 w-8 mt-0.5">
-                                    <AvatarImage src={activity.user.image || undefined} />
-                                    <AvatarFallback className="text-xs">
-                                        {activity.user.name?.[0]?.toUpperCase() || "?"}
-                                    </AvatarFallback>
-                                </Avatar>
+                                <UserAvatar user={activity.user} className="h-8 w-8" showStatus={false} />
 
                                 {/* Content */}
                                 <div className="flex-1 min-w-0">

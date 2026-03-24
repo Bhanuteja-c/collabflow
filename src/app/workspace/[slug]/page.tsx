@@ -24,7 +24,8 @@ import {
 import { ActivityFeed } from "@/components/dashboard/ActivityFeed";
 import { MyTasks } from "@/components/dashboard/MyTasks";
 import { useWorkspacePresence } from "@/hooks/useWorkspacePresence";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -33,7 +34,8 @@ import {
     DropdownMenuSeparator,
     DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
-import { CreateProjectModal } from "@/components/workspace/CreateProjectModal";
+import { CreateProjectModal } from "@/components/dashboard/CreateProjectModal";
+import { OnboardingChecklist } from "@/components/onboarding/OnboardingChecklist";
 
 interface WorkspaceDashboardProps {
     params: Promise<{ slug: string }>;
@@ -44,6 +46,13 @@ interface Workspace {
     slug: string;
     name: string;
     members?: { userId: string, user: { name?: string | null, image?: string | null } }[];
+    onboardingCompleted?: boolean;
+    userRole?: string;
+    _count?: {
+        boards: number;
+        channels: number;
+        documents: number;
+    };
 }
 
 interface User {
@@ -193,30 +202,54 @@ export default function WorkspaceDashboard({ params }: WorkspaceDashboardProps) 
                                     <span className="hidden sm:inline">Create New</span>
                                 </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-56">
-                                <DropdownMenuLabel>Create options</DropdownMenuLabel>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => setIsProjectModalOpen(true)} className="font-medium text-primary focus:text-primary focus:bg-primary/10">
-                                    <Sparkles className="w-4 h-4 mr-2" />
-                                    Full Project Suite
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem asChild>
+                            <DropdownMenuContent align="end" className="w-[280px]">
+                                <DropdownMenuLabel className="text-xs font-semibold uppercase text-muted-foreground tracking-wider mb-1">
+                                    QUICK CREATE
+                                </DropdownMenuLabel>
+                                <DropdownMenuItem asChild className="mb-1 py-2 cursor-pointer">
                                     <Link href={`/workspace/${slug}/boards?new=true`}>
-                                        <LayoutGrid className="w-4 h-4 mr-2" />
-                                        Kanban Board
+                                        <LayoutGrid className="w-5 h-5 mr-3 text-primary/70" />
+                                        <div className="flex flex-col">
+                                            <span className="font-bold">Kanban Board</span>
+                                            <span className="text-[11px] text-muted-foreground">Start a new project board</span>
+                                        </div>
                                     </Link>
                                 </DropdownMenuItem>
-                                <DropdownMenuItem asChild>
+                                <DropdownMenuItem asChild className="mb-2 py-2 cursor-pointer">
                                     <Link href={`/workspace/${slug}/documents?new=true`}>
-                                        <FileText className="w-4 h-4 mr-2" />
-                                        Document
+                                        <FileText className="w-5 h-5 mr-3 text-blue-500/70" />
+                                        <div className="flex flex-col">
+                                            <span className="font-bold">Document</span>
+                                            <span className="text-[11px] text-muted-foreground">Start a new document</span>
+                                        </div>
                                     </Link>
                                 </DropdownMenuItem>
-                                <DropdownMenuItem asChild>
+
+                                <DropdownMenuSeparator />
+
+                                <DropdownMenuLabel className="text-xs font-semibold uppercase text-muted-foreground tracking-wider mt-2 mb-1">
+                                    NEW PROJECT
+                                </DropdownMenuLabel>
+                                <DropdownMenuItem onClick={() => setIsProjectModalOpen(true)} className="mb-2 py-2 cursor-pointer focus:bg-primary/10">
+                                    <Sparkles className="w-5 h-5 mr-3 text-primary" />
+                                    <div className="flex flex-col">
+                                        <span className="font-bold text-primary">New Project</span>
+                                        <span className="text-[11px] text-muted-foreground">Board · Chat · Whiteboard</span>
+                                    </div>
+                                </DropdownMenuItem>
+
+                                <DropdownMenuSeparator />
+
+                                <DropdownMenuLabel className="text-xs font-semibold uppercase text-muted-foreground tracking-wider mt-2 mb-1">
+                                    OTHER
+                                </DropdownMenuLabel>
+                                <DropdownMenuItem asChild className="mb-1 py-2 cursor-pointer">
                                     <Link href={`/workspace/${slug}/whiteboard?new=true`}>
-                                        <PenTool className="w-4 h-4 mr-2" />
-                                        Whiteboard
+                                        <PenTool className="w-5 h-5 mr-3 text-orange-500/70" />
+                                        <div className="flex flex-col">
+                                            <span className="font-bold">Whiteboard</span>
+                                            <span className="text-[11px] text-muted-foreground">New blank canvas</span>
+                                        </div>
                                     </Link>
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
@@ -237,6 +270,15 @@ export default function WorkspaceDashboard({ params }: WorkspaceDashboardProps) 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-6">
                 {/* Main Content Area */}
                 <div className="lg:col-span-8 space-y-8">
+                    
+                    {/* Onboarding Flow: Render only for not completed & admins/owners */}
+                    {workspace && workspace.onboardingCompleted === false && (workspace.userRole === "owner" || workspace.userRole === "admin") && (
+                        <OnboardingChecklist 
+                            workspace={workspace} 
+                            onDismiss={() => setWorkspace({ ...workspace, onboardingCompleted: true })} 
+                        />
+                    )}
+
                     {/* My Tasks (Moved here for prominence) */}
                     <div className="flex flex-col gap-4">
                         <MyTasks workspaceId={workspace?.id || ""} />
@@ -317,12 +359,7 @@ export default function WorkspaceDashboard({ params }: WorkspaceDashboardProps) 
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-3">
                                         <div className="relative">
-                                            <Avatar className="h-9 w-9 border border-border/50">
-                                                <AvatarImage src={session?.user?.image || ""} />
-                                                <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
-                                                    {session?.user?.name?.charAt(0)?.toUpperCase() || "U"}
-                                                </AvatarFallback>
-                                            </Avatar>
+                                            <UserAvatar user={{ name: session?.user?.name, image: session?.user?.image }} className="h-9 w-9 border border-border/50" showStatus={false} />
                                             <div className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 rounded-full border-2 border-background" />
                                         </div>
                                         <div className="flex flex-col">
@@ -344,10 +381,7 @@ export default function WorkspaceDashboard({ params }: WorkspaceDashboardProps) 
                                             <div className="flex items-center gap-3">
                                                 <div className="relative">
                                                     <Avatar className="h-9 w-9 border border-border/50">
-                                                        <AvatarImage src={image || ""} />
-                                                        <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
-                                                            {name.charAt(0)?.toUpperCase()}
-                                                        </AvatarFallback>
+                                                        <UserAvatar user={{ name, image }} className="h-9 w-9" showStatus={false} />
                                                     </Avatar>
                                                     <div className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 rounded-full border-2 border-background" />
                                                 </div>

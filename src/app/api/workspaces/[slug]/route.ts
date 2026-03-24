@@ -174,3 +174,43 @@ export async function DELETE(
     }
 }
 
+// PATCH /api/workspaces/[slug] - Partial updates (e.g. onboarding)
+export async function PATCH(
+    request: NextRequest,
+    { params }: { params: Promise<{ slug: string }> }
+) {
+    try {
+        const session = await auth();
+        if (!session?.user) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
+        const { slug } = await params;
+        const userId = (session.user as { id: string }).id;
+
+        const workspaceId = await resolveWorkspaceId(slug);
+        if (!workspaceId) {
+            return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
+        }
+
+        const membership = await checkWorkspaceAccess(workspaceId, userId);
+        if (!membership || !["owner", "admin"].includes(membership.role)) {
+            return NextResponse.json({ error: "Permission denied" }, { status: 403 });
+        }
+
+        const body = await request.json();
+        
+        if (body.onboardingCompleted !== undefined) {
+            const workspace = await prisma.workspace.update({
+                where: { id: workspaceId },
+                data: { onboardingCompleted: Boolean(body.onboardingCompleted) },
+            });
+            return NextResponse.json(workspace);
+        }
+
+        return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+    } catch (error) {
+        console.error("Patch workspace error:", error);
+        return NextResponse.json({ error: "Failed to update workspace" }, { status: 500 });
+    }
+}

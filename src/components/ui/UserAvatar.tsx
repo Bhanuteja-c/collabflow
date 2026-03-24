@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getDiceBearAvatar } from "@/lib/avatar-colors";
 import { cn } from "@/lib/utils";
@@ -28,15 +28,33 @@ export function getStatusColor(status?: string | null) {
     }
 }
 
-export function UserAvatar({ user, className, showStatus = true }: UserAvatarProps) {
-    const avatarUrl = user.image || getDiceBearAvatar(user.name);
+export function UserAvatar({ user: rawUser, className, showStatus = true }: UserAvatarProps) {
+    const user = rawUser ?? { name: null, image: null };
+    const diceBearUrl = getDiceBearAvatar(user.name);
+    const [imgSrc, setImgSrc] = useState(user.image || diceBearUrl);
+    const [hasFailed, setHasFailed] = useState(false);
     const initial = user.name?.[0]?.toUpperCase() || "U";
     const statusColor = getStatusColor(user.status);
+
+    // Reset src when user.image prop changes
+    React.useEffect(() => {
+        setImgSrc(user.image || diceBearUrl);
+        setHasFailed(false);
+    }, [user.image, diceBearUrl]);
 
     return (
         <div className="relative inline-block">
             <Avatar className={cn("h-8 w-8", className)}>
-                <AvatarImage src={avatarUrl} alt={user.name || "User"} />
+                <AvatarImage
+                    src={imgSrc}
+                    alt={user.name || "User"}
+                    onLoadingStatusChange={(status) => {
+                        if (status === "error" && !hasFailed) {
+                            setHasFailed(true);
+                            setImgSrc(diceBearUrl);
+                        }
+                    }}
+                />
                 <AvatarFallback className="bg-accent text-accent-foreground text-sm font-medium">
                     {initial}
                 </AvatarFallback>
@@ -56,3 +74,4 @@ export function UserAvatar({ user, className, showStatus = true }: UserAvatarPro
         </div>
     );
 }
+

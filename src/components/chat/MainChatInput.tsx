@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import {
   Loader2, Send, Smile, Paperclip, X,
   Bold, Italic, Underline, Strikethrough,
@@ -158,10 +158,7 @@ export function MainChatInput({
               }}
               className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm hover:bg-muted text-left transition-colors"
             >
-              <Avatar className="h-5 w-5">
-                <AvatarImage src={member.image || ""} />
-                <AvatarFallback className="text-[10px] bg-primary/10 text-primary">{member.name?.[0]?.toUpperCase() || "?"}</AvatarFallback>
-              </Avatar>
+              <UserAvatar user={{ name: member.name, image: member.image }} className="h-5 w-5" showStatus={false} />
               <span className="truncate font-medium">{member.name}</span>
             </button>
           ))}

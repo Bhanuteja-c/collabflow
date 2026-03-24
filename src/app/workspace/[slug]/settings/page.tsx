@@ -7,7 +7,8 @@ import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -30,10 +31,90 @@ const tabs = [
     { id: "danger" as const, label: "Danger Zone", icon: Shield },
 ];
 
+const THEMES = [
+    {
+        id: "light",
+        name: "Light",
+        description: "Clean white interface",
+        preview: {
+            bg: "#ffffff",
+            sidebar: "#f8fafc",
+            accent: "#6366f1",
+            card: "#f1f5f9"
+        }
+    },
+    {
+        id: "dark",
+        name: "Dark",
+        description: "Easy on the eyes",
+        preview: {
+            bg: "#1a1a1a",
+            sidebar: "#111111",
+            accent: "#6366f1",
+            card: "#2a2a2a"
+        }
+    },
+    {
+        id: "midnight",
+        name: "Midnight Blue",
+        description: "Deep navy with blue accents",
+        preview: {
+            bg: "#0f172a",
+            sidebar: "#0a0f1e",
+            accent: "#3b82f6",
+            card: "#1e293b"
+        }
+    },
+    {
+        id: "forest",
+        name: "Forest",
+        description: "Dark green, earthy and calm",
+        preview: {
+            bg: "#0d1f0f",
+            sidebar: "#081208",
+            accent: "#22c55e",
+            card: "#14291a"
+        }
+    },
+    {
+        id: "sunset",
+        name: "Sunset",
+        description: "Warm orange on dark base",
+        preview: {
+            bg: "#1a0e05",
+            sidebar: "#120a03",
+            accent: "#f97316",
+            card: "#2d1a0a"
+        }
+    },
+    {
+        id: "nord",
+        name: "Nord",
+        description: "Arctic blues and muted greys",
+        preview: {
+            bg: "#2e3440",
+            sidebar: "#242933",
+            accent: "#88c0d0",
+            card: "#3b4252"
+        }
+    },
+    {
+        id: "catppuccin",
+        name: "Catppuccin",
+        description: "Pastel purple, popular dev theme",
+        preview: {
+            bg: "#1e1e2e",
+            sidebar: "#181825",
+            accent: "#cba6f7",
+            card: "#313244"
+        }
+    },
+];
+
 export default function WorkspaceSettingsPage({ params }: { params: Promise<{ slug: string }> }) {
     const { slug } = use(params);
     const { data: session, update } = useSession();
-    const { theme, setTheme, resolvedTheme } = useTheme();
+    const { theme, setTheme } = useTheme();
 
     const [activeTab, setActiveTab] = useState<SettingsTab>("profile");
     const [workspace, setWorkspace] = useState<any>(null);
@@ -209,8 +290,8 @@ export default function WorkspaceSettingsPage({ params }: { params: Promise<{ sl
                 <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-3">Settings</h2>
                 {tabs.map((tab) => {
                     const isActive = activeTab === tab.id;
-                    // Hide workspace tab for non-admins
-                    if (tab.id === "workspace" && !canManage) return null;
+                    // Hide workspace and integrations tabs for non-admins
+                    if ((tab.id === "workspace" || tab.id === "integrations") && !canManage) return null;
                     // Hide danger zone as a tab if not owner (still show sign out in profile)
                     return (
                         <button
@@ -245,10 +326,7 @@ export default function WorkspaceSettingsPage({ params }: { params: Promise<{ sl
                             <div className="flex flex-col items-center gap-3">
                                 <div className="relative group cursor-pointer" onClick={() => avatarInputRef.current?.click()}>
                                     <Avatar className="h-24 w-24 border-4 border-background shadow-sm ring-1 ring-border">
-                                        <AvatarImage src={avatarUrl || session?.user?.image || getDiceBearAvatar(session?.user?.name)} />
-                                        <AvatarFallback className={avatarFallbackClass(session?.user?.name, "text-3xl font-bold")}>
-                                            {session?.user?.name?.[0]?.toUpperCase() || "?"}
-                                        </AvatarFallback>
+                                        <UserAvatar user={{ name: session?.user?.name, image: avatarUrl || session?.user?.image }} className="h-24 w-24" showStatus={false} />
                                     </Avatar>
                                     {/* Upload overlay */}
                                     <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -426,12 +504,7 @@ export default function WorkspaceSettingsPage({ params }: { params: Promise<{ sl
                                 <div className="space-y-1 max-h-[240px] overflow-y-auto">
                                     {members.map((m: any) => (
                                         <div key={m.id || m.userId} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted/40 transition-colors">
-                                            <Avatar className="h-8 w-8">
-                                                <AvatarImage src={m.user?.image || m.image || getDiceBearAvatar(m.user?.name || m.name)} />
-                                                <AvatarFallback className={avatarFallbackClass(m.user?.name || m.name, "text-[11px] font-semibold")}>
-                                                    {(m.user?.name || m.name)?.[0]?.toUpperCase() || "?"}
-                                                </AvatarFallback>
-                                            </Avatar>
+                                            <UserAvatar user={{ name: m.user?.name, image: m.user?.image }} className="h-8 w-8" showStatus={false} />
                                             <div className="flex-1 min-w-0">
                                                 <p className="text-sm font-medium truncate">{m.user?.name || m.name}</p>
                                                 <p className="text-xs text-muted-foreground truncate">{m.user?.email || m.email}</p>
@@ -457,66 +530,94 @@ export default function WorkspaceSettingsPage({ params }: { params: Promise<{ sl
                 {/* Appearance Tab */}
                 {activeTab === "appearance" && (
                     <div className="space-y-6">
-                        <div>
-                            <h1 className="text-xl font-semibold">Appearance</h1>
-                            <p className="text-sm text-muted-foreground mt-1">Customize how CollabFlow looks for you</p>
-                        </div>
-
-                        <Separator />
-
-                        <div className="space-y-3">
-                            <Label className="text-sm font-medium">Theme</Label>
-                            <div className="grid grid-cols-3 gap-3">
-                                {themeOptions.map((t) => {
-                                    const isActive = mounted && resolvedTheme === t.value || (!mounted && t.value === "system");
-                                    const isSelected = theme === t.value;
-                                    return (
-                                        <button
-                                            key={t.value}
-                                            onClick={() => setTheme(t.value)}
-                                            className={`group relative flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${isSelected
-                                                ? "border-primary bg-primary/5 shadow-sm"
-                                                : "border-border hover:border-primary/40 hover:bg-muted/30"
-                                                }`}
+                        <section className="mb-8">
+                            <h2 className="text-lg font-semibold mb-1">
+                                Appearance
+                            </h2>
+                            <p className="text-sm text-muted-foreground mb-4">
+                                Choose a theme for your workspace.
+                                Your preference is saved automatically.
+                            </p>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                                {THEMES.map((t) => (
+                                    <button
+                                        key={t.id}
+                                        onClick={() => setTheme(t.id)}
+                                        className={`group rounded-xl border-2 p-3 text-left transition-all duration-200 hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-primary ${
+                                            theme === t.id
+                                                ? "border-primary shadow-sm"
+                                                : "border-border hover:border-primary/50"
+                                        }`}
+                                    >
+                                        {/* Mini UI Preview */}
+                                        <div
+                                            className="w-full h-16 rounded-lg mb-3 overflow-hidden flex"
+                                            style={{ backgroundColor: t.preview.bg }}
                                         >
-                                            <div className={`p-3 rounded-lg ${isSelected ? "bg-primary/10" : "bg-muted/50 group-hover:bg-muted"} transition-colors`}>
-                                                <t.icon className={`w-5 h-5 ${isSelected ? "text-primary" : "text-muted-foreground"}`} />
+                                            {/* Sidebar strip */}
+                                            <div
+                                                className="w-1/3 h-full flex flex-col gap-1 p-1.5"
+                                                style={{ backgroundColor: t.preview.sidebar }}
+                                            >
+                                                <div
+                                                    className="h-1.5 rounded-full w-3/4"
+                                                    style={{ backgroundColor: t.preview.accent, opacity: 0.8 }}
+                                                />
+                                                <div
+                                                    className="h-1 rounded-full w-1/2"
+                                                    style={{ backgroundColor: t.preview.accent, opacity: 0.4 }}
+                                                />
+                                                <div
+                                                    className="h-1 rounded-full w-2/3"
+                                                    style={{ backgroundColor: t.preview.accent, opacity: 0.4 }}
+                                                />
                                             </div>
-                                            <div className="text-center">
-                                                <p className={`text-sm font-medium ${isSelected ? "text-primary" : ""}`}>{t.label}</p>
-                                                <p className="text-[10px] text-muted-foreground mt-0.5">{t.desc}</p>
+                                            {/* Main area */}
+                                            <div className="flex-1 p-1.5 flex flex-col gap-1">
+                                                <div
+                                                    className="h-2 rounded w-full"
+                                                    style={{ backgroundColor: t.preview.card }}
+                                                />
+                                                <div
+                                                    className="h-5 rounded w-full"
+                                                    style={{ backgroundColor: t.preview.card }}
+                                                />
+                                                <div
+                                                    className="h-1.5 rounded w-2/3"
+                                                    style={{ backgroundColor: t.preview.accent, opacity: 0.6 }}
+                                                />
                                             </div>
-                                            {isSelected && (
-                                                <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-primary" />
+                                        </div>
+
+                                        {/* Theme info */}
+                                        <div className="flex items-start justify-between">
+                                            <div>
+                                                <p className="text-sm font-medium leading-tight">
+                                                    {t.name}
+                                                </p>
+                                                <p className="text-xs text-muted-foreground mt-0.5">
+                                                    {t.description}
+                                                </p>
+                                            </div>
+                                            {theme === t.id && (
+                                                <div className="w-4 h-4 rounded-full bg-primary flex items-center justify-center shrink-0 mt-0.5">
+                                                    <svg width="8" height="8" viewBox="0 0 8 8">
+                                                        <path
+                                                            d="M1.5 4L3 5.5L6.5 2"
+                                                            stroke="white"
+                                                            strokeWidth="1.5"
+                                                            strokeLinecap="round"
+                                                            strokeLinejoin="round"
+                                                            fill="none"
+                                                        />
+                                                    </svg>
+                                                </div>
                                             )}
-                                        </button>
-                                    );
-                                })}
+                                        </div>
+                                    </button>
+                                ))}
                             </div>
-                        </div>
-
-                        <Separator />
-
-                        {/* Preview */}
-                        <div className="space-y-3">
-                            <Label className="text-sm font-medium">Preview</Label>
-                            <div className="p-4 rounded-xl border bg-card">
-                                <div className="flex items-center gap-3 mb-3">
-                                    <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-                                        <span className="text-sm font-bold text-primary">C</span>
-                                    </div>
-                                    <div>
-                                        <p className="text-sm font-semibold">CollabFlow</p>
-                                        <p className="text-[10px] text-muted-foreground">Just now</p>
-                                    </div>
-                                </div>
-                                <p className="text-sm text-foreground">This is how your messages will look with the current theme. 🎨</p>
-                                <div className="flex gap-1 mt-2">
-                                    <span className="text-xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">👍 2</span>
-                                    <span className="text-xs px-1.5 py-0.5 rounded-full bg-muted border border-border">❤️ 1</span>
-                                </div>
-                            </div>
-                        </div>
+                        </section>
                     </div>
                 )}
 

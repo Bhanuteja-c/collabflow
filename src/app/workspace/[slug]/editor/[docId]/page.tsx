@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { useSession } from "next-auth/react";
 import { Loader2, ArrowLeft, Check, Share2, Wifi, WifiOff, Save, Clock, Download, FileText } from "lucide-react";
 import Link from "next/link";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { useDocumentSync } from "@/hooks/useDocumentSync";
 import CollaborativeEditor from "@/components/editor/CollaborativeEditor";
 
@@ -136,10 +137,10 @@ export default function WorkspaceEditorPage({ params }: { params: Promise<{ slug
         }
     }, [docId]);
 
-    const handleSave = useCallback(async (content: string) => {
+    const handleSave = useCallback(async (content: string, isSnapshot = false) => {
         setSaving(true);
         try {
-            await fetch(`/api/documents/${docId}`, {
+            await fetch(`/api/documents/${docId}${isSnapshot ? '?snapshot=true' : ''}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ title: titleRef.current, content })
@@ -158,10 +159,15 @@ export default function WorkspaceEditorPage({ params }: { params: Promise<{ slug
                 clearTimeout(savePendingRef.current);
                 savePendingRef.current = null;
             }
-            // Use sendBeacon for reliable save on unload
+            // Use fetch with keepalive for reliable save on unload
             if (contentRef.current) {
                 const payload = JSON.stringify({ title: titleRef.current, content: contentRef.current });
-                navigator.sendBeacon(`/api/documents/${docId}`, new Blob([payload], { type: 'application/json' }));
+                fetch(`/api/documents/${docId}?snapshot=true`, {
+                    method: "PUT",
+                    keepalive: true,
+                    headers: { "Content-Type": "application/json" },
+                    body: payload
+                }).catch(() => {});
             }
         };
 
@@ -270,10 +276,7 @@ export default function WorkspaceEditorPage({ params }: { params: Promise<{ slug
                                 <div className="flex -space-x-2">
                                     {remoteUsers.slice(0, 5).map((u) => (
                                         <Avatar key={u.socketId} className="h-8 w-8 border-2 border-background ring-2 ring-background">
-                                            <AvatarImage src={u.user.image} alt={u.user.name} />
-                                            <AvatarFallback style={{ backgroundColor: u.user.color }} className="text-xs text-white font-medium">
-                                                {u.user.name?.[0]?.toUpperCase()}
-                                            </AvatarFallback>
+                                            <UserAvatar user={{ name: u.user.name, image: u.user.image }} className="h-8 w-8" showStatus={false} />
                                         </Avatar>
                                     ))}
                                 </div>
@@ -321,7 +324,7 @@ export default function WorkspaceEditorPage({ params }: { params: Promise<{ slug
                             <span className="hidden sm:inline">{copied ? "Copied!" : "Share"}</span>
                         </Button>
                         <Button
-                            onClick={() => {/* Save handled by editor */ }}
+                            onClick={() => handleSave(contentRef.current, true)}
                             disabled={saving}
                             variant={saved ? "outline" : "default"}
                             className={saved ? "text-emerald-600 border-emerald-600" : ""}

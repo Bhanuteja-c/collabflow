@@ -3,7 +3,7 @@
 
 import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -221,12 +221,7 @@ export default function BacklogPanel({
 
                     {/* Assignee */}
                     {item.assignee && (
-                      <Avatar className="h-5 w-5 shrink-0">
-                        <AvatarImage src={item.assignee.image || undefined} />
-                        <AvatarFallback className="text-[9px]">
-                          {item.assignee.name?.[0] || "?"}
-                        </AvatarFallback>
-                      </Avatar>
+                      <UserAvatar user={item.assignee} className="h-5 w-5" showStatus={false} />
                     )}
 
                     {/* Move to board button */}

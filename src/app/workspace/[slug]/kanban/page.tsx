@@ -4,7 +4,10 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { useSession } from "next-auth/react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams, useRouter } from "next/navigation";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue
+} from "@/components/ui/select";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   DndContext,
@@ -21,7 +24,8 @@ import {
 import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -124,10 +128,14 @@ interface Board {
 export default function WorkspaceKanbanPage() {
   const { data: session } = useSession();
   const params = useParams();
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [board, setBoard] = useState<Board | null>(null);
+  const [allBoards, setAllBoards] = useState<{ id: string; title: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [activeCard, setActiveCard] = useState<Card | null>(null);
+  const [boardSnapshot, setBoardSnapshot] = useState<Board | null>(null);
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [workspaceMembers, setWorkspaceMembers] = useState<User[]>([]);
@@ -459,12 +467,42 @@ export default function WorkspaceKanbanPage() {
       const res = await fetch(`/api/boards?workspaceId=${workspaceId}`);
       if (res.ok) {
         const boards = await res.json();
+        setAllBoards(boards.map((b: Board) => ({ id: b.id, title: b.title })));
         if (boards.length > 0) {
-          setBoard(boards[0]);
+          // Read boardId from URL if available, otherwise use first board
+          const urlBoardId = searchParams?.get("boardId");
+          const targetBoard = urlBoardId
+            ? boards.find((b: Board) => b.id === urlBoardId) || boards[0]
+            : boards[0];
+          setBoard(targetBoard);
         }
       }
     } catch (error) {
       console.error("Error fetching boards:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const switchBoard = async (boardId: string) => {
+    if (boardId === board?.id) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/boards?workspaceId=${workspaceId}`);
+      if (res.ok) {
+        const boards = await res.json();
+        const target = boards.find((b: Board) => b.id === boardId);
+        if (target) {
+          setBoard(target);
+          // Update URL without full navigation
+          const url = new URL(window.location.href);
+          url.searchParams.set("boardId", boardId);
+          router.replace(url.pathname + url.search, { scroll: false });
+        }
+      }
+    } catch (error) {
+      console.error("Error switching board:", error);
+      toast.error("Failed to switch board");
     } finally {
       setLoading(false);
     }
@@ -664,6 +702,7 @@ export default function WorkspaceKanbanPage() {
       if (res.ok) {
         const newBoard = await res.json();
         setBoard(newBoard);
+        setAllBoards((prev) => [...prev, { id: newBoard.id, title: newBoard.title }]);
         toast.success("Board created");
       }
     } catch (error) {
@@ -1170,6 +1209,7 @@ export default function WorkspaceKanbanPage() {
   };
 
   const handleDragStart = (event: DragStartEvent) => {
+    setBoardSnapshot(board);
     const { active } = event;
     const column = findColumn(active.id as string);
     if (column) {
@@ -1264,15 +1304,8 @@ export default function WorkspaceKanbanPage() {
           ),
         });
 
-        emitCardMoved(
-          active.id as string,
-          activeColumn.id,
-          activeColumn.id,
-          newIndex,
-        );
-
         try {
-          await fetch("/api/cards", {
+          const res = await fetch("/api/cards", {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -1281,8 +1314,27 @@ export default function WorkspaceKanbanPage() {
               order: newIndex,
             }),
           });
+
+          if (!res.ok) {
+            const errorData = await res.json();
+            if (res.status === 422 && errorData.error === "WIP_LIMIT_REACHED") {
+              toast.error("Cannot move card: Column WIP limit reached.");
+            } else {
+              toast.error(errorData.error || "Failed to move card");
+            }
+            if (boardSnapshot) setBoard(boardSnapshot);
+            return;
+          }
+
+          emitCardMoved(
+            active.id as string,
+            activeColumn.id,
+            activeColumn.id,
+            newIndex,
+          );
         } catch (error) {
           toast.error("Failed to move card");
+          if (boardSnapshot) setBoard(boardSnapshot);
         }
       }
     } else {
@@ -1290,15 +1342,8 @@ export default function WorkspaceKanbanPage() {
       const cardIndex =
         newColumn?.cards.findIndex((c) => c.id === active.id) ?? 0;
 
-      emitCardMoved(
-        active.id as string,
-        activeColumn.id,
-        overColumn.id,
-        cardIndex,
-      );
-
       try {
-        await fetch("/api/cards", {
+        const res = await fetch("/api/cards", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -1307,8 +1352,27 @@ export default function WorkspaceKanbanPage() {
             order: cardIndex,
           }),
         });
+
+        if (!res.ok) {
+          const errorData = await res.json();
+          if (res.status === 422 && errorData.error === "WIP_LIMIT_REACHED") {
+            toast.error("Cannot move card: Column WIP limit reached.");
+          } else {
+            toast.error(errorData.error || "Failed to move card");
+          }
+          if (boardSnapshot) setBoard(boardSnapshot);
+          return;
+        }
+
+        emitCardMoved(
+          active.id as string,
+          activeColumn.id,
+          overColumn.id,
+          cardIndex,
+        );
       } catch (error) {
         toast.error("Failed to move card");
+        if (boardSnapshot) setBoard(boardSnapshot);
       }
     }
   };
@@ -1417,35 +1481,53 @@ export default function WorkspaceKanbanPage() {
             animate={{ opacity: 1, y: 0 }}
             className="flex items-center justify-between gap-3"
           >
-            {/* Left: Icon + Title + Live badge */}
+            {/* Left: Board switcher + Title + Live badge */}
             <div className="min-w-0 flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center flex-shrink-0 shadow-sm">
                 <LayoutGrid className="w-4 h-4 text-white" />
               </div>
-              {editingTitle ? (
-                <Input
-                  value={titleDraft}
-                  onChange={(e) => setTitleDraft(e.target.value)}
-                  onBlur={saveBoardTitle}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") saveBoardTitle();
-                    if (e.key === "Escape") setEditingTitle(false);
-                  }}
-                  autoFocus
-                  className="text-lg font-bold w-64 h-9"
-                />
-              ) : (
-                <h1
-                  className="text-lg font-bold tracking-tight truncate cursor-pointer hover:text-primary/80 transition-colors"
-                  onClick={() => {
-                    setTitleDraft(board.title);
-                    setEditingTitle(true);
-                  }}
-                  title="Click to rename"
-                >
-                  {board.title}
-                </h1>
+
+              {/* Board Selector */}
+              {allBoards.length > 1 && (
+                <Select value={board.id} onValueChange={switchBoard}>
+                  <SelectTrigger className="w-[200px] h-9 text-sm font-semibold border-border/50 bg-muted/30">
+                    <SelectValue placeholder="Select board" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allBoards.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>{b.title}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               )}
+
+              {allBoards.length <= 1 && (
+                editingTitle ? (
+                  <Input
+                    value={titleDraft}
+                    onChange={(e) => setTitleDraft(e.target.value)}
+                    onBlur={saveBoardTitle}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") saveBoardTitle();
+                      if (e.key === "Escape") setEditingTitle(false);
+                    }}
+                    autoFocus
+                    className="text-lg font-bold w-64 h-9"
+                  />
+                ) : (
+                  <h1
+                    className="text-lg font-bold tracking-tight truncate cursor-pointer hover:text-primary/80 transition-colors"
+                    onClick={() => {
+                      setTitleDraft(board.title);
+                      setEditingTitle(true);
+                    }}
+                    title="Click to rename"
+                  >
+                    {board.title}
+                  </h1>
+                )
+              )}
+
               {syncConnected ? (
                 <span className="flex items-center gap-1.5 text-[10px] text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full font-medium">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-online-pulse" />
@@ -1485,10 +1567,7 @@ export default function WorkspaceKanbanPage() {
                   <div className="flex -space-x-2">
                     {viewers.slice(0, 5).map((viewer) => (
                       <div key={viewer.socketId} className="relative">
-                        <Avatar className="w-6 h-6 border-2 border-background ring-1 ring-border/30" title={viewer.user.name}>
-                          <AvatarImage src={viewer.user.image} />
-                          <AvatarFallback className="text-[9px] font-semibold">{viewer.user.name?.[0] || "?"}</AvatarFallback>
-                        </Avatar>
+                        <UserAvatar user={viewer.user} className="w-6 h-6 border-2 border-background ring-1 ring-border/30" showStatus={false} />
                         <span className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-500 border border-background" />
                       </div>
                     ))}
@@ -1587,10 +1666,7 @@ export default function WorkspaceKanbanPage() {
                 }`}
                 title={member.name || "Member"}
               >
-                <Avatar className="w-7 h-7 border-2 border-background">
-                  <AvatarImage src={member.image || undefined} />
-                  <AvatarFallback className="text-[9px] font-semibold bg-primary/10 text-primary">{member.name?.[0] || "?"}</AvatarFallback>
-                </Avatar>
+                <UserAvatar user={member} className="w-7 h-7 border-2 border-background" showStatus={false} />
               </button>
             ))}
 

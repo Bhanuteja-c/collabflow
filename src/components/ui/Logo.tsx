@@ -107,11 +107,9 @@ export default function Logo({ className = "", showText = true, size = "md" }: L
 
             {/* Logo Text */}
             {showText && (
-                <span className={`font-bold tracking-tight ${text}`}>
-                    <span className={isDark ? "text-white" : "text-gray-900"}>Collab</span>
-                    <span className="bg-gradient-to-r from-blue-500 via-indigo-500 to-violet-500 bg-clip-text text-transparent">
-                        Flow
-                    </span>
+                <span className={`tracking-tight ${text}`}>
+                    <span className="text-foreground font-bold">Collab</span>
+                    <span className="text-primary font-bold">Flow</span>
                 </span>
             )}
         </div>

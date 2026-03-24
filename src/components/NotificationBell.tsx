@@ -5,7 +5,7 @@ import { Button } from "./ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { useNotifications, AppNotification } from "@/hooks/useNotifications";
 import { ScrollArea } from "./ui/scroll-area";
-import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
+import { UserAvatar } from "./ui/UserAvatar";
 import { useRouter } from "next/navigation";
 
 function getRelativeTime(dateStr: string) {
@@ -84,12 +84,7 @@ export function NotificationBell() {
                                     onClick={() => handleNotificationClick(notif)}
                                     className={`flex items-start gap-3 p-3 text-sm transition-colors cursor-pointer hover:bg-muted/60 border-l-2 ${!notif.isRead ? 'bg-primary/5 border-primary' : 'border-transparent'}`}
                                 >
-                                    <Avatar className="h-8 w-8 mt-0.5 border">
-                                        <AvatarImage src={notif.sender?.image || ""} />
-                                        <AvatarFallback className="text-[10px] bg-background">
-                                            {notif.sender?.name?.[0] || <Bell className="h-3 w-3" />}
-                                        </AvatarFallback>
-                                    </Avatar>
+                                    <UserAvatar user={{ name: notif.sender?.name, image: notif.sender?.image }} className="h-8 w-8" showStatus={false} />
                                     <div className="flex-1 space-y-1 overflow-hidden">
                                         <p className="text-xs text-foreground cursor-pointer leading-tight">
                                             <span className="font-semibold">{notif.sender?.name || 'System'}</span>{" "}

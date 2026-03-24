@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { Badge } from "@/components/ui/badge";
 import {
     FileText,
@@ -567,10 +567,7 @@ export default function WorkspaceDocuments({ params }: WorkspaceDocumentsProps) 
                                     <div className="flex items-center gap-2">
                                         {/* Author avatar */}
                                         {doc.author && (
-                                            <Avatar className="w-4 h-4">
-                                                <AvatarImage src={doc.author.image} />
-                                                <AvatarFallback className="text-[8px]">{doc.author.name?.[0] || "?"}</AvatarFallback>
-                                            </Avatar>
+                                            <UserAvatar user={{ name: doc.author?.name, image: doc.author?.image }} className="w-4 h-4" showStatus={false} />
                                         )}
                                         <p className="text-xs text-muted-foreground flex items-center gap-1">
                                             <Clock className="w-3 h-3" />

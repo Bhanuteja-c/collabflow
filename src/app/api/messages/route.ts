@@ -97,10 +97,33 @@ export async function GET(req: NextRequest) {
             return NextResponse.json(result);
         }
 
+        const cursor = searchParams.get("cursor");
+        const takeSize = 50;
+
         // Fetch top-level messages only (no parentId)
         const messages = await prisma.message.findMany({
-            where: { channelId, parentId: null },
-            orderBy: { createdAt: "asc" },
+            where: {
+                channelId,
+                parentId: null,
+                isDeleted: false,
+                NOT: [
+                    { content: { startsWith: "📋" } },
+                    { content: { startsWith: "✅" } },
+                    { content: { startsWith: "📊" } },
+                    { content: { startsWith: "🔔" } },
+                    { content: { startsWith: "──" } },
+                    { content: { startsWith: "**" } },
+                    { content: { startsWith: "👋" } },
+                    { content: { startsWith: "🎥" } }
+                ]
+            },
+            take: takeSize,
+            skip: cursor ? 1 : 0,
+            cursor: cursor ? { id: cursor } : undefined,
+            orderBy: [
+                { createdAt: "desc" },
+                { id: "desc" }
+            ],
             include: {
                 author: {
                     select: { id: true, name: true, image: true },
@@ -123,11 +146,18 @@ export async function GET(req: NextRequest) {
             },
         });
 
+        const nextCursor = messages.length === takeSize ? messages[messages.length - 1].id : null;
+
         // Map to expose isPinned as a boolean
         const result = messages.map(({ pinnedMessage, ...msg }: any) => ({
             ...msg,
             isPinned: !!pinnedMessage,
         }));
+
+        // Callers expect `{ messages, nextCursor }` when nextCursor is implemented
+        const responseData = cursor !== null || searchParams.has("cursor") || searchParams.has("take") 
+            ? { messages: result, nextCursor } 
+            : { messages: result, nextCursor }; // Always return the object form for paginated requests
 
         // Update this user's lastReadAt and notify other channel members (for read receipts / blue ticks)
         const readAt = new Date();
@@ -137,7 +167,7 @@ export async function GET(req: NextRequest) {
         });
         emitToChannel(channelId, "messages-read", { userId, readAt: readAt.toISOString() });
 
-        return NextResponse.json(result);
+        return NextResponse.json(responseData);
     } catch (error) {
         console.error("[API/messages] Error:", error);
         return NextResponse.json({

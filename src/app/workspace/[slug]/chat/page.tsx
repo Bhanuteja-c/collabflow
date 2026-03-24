@@ -8,13 +8,16 @@ import { toast } from "sonner";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useSocket } from "@/hooks/useSocket";
 import { useSharedSocket } from "@/components/providers/SocketProvider";
 import { useWorkspacePresence } from "@/hooks/useWorkspacePresence";
 import { MessageContent } from "@/components/chat/MessageContent";
 import { MessageTicks } from "@/components/chat/MessageTicks";
+import { ThreadPanel } from "@/components/chat/ThreadPanel";
+import { MessageSearch } from "@/components/chat/MessageSearch";
 import {
   Plus,
   Send,
@@ -22,6 +25,7 @@ import {
   Users,
   Loader2,
   MessageSquare,
+  Search,
   Smile,
   X,
   Menu,
@@ -149,12 +153,7 @@ function ThreadReplyInput({
                 }}
                 className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted text-left"
               >
-                <Avatar className="h-4 w-4">
-                  <AvatarImage src={member.image || ""} />
-                  <AvatarFallback className="text-[8px]">
-                    {member.name?.[0] || "?"}
-                  </AvatarFallback>
-                </Avatar>
+                <UserAvatar user={member} className="h-4 w-4" showStatus={false} />
                 <span className="truncate">{member.name}</span>
               </button>
             ))}
@@ -219,10 +218,13 @@ export default function ChatPage() {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
   const [fetchedMessages, setFetchedMessages] = useState<Message[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showNewChannel, setShowNewChannel] = useState(false);
   const [newChannelName, setNewChannelName] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [workspaceMembers, setWorkspaceMembers] = useState<
     { id: string; name: string; image?: string; email?: string }[]
   >([]);
@@ -437,7 +439,13 @@ export default function ChatPage() {
         );
         if (res.ok) {
           const data = await res.json();
-          setFetchedMessages(data);
+          if (Array.isArray(data)) {
+            setFetchedMessages(data);
+            setNextCursor(null);
+          } else {
+            setFetchedMessages(data.messages.reverse());
+            setNextCursor(data.nextCursor);
+          }
         }
       } catch (error) {
         console.error("Error fetching messages:", error);
@@ -445,6 +453,37 @@ export default function ChatPage() {
     };
     fetchMessages();
   }, [selectedChannel]);
+
+  const loadEarlierMessages = async () => {
+    if (!selectedChannel || !nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const scrollPos = scrollAreaRef.current?.scrollHeight || 0;
+      
+      const res = await fetch(
+        `/api/messages?channelId=${selectedChannel.id}&cursor=${nextCursor}&take=50`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (!Array.isArray(data) && data.messages.length > 0) {
+          const olderMessages = data.messages.reverse();
+          setFetchedMessages((prev) => [...olderMessages, ...prev]);
+          setNextCursor(data.nextCursor);
+          
+          setTimeout(() => {
+            if (scrollAreaRef.current) {
+              const newScrollHeight = scrollAreaRef.current.scrollHeight;
+              scrollAreaRef.current.scrollTop = newScrollHeight - scrollPos;
+            }
+          }, 0);
+        }
+      }
+    } catch (error) {
+      console.error("Error loading older messages:", error);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   // (pinnedMessages is now derived via useMemo from allMessages)
 
@@ -1190,12 +1229,7 @@ export default function ChatPage() {
                         />
                       )}
                       <div className="relative z-10">
-                        <Avatar className="w-5 h-5 flex-shrink-0">
-                          <AvatarImage src={member.image || getDiceBearAvatar(member.name)} />
-                          <AvatarFallback className={avatarFallbackClass(member.name, "text-[10px] font-semibold")}>
-                            {member.name?.[0]?.toUpperCase() || "?"}
-                          </AvatarFallback>
-                        </Avatar>
+                        <UserAvatar user={member} className="w-5 h-5 flex-shrink-0" showStatus={false} />
                         {isOnline && (
                           <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 border border-background"></span>
                         )}
@@ -1230,10 +1264,7 @@ export default function ChatPage() {
                 {/* Channel Icon or User Avatar */}
                 {isDirectMessage ? (
                   <div className="relative flex-shrink-0">
-                    <Avatar className="w-9 h-9 border">
-                      <AvatarImage src={displayAvatar || getDiceBearAvatar(displayName)} />
-                      <AvatarFallback className={avatarFallbackClass(displayName, "text-sm font-semibold")}>{displayName[0]}</AvatarFallback>
-                    </Avatar>
+                    <UserAvatar user={{ name: displayName, image: displayAvatar }} className="w-9 h-9" showStatus={false} />
                     {workspaceOnlineUsers.some((u) => u.user.id === targetUser?.id) && (
                       <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-background" />
                     )}
@@ -1262,15 +1293,18 @@ export default function ChatPage() {
                 {!isDirectMessage && onlineUsers.length > 0 && (
                   <div className="hidden sm:flex -space-x-1.5">
                     {onlineUsers.slice(0, 3).map((viewer) => (
-                      <Avatar key={viewer.socketId} className="w-6 h-6 border-2 border-background ring-1 ring-emerald-500/40" title={viewer.user.name}>
-                        <AvatarImage src={viewer.user.image || getDiceBearAvatar(viewer.user.name)} />
-                        <AvatarFallback className="text-[9px]">{viewer.user.name?.[0] || "?"}</AvatarFallback>
-                      </Avatar>
+                      <UserAvatar user={viewer.user} className="w-6 h-6" showStatus={false} />
                     ))}
                     {onlineUsers.length > 3 && (
                       <div className="w-6 h-6 rounded-full bg-muted border-2 border-background flex items-center justify-center text-[9px] font-medium">+{onlineUsers.length - 3}</div>
                     )}
                   </div>
+                )}
+                {!isDirectMessage && (
+                  <Button variant="outline" size="sm" className="hidden sm:flex items-center gap-1.5 h-8 px-3 text-xs text-muted-foreground hover:bg-muted" onClick={() => setSearchOpen(true)}>
+                    <Search className="w-3.5 h-3.5" />
+                    Search
+                  </Button>
                 )}
                 <Button variant="outline" size="sm" className="hidden sm:flex items-center gap-1.5 h-8 px-3 text-xs border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10 hover:border-emerald-500/50" onClick={startHuddle}>
                   <Video className="w-3.5 h-3.5" />
@@ -1381,8 +1415,7 @@ export default function ChatPage() {
                     <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
                       {selectedChannel.type === "direct" && displayAvatar ? (
                         <Avatar className="w-12 h-12">
-                          <AvatarImage src={displayAvatar} />
-                          <AvatarFallback>{displayName[0]}</AvatarFallback>
+                          <UserAvatar user={{ name: displayName, image: displayAvatar }} className="w-12 h-12" showStatus={false} />
                         </Avatar>
                       ) : (
                         <MessageSquare className="w-8 h-8 text-primary" />
@@ -1400,7 +1433,22 @@ export default function ChatPage() {
                     </p>
                   </div>
                 ) : (
-                  allMessages.map((message, i) => {
+                  <>
+                    {nextCursor && (
+                      <div className="flex justify-center my-4 w-full">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={loadEarlierMessages}
+                          disabled={loadingMore}
+                          className="text-xs text-muted-foreground hover:text-foreground"
+                        >
+                          {loadingMore ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : <RefreshCw className="w-3 h-3 mr-2" />}
+                          Load earlier messages
+                        </Button>
+                      </div>
+                    )}
+                    {allMessages.map((message, i) => {
                     const prevMessage = allMessages[i - 1];
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const isOwnMessage = message.author.id === (session?.user as any)?.id;
@@ -1412,6 +1460,8 @@ export default function ChatPage() {
                       /^✅\s/,   // Completed
                       /^📊\s/,   // Board created
                       /^🎥\s/,   // Huddle started
+                      /^👋\s/,   // Joined
+                      /^──\s/,   // Generic system marker
                     ];
                     const isSystemMessage = systemPatterns.some((p) => p.test(message.content));
 
@@ -1443,25 +1493,11 @@ export default function ChatPage() {
                               </span>
                             </div>
                           )}
-                          <motion.div
-                            initial={{ opacity: 0, y: 2 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="flex items-center gap-2.5 px-4 -mx-4 py-1.5 my-0.5 rounded-md bg-muted/20 hover:bg-muted/30 transition-colors border-l-2 border-primary/30"
-                          >
-                            <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                              <span className="text-xs leading-none">{message.content.charAt(0)}</span>
-                            </div>
-                            <div className="flex-1 min-w-0 text-[12px] text-muted-foreground leading-snug">
-                              <MessageContent
-                                content={message.content.slice(2)}
-                                workspaceMembers={workspaceMembers}
-                                onMentionClick={handleDirectMessage}
-                              />
-                            </div>
-                            <span className="text-[10px] text-muted-foreground/50 flex-shrink-0 tabular-nums">
-                              {formatTime(message.createdAt)}
+                          <div className="flex justify-center my-2 py-1 select-none pointer-events-none">
+                            <span className="text-xs italic text-muted-foreground text-center px-4">
+                              {message.content}
                             </span>
-                          </motion.div>
+                          </div>
                         </div>
                       );
                     }
@@ -1484,12 +1520,7 @@ export default function ChatPage() {
                         >
                           {/* Avatar gutter */}
                           {showAvatar ? (
-                            <Avatar className="h-8 w-8 mt-0.5 flex-shrink-0">
-                              <AvatarImage src={message.author.image || getDiceBearAvatar(message.author.name)} />
-                              <AvatarFallback className={avatarFallbackClass(message.author.name, "text-[11px] font-semibold")}>
-                                {message.author.name?.[0]?.toUpperCase() || "?"}
-                              </AvatarFallback>
-                            </Avatar>
+                            <UserAvatar user={{ name: message.author?.name, image: message.author?.image }} className="h-8 w-8 mt-0.5 flex-shrink-0" showStatus={false} />
                           ) : (
                             <div className="w-8 flex-shrink-0 flex items-center justify-center">
                               <span className="text-[10px] text-muted-foreground/0 group-hover:text-muted-foreground/50 transition-colors tabular-nums">
@@ -1621,8 +1652,9 @@ export default function ChatPage() {
                         </motion.div>
                       </div>
                     );
-                  })
-                )}
+                  })}
+                </>
+              )}
 
                 {/* Typing indicator — avatar + chat bubble */}
                 {typingUsers.length > 0 && (
@@ -1632,10 +1664,7 @@ export default function ChatPage() {
                     exit={{ opacity: 0, y: 4 }}
                     className="flex items-end gap-2 mt-3 px-1"
                   >
-                    <Avatar className="h-6 w-6 flex-shrink-0">
-                      <AvatarImage src={typingUsers[0].image || getDiceBearAvatar(typingUsers[0].name)} />
-                      <AvatarFallback className={avatarFallbackClass(typingUsers[0].name, "text-[10px] font-semibold")}>{typingUsers[0].name?.[0] || "?"}</AvatarFallback>
-                    </Avatar>
+                    <UserAvatar user={{ name: typingUsers[0].name, image: typingUsers[0].image }} className="h-6 w-6" showStatus={false} />
                     <div className="bg-muted rounded-2xl rounded-bl-sm px-3 py-2 flex items-center gap-1.5">
                       <span className="w-1.5 h-1.5 bg-muted-foreground/60 rounded-full animate-bounce" />
                       <span className="w-1.5 h-1.5 bg-muted-foreground/60 rounded-full animate-bounce" style={{ animationDelay: "0.15s" }} />
@@ -1717,133 +1746,42 @@ export default function ChatPage() {
         )}
       </div>
 
+      {workspace && (
+        <MessageSearch
+          workspaceId={workspace.id}
+          channelId={selectedChannel?.id}
+          isOpen={searchOpen}
+          onClose={() => setSearchOpen(false)}
+          onResultClick={(message) => {
+            const el = document.getElementById(message.id);
+            if (el) {
+              el.scrollIntoView({ behavior: "smooth", block: "center" });
+              el.classList.add("bg-accent/20", "transition-colors", "duration-500");
+              setTimeout(() => {
+                el.classList.remove("bg-accent/20");
+              }, 2000);
+            }
+          }}
+        />
+      )}
+
       {/* Thread Panel */}
       <AnimatePresence>
-        {activeThread && (
+        {activeThread && selectedChannel && (
           <motion.div
             initial={{ x: "100%", opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: "100%", opacity: 0 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
-            className="fixed inset-0 sm:relative sm:inset-auto border-l bg-card overflow-hidden flex-shrink-0 z-50 sm:z-auto sm:w-[360px]"
+            className="fixed inset-0 sm:absolute sm:right-0 sm:top-0 sm:bottom-0 bg-background overflow-hidden flex-shrink-0 z-[100] w-full sm:w-[400px] border-l shadow-2xl"
           >
-            <div className="w-full sm:w-[360px] h-full flex flex-col">
-              {/* Thread header */}
-              <div className="flex items-center justify-between px-4 py-3 border-b">
-                <div className="flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4 text-primary" />
-                  <h3 className="font-semibold text-sm">Thread</h3>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={() => setActiveThread(null)}
-                >
-                  <X className="w-4 h-4" />
-                </Button>
-              </div>
-
-              {/* Parent message */}
-              <div className="px-4 py-3 border-b bg-muted/30">
-                <div className="flex items-start gap-3">
-                  <Avatar className="h-8 w-8 flex-shrink-0">
-                    <AvatarImage src={activeThread.author.image || getDiceBearAvatar(activeThread.author.name)} />
-                    <AvatarFallback className="text-xs">
-                      {activeThread.author.name?.[0]?.toUpperCase() || "?"}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-sm">
-                        {activeThread.author.name}
-                      </span>
-                      <span className="text-[11px] text-muted-foreground">
-                        {formatTime(activeThread.createdAt)}
-                      </span>
-                    </div>
-
-                    <div className="mt-0.5">
-                      <MessageContent
-                        content={activeThread.content}
-                        workspaceMembers={workspaceMembers}
-                        onMentionClick={handleDirectMessage}
-                      />
-                      {activeThread.attachments && (
-                        <div className="mt-2">
-                          <AttachmentPreview
-                            attachments={activeThread.attachments}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground mt-2">
-                  {activeThread.replyCount || 0}{" "}
-                  {(activeThread.replyCount || 0) === 1 ? "reply" : "replies"}
-                </p>
-              </div>
-
-              {/* Thread replies */}
-              <ScrollArea className="flex-1">
-                <div className="px-4 py-2 space-y-3">
-                  {threadLoading ? (
-                    <div className="flex items-center justify-center py-8">
-                      <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : threadReplies.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground text-sm">
-                      No replies yet. Be the first!
-                    </div>
-                  ) : (
-                    threadReplies.map((reply) => (
-                      <div key={reply.id} className="flex items-start gap-2">
-                        <Avatar className="h-6 w-6 flex-shrink-0 mt-0.5">
-                          <AvatarImage src={reply.author.image || getDiceBearAvatar(reply.author.name)} />
-                          <AvatarFallback className="text-[10px]">
-                            {reply.author.name?.[0]?.toUpperCase() || "?"}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-medium text-xs">
-                              {reply.author.name}
-                            </span>
-                            <span className="text-[10px] text-muted-foreground">
-                              {formatTime(reply.createdAt)}
-                            </span>
-                          </div>
-
-                          <div className="text-sm">
-                            <MessageContent
-                              content={reply.content}
-                              workspaceMembers={workspaceMembers}
-                              onMentionClick={handleDirectMessage}
-                            />
-                            {reply.attachments && (
-                              <div className="mt-1">
-                                <AttachmentPreview
-                                  attachments={reply.attachments}
-                                />
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </ScrollArea>
-
-              {/* Thread reply input */}
-              <div className="p-3 border-t overflow-visible">
-                <ThreadReplyInput
-                  onSend={sendThreadReply}
-                  workspaceMembers={workspaceMembers}
-                />
-              </div>
-            </div>
+            <ThreadPanel
+              parentMessage={activeThread}
+              channelId={selectedChannel.id}
+              workspaceSlug={params.slug as string}
+              onClose={() => setActiveThread(null)}
+              currentUser={session?.user}
+            />
           </motion.div>
         )}
       </AnimatePresence>
