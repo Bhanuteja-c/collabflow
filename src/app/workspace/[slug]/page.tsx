@@ -246,7 +246,17 @@ export default function WorkspaceDashboard({ params }: WorkspaceDashboardProps) 
         return (
             <div className="min-h-full p-4 md:p-6 space-y-5 max-w-7xl mx-auto">
                 {/* ── Welcome Banner ── */}
-                <div className="h-[120px] md:h-[136px] bg-muted/40 shimmer border border-border/40 rounded-2xl mb-4" />
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border/60">
+                    <div className="space-y-2">
+                        <div className="h-7 w-52 bg-muted/40 shimmer rounded-md" />
+                        <div className="h-4 w-64 bg-muted/30 shimmer rounded" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="h-8 w-20 bg-muted/40 shimmer rounded-lg" />
+                        <div className="h-8 w-8 bg-muted/40 shimmer rounded-lg" />
+                        <div className="h-8 w-24 bg-muted/40 shimmer rounded-lg" />
+                    </div>
+                </div>
 
                 {/* Overview Stats (Row 1) — matches grid-cols-2 lg:grid-cols-4 */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -285,130 +295,99 @@ export default function WorkspaceDashboard({ params }: WorkspaceDashboardProps) 
     return (
         <div className="min-h-full p-4 md:p-6 space-y-5 max-w-7xl mx-auto">
             {/* ── Welcome Banner ── */}
-            <div className="relative overflow-hidden rounded-2xl mb-4 p-6 md:p-8 bg-gradient-to-br from-primary/10 via-background to-background border border-border shadow-sm">
-                
-                {/* Decorative circles */}
-                <div className="absolute -top-12 -right-12 w-48 h-48 rounded-full bg-primary/20 blur-3xl" />
-                <div className="absolute -bottom-8 right-32 w-32 h-32 rounded-full bg-primary/10 blur-2xl" />
-
-                {/* Content */}
-                <div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
-                    <div>
-                        {/* Workspace badge */}
-                        <div className="inline-flex items-center gap-1.5 bg-primary/10 border border-primary/20 rounded-full px-3 py-1 mb-3">
-                            <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-                            <span className="text-xs font-medium text-primary">
-                                {workspace?.name || slug}
-                            </span>
-                        </div>
-
-                        {/* Greeting */}
-                        <h1
-                            className="text-2xl md:text-3xl font-bold text-foreground mb-1"
-                        >
-                            {getGreeting()},{" "}
-                            <span className="bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-                                {session?.user?.name?.split(" ")[0]}
-                            </span>
-                        </h1>
-
-                        {/* Date + quick info */}
-                        <div className="flex items-center gap-3 text-sm text-muted-foreground mt-2">
-                            <span className="flex items-center gap-1.5">
-                                <Calendar className="w-3.5 h-3.5" />
-                                {new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
-                            </span>
-                            {taskCount > 0 && (
-                                <>
-                                    <span>·</span>
-                                    <span className="text-primary font-medium">
-                                        {taskCount} task{taskCount !== 1 ? "s" : ""} assigned to you
-                                    </span>
-                                </>
-                            )}
-                        </div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border/60">
+                <div className="space-y-1">
+                    <h1 className="text-2xl md:text-[28px] font-semibold tracking-tight text-foreground">
+                        {getGreeting()}, {session?.user?.name?.split(" ")[0]}
+                    </h1>
+                    <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
+                        <Calendar className="w-3.5 h-3.5" />
+                        <span>{new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+                        {taskCount > 0 && (
+                            <>
+                                <span className="text-border">·</span>
+                                <span>{taskCount} task{taskCount !== 1 ? "s" : ""} assigned to you</span>
+                            </>
+                        )}
                     </div>
+                </div>
 
-                    {/* Action buttons row (moved inside the banner on desktop, or stacked on mobile) */}
-                    <div className="flex items-center gap-2 mt-4 md:mt-0">
-                        <Button
-                            variant="outline"
-                            size="icon"
-                            className="rounded-full bg-background/50 backdrop-blur-sm border-primary/20 hover:bg-background/80 h-9 w-9"
-                            onClick={handleSearchClick}
-                        >
-                            <Search className="w-4 h-4" />
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="icon"
-                            asChild
-                            className="rounded-full bg-background/50 backdrop-blur-sm border-primary/20 hover:bg-background/80 h-9 w-9"
-                        >
-                            <Link href={`/workspace/${slug}/settings`}>
-                                <Settings className="w-4 h-4" />
-                            </Link>
-                        </Button>
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button className="rounded-full px-4 shadow-lg shadow-primary/20 h-9">
-                                    <Plus className="w-4 h-4 sm:mr-1.5" />
-                                    <span className="hidden sm:inline text-sm">Create New</span>
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-[280px]">
-                                <DropdownMenuLabel className="text-xs font-semibold uppercase text-muted-foreground tracking-wider mb-1">
-                                    QUICK CREATE
-                                </DropdownMenuLabel>
-                                <DropdownMenuItem asChild className="mb-1 py-2 cursor-pointer">
-                                    <Link href={`/workspace/${slug}/boards?new=true`}>
-                                        <LayoutGrid className="w-5 h-5 mr-3 text-primary/70" />
-                                        <div className="flex flex-col">
-                                            <span className="font-bold">Kanban Board</span>
-                                            <span className="text-[11px] text-muted-foreground">Start a new project board</span>
-                                        </div>
-                                    </Link>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem asChild className="mb-2 py-2 cursor-pointer">
-                                    <Link href={`/workspace/${slug}/documents?new=true`}>
-                                        <FileText className="w-5 h-5 mr-3 text-blue-500/70" />
-                                        <div className="flex flex-col">
-                                            <span className="font-bold">Document</span>
-                                            <span className="text-[11px] text-muted-foreground">Start a new document</span>
-                                        </div>
-                                    </Link>
-                                </DropdownMenuItem>
-
-                                <DropdownMenuSeparator />
-
-                                <DropdownMenuLabel className="text-xs font-semibold uppercase text-muted-foreground tracking-wider mt-2 mb-1">
-                                    NEW PROJECT
-                                </DropdownMenuLabel>
-                                <DropdownMenuItem onClick={() => setIsProjectModalOpen(true)} className="mb-2 py-2 cursor-pointer focus:bg-primary/10">
-                                    <Sparkles className="w-5 h-5 mr-3 text-primary" />
+                <div className="flex items-center gap-2">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-3 rounded-lg text-xs"
+                        onClick={handleSearchClick}
+                    >
+                        <Search className="w-3.5 h-3.5 mr-1.5" />
+                        Search
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        asChild
+                        className="h-8 w-8 rounded-lg"
+                    >
+                        <Link href={`/workspace/${slug}/settings`}>
+                            <Settings className="w-3.5 h-3.5" />
+                        </Link>
+                    </Button>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button size="sm" className="h-8 rounded-lg px-3 text-xs">
+                                <Plus className="w-3.5 h-3.5 mr-1.5" />
+                                Create New
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-[260px]">
+                            <DropdownMenuLabel className="text-[11px] font-semibold uppercase text-muted-foreground tracking-wider">
+                                Quick Create
+                            </DropdownMenuLabel>
+                            <DropdownMenuItem asChild className="py-2 cursor-pointer">
+                                <Link href={`/workspace/${slug}/boards?new=true`}>
+                                    <LayoutGrid className="w-4 h-4 mr-2.5 text-muted-foreground" />
                                     <div className="flex flex-col">
-                                        <span className="font-bold text-primary">New Project</span>
-                                        <span className="text-[11px] text-muted-foreground">Board · Chat · Whiteboard</span>
+                                        <span className="font-medium text-[13px]">Kanban Board</span>
+                                        <span className="text-[11px] text-muted-foreground">Start a new project board</span>
                                     </div>
-                                </DropdownMenuItem>
+                                </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem asChild className="py-2 cursor-pointer">
+                                <Link href={`/workspace/${slug}/documents?new=true`}>
+                                    <FileText className="w-4 h-4 mr-2.5 text-muted-foreground" />
+                                    <div className="flex flex-col">
+                                        <span className="font-medium text-[13px]">Document</span>
+                                        <span className="text-[11px] text-muted-foreground">Start a new document</span>
+                                    </div>
+                                </Link>
+                            </DropdownMenuItem>
 
-                                <DropdownMenuSeparator />
+                            <DropdownMenuSeparator />
 
-                                <DropdownMenuLabel className="text-xs font-semibold uppercase text-muted-foreground tracking-wider mt-2 mb-1">
-                                    OTHER
-                                </DropdownMenuLabel>
-                                <DropdownMenuItem asChild className="mb-1 py-2 cursor-pointer">
-                                    <Link href={`/workspace/${slug}/whiteboard?new=true`}>
-                                        <PenTool className="w-5 h-5 mr-3 text-orange-500/70" />
-                                        <div className="flex flex-col">
-                                            <span className="font-bold">Whiteboard</span>
-                                            <span className="text-[11px] text-muted-foreground">New blank canvas</span>
-                                        </div>
-                                    </Link>
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    </div>
+                            <DropdownMenuLabel className="text-[11px] font-semibold uppercase text-muted-foreground tracking-wider">
+                                Project
+                            </DropdownMenuLabel>
+                            <DropdownMenuItem onClick={() => setIsProjectModalOpen(true)} className="py-2 cursor-pointer">
+                                <Sparkles className="w-4 h-4 mr-2.5 text-muted-foreground" />
+                                <div className="flex flex-col">
+                                    <span className="font-medium text-[13px]">New Project</span>
+                                    <span className="text-[11px] text-muted-foreground">Board · Chat · Whiteboard</span>
+                                </div>
+                            </DropdownMenuItem>
+
+                            <DropdownMenuSeparator />
+
+                            <DropdownMenuItem asChild className="py-2 cursor-pointer">
+                                <Link href={`/workspace/${slug}/whiteboard?new=true`}>
+                                    <PenTool className="w-4 h-4 mr-2.5 text-muted-foreground" />
+                                    <div className="flex flex-col">
+                                        <span className="font-medium text-[13px]">Whiteboard</span>
+                                        <span className="text-[11px] text-muted-foreground">New blank canvas</span>
+                                    </div>
+                                </Link>
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
             </div>
 
