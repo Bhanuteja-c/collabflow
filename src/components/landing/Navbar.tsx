@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { LazyMotion, domAnimation, m, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { useTheme } from "next-themes";
 import { useSession } from "next-auth/react";
@@ -37,8 +37,9 @@ export default function Navbar() {
     }, []);
 
     return (
+        <LazyMotion features={domAnimation}>
         <>
-            <motion.header
+            <m.header
                 initial={{ y: -100 }}
                 animate={{ y: 0 }}
                 className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${isScrolled
@@ -105,12 +106,12 @@ export default function Navbar() {
                         </button>
                     </div>
                 </nav>
-            </motion.header>
+            </m.header>
 
             {/* Mobile Menu */}
             <AnimatePresence>
                 {isMobileMenuOpen && (
-                    <motion.div
+                    <m.div
                         initial={{ opacity: 0, y: -20 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -20 }}
@@ -138,9 +139,10 @@ export default function Navbar() {
                                 </Link>
                             </div>
                         </div>
-                    </motion.div>
+                    </m.div>
                 )}
             </AnimatePresence>
         </>
+        </LazyMotion>
     );
 }

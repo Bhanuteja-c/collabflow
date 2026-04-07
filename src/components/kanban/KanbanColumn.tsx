@@ -2,7 +2,7 @@
 // Jira-style Kanban column with uppercase headers, card counts, WIP warnings, and inline card creation
 "use client";
 
-import { useState } from "react";
+import { useState, memo } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { Button } from "@/components/ui/button";
@@ -98,7 +98,7 @@ const issueTypes: { value: IssueType; label: string; icon: typeof SquareCheck; c
 
 const WIP_LIMIT_DEFAULT = 5;
 
-export default function KanbanColumn({
+function KanbanColumnInner({
     column,
     onAddCard,
     onUpdateCard,
@@ -344,3 +344,12 @@ export default function KanbanColumn({
         </div>
     );
 }
+
+const KanbanColumn = memo(KanbanColumnInner, (prev, next) =>
+  prev.column.id === next.column.id &&
+  prev.column.cards.length === next.column.cards.length &&
+  prev.column.cards === next.column.cards &&
+  prev.canDelete === next.canDelete
+);
+
+export default KanbanColumn;

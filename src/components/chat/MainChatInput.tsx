@@ -23,6 +23,8 @@ interface MainChatInputProps {
   displayName: string;
   selectedChannelName?: string;
   isDirectMessage: boolean;
+  workspaceId?: string;
+  channelId?: string;
 }
 
 export function MainChatInput({
@@ -31,7 +33,9 @@ export function MainChatInput({
   workspaceMembers,
   displayName,
   selectedChannelName,
-  isDirectMessage
+  isDirectMessage,
+  workspaceId,
+  channelId,
 }: MainChatInputProps) {
   const [value, setValue] = useState("");
   const [sending, setSending] = useState(false);
@@ -58,6 +62,9 @@ export function MainChatInput({
     try {
       const formData = new FormData();
       formData.append("file", file);
+      if (workspaceId) formData.append("workspaceId", workspaceId);
+      formData.append("sourceType", "CHAT");
+      if (channelId) formData.append("sourceId", channelId);
 
       const res = await fetch("/api/upload", {
         method: "POST",
@@ -126,14 +133,14 @@ export function MainChatInput({
   );
 
   return (
-    <div className="px-4 pb-3 pt-1.5 bg-background relative">
+    <div className="shrink-0 bg-background px-5 pb-5 pt-1 relative">
       {/* Pending attachment chip */}
       {pendingAttachment && (
-        <div className="flex items-center gap-2 mb-1.5 px-1">
-          <div className="flex items-center gap-1.5 pl-2 pr-1 py-1 bg-primary/10 border border-primary/20 rounded-lg text-xs font-medium text-primary">
-            <span className="truncate max-w-[160px]">{pendingAttachment.name}</span>
-            <button onClick={() => setPendingAttachment(null)} className="flex-shrink-0 hover:bg-primary/20 rounded p-0.5 transition-colors">
-              <X className="w-3 h-3" />
+        <div className="flex items-center gap-2 mb-2 px-1">
+          <div className="flex items-center gap-2 pl-3 pr-1.5 py-1.5 bg-muted border border-border/50 rounded-lg shadow-sm text-[13px] font-medium text-foreground max-w-[200px]">
+            <span className="truncate flex-1">{pendingAttachment.name}</span>
+            <button onClick={() => setPendingAttachment(null)} className="flex-shrink-0 hover:bg-primary/20 rounded-md p-1 transition-colors">
+              <X className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
@@ -144,8 +151,8 @@ export function MainChatInput({
 
       {/* Mention autocomplete popup */}
       {showMentionMenu && (
-        <div className="absolute bottom-full left-4 mb-1 w-64 bg-popover border rounded-lg shadow-xl py-1 z-50">
-          <div className="px-3 py-1.5 text-[10px] font-semibold text-muted-foreground border-b uppercase tracking-widest">Members</div>
+        <div className="absolute bottom-[105%] left-5 mb-2 w-72 bg-card border border-border rounded-lg shadow-lg py-1.5 z-50 overflow-hidden">
+          <div className="px-4 py-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Members</div>
           {workspaceMembers.filter((m) => (m.name || "").toLowerCase().includes(mentionSearch)).slice(0, 5).map((member) => (
             <button key={member.id}
               onClick={() => {
@@ -156,22 +163,25 @@ export function MainChatInput({
                 setShowMentionMenu(false);
                 inputRef.current?.focus();
               }}
-              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm hover:bg-muted text-left transition-colors"
+              className="w-full flex items-center gap-3 px-4 py-2 text-[13px] hover:bg-muted/60 text-left transition-colors font-medium text-foreground/90 group"
             >
-              <UserAvatar user={{ name: member.name, image: member.image }} className="h-5 w-5" showStatus={false} />
-              <span className="truncate font-medium">{member.name}</span>
+              <UserAvatar user={{ name: member.name, image: member.image }} className="h-6 w-6 rounded-md shadow-sm border border-border/50 group-hover:scale-105 transition-transform" showStatus={false} />
+              <span className="truncate">{member.name}</span>
             </button>
           ))}
           {workspaceMembers.filter((m) => (m.name || "").toLowerCase().includes(mentionSearch)).length === 0 && (
-            <div className="px-3 py-4 text-sm text-center text-muted-foreground">No matches</div>
+            <div className="px-4 py-6 text-[13px] text-center text-muted-foreground font-medium flex flex-col items-center gap-2">
+              <AtSign className="w-5 h-5 opacity-20" />
+              No matches found
+            </div>
           )}
         </div>
       )}
 
-      {/* Composer container — Slack-style bordered box */}
-      <div className="border border-border/60 rounded-lg focus-within:border-primary/50 focus-within:shadow-[0_0_0_1px] focus-within:shadow-primary/20 transition-all bg-background">
+      {/* Composer container — Professional matte box */}
+      <div className="border border-border/70 rounded-[8px] focus-within:border-border focus-within:ring-[3px] focus-within:ring-border/40 transition-all duration-200 bg-background overflow-hidden relative">
         {/* Top: Rich text formatting toolbar */}
-        <div className="flex items-center gap-0.5 px-2 py-1 border-b border-border/40">
+        <div className="flex items-center gap-0.5 px-2 py-1 bg-muted/30">
           <FmtBtn icon={Bold} title="Bold" />
           <FmtBtn icon={Italic} title="Italic" />
           <FmtBtn icon={Underline} title="Underline" />
@@ -200,13 +210,13 @@ export function MainChatInput({
             }
           }}
           rows={1}
-          className="w-full resize-none bg-transparent px-3 py-2 text-[13px] leading-snug placeholder:text-muted-foreground/40 focus:outline-none min-h-[36px] max-h-[120px] overflow-y-auto"
+          className="w-full resize-none bg-transparent px-3 py-2 text-[15px] text-foreground font-normal leading-relaxed placeholder:text-muted-foreground/50 focus:outline-none min-h-[44px] max-h-[40vh] overflow-y-auto"
         />
 
         {/* Bottom: Action bar */}
-        <div className="flex items-center justify-between px-2 py-1 border-t border-border/40">
+        <div className="flex items-center justify-between px-2 py-1.5 bg-background">
           {/* Left actions */}
-          <div className="flex items-center gap-0.5">
+          <div className="flex items-center gap-1">
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
@@ -267,9 +277,9 @@ export function MainChatInput({
             onClick={handleSend}
             disabled={!hasContent || sending}
             size="icon"
-            className={`h-7 w-7 rounded-md flex-shrink-0 transition-all ${hasContent ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm" : "bg-muted/50 text-muted-foreground/30 cursor-default"}`}
+            className={`h-8 w-8 rounded-md flex-shrink-0 transition-colors ${hasContent ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-muted text-muted-foreground/40 cursor-default"}`}
           >
-            {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+            {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
           </Button>
         </div>
       </div>

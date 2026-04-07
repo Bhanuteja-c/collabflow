@@ -284,9 +284,30 @@ export default function WorkspaceSettingsPage({ params }: { params: Promise<{ sl
     ];
 
     return (
-        <div className="flex min-h-[calc(100vh-60px)]">
-            {/* Sidebar Navigation */}
-            <div className="w-56 flex-shrink-0 border-r bg-muted/20 p-4 space-y-1">
+        <div className="flex flex-col lg:flex-row min-h-[calc(100vh-60px)]">
+            {/* Mobile Tab Bar */}
+            <div className="lg:hidden overflow-x-auto border-b bg-muted/10 px-4 py-2 flex gap-1 scrollbar-hide">
+                {tabs.map((tab) => {
+                    const isActive = activeTab === tab.id;
+                    if ((tab.id === "workspace" || tab.id === "integrations") && !canManage) return null;
+                    return (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${isActive
+                                ? "bg-primary text-primary-foreground shadow-sm"
+                                : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                            }`}
+                        >
+                            <tab.icon className="w-3.5 h-3.5 flex-shrink-0" />
+                            {tab.label}
+                        </button>
+                    );
+                })}
+            </div>
+
+            {/* Desktop Sidebar Navigation */}
+            <div className="hidden lg:flex flex-col w-56 flex-shrink-0 border-r bg-muted/20 p-4 space-y-1">
                 <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-3 mb-3">Settings</h2>
                 {tabs.map((tab) => {
                     const isActive = activeTab === tab.id;
@@ -310,7 +331,7 @@ export default function WorkspaceSettingsPage({ params }: { params: Promise<{ sl
             </div>
 
             {/* Content Area */}
-            <div className="flex-1 p-8 max-w-2xl">
+            <div className="flex-1 p-4 sm:p-6 lg:p-10 max-w-3xl lg:max-w-4xl w-full">
                 {/* Profile Tab */}
                 {activeTab === "profile" && (
                     <div className="space-y-6">

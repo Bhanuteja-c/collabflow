@@ -810,12 +810,12 @@ export default function CardDetailModal({
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
+            <DialogContent className="w-full h-full lg:max-w-2xl lg:max-h-[90vh] max-h-full rounded-none lg:rounded-lg overflow-hidden flex flex-col p-0 gap-0">
                 {/* Hidden title for screen readers — the visible title is the editable Input below */}
                 <DialogTitle className="sr-only">{title || currentCard?.title || "Card Details"}</DialogTitle>
                 
                 {/* Header structure: Breadcrumbs (if nested) + Top Row */}
-                <div className="flex-shrink-0 px-6 pt-5 pb-4 border-b border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 z-10 relative">
+                <div className="flex-shrink-0 px-4 lg:px-6 pt-4 lg:pt-5 pb-3 lg:pb-4 border-b border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 z-10 relative">
                     {/* Navigation Stack Breadcrumbs */}
                     <AnimatePresence>
                         {isSubtaskLevel && (

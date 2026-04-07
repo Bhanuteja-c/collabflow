@@ -10,7 +10,20 @@ import Link from "next/link";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { useDocumentSync } from "@/hooks/useDocumentSync";
-import CollaborativeEditor from "@/components/editor/CollaborativeEditor";
+import dynamic from "next/dynamic";
+
+// Dynamic import — TipTap + extensions + Yjs (~500KB) loaded only when editor page is visited
+const CollaborativeEditor = dynamic(
+  () => import("@/components/editor/CollaborativeEditor"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex-1 flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+      </div>
+    ),
+  }
+);
 
 const getColorFromId = (id: string): string => {
     const colors = ["#958DF1", "#F98181", "#FBBC88", "#FAF594", "#70CFF8", "#94FADB", "#B9F18D"];

@@ -2,7 +2,7 @@
 // Jira-style Kanban card with issue type icons, issue IDs, priority strip, and hover actions
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, memo } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Check } from "lucide-react";
@@ -119,7 +119,7 @@ export const PRIORITY_COLORS = {
     none: "text-muted-foreground"
 };
 
-export default function KanbanCard({
+function KanbanCardInner({
     card,
     isDragging,
     isSelected,
@@ -450,3 +450,15 @@ export default function KanbanCard({
         </div>
     );
 }
+
+const KanbanCard = memo(KanbanCardInner, (prev, next) =>
+  prev.card.id === next.card.id &&
+  prev.card.title === next.card.title &&
+  prev.card.order === next.card.order &&
+  prev.card.priority === next.card.priority &&
+  prev.card.assigneeId === next.card.assigneeId &&
+  prev.isDragging === next.isDragging &&
+  prev.isSelected === next.isSelected
+);
+
+export default KanbanCard;

@@ -156,215 +156,237 @@ export default function WorkspaceMembersPage({ params }: { params: Promise<{ slu
     );
 
     return (
-        <div className="p-8 max-w-4xl mx-auto space-y-6">
-            {/* Header */}
-            <div className="flex items-start justify-between">
+        <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
+            {/* ── Sleek Minimal Header ── */}
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-6 border-b border-border/40">
                 <div>
-                    <h1 className="text-xl font-semibold">Team Members</h1>
-                    <p className="text-sm text-muted-foreground mt-1">
-                        Manage who has access to <span className="font-medium text-foreground">{workspace?.name || "this workspace"}</span>
+                    <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
+                        <div className="p-1.5 bg-primary/10 rounded-lg">
+                            <Users className="w-5 h-5 text-primary" />
+                        </div>
+                        Team Directory
+                    </h1>
+                    <p className="text-sm text-muted-foreground mt-1.5 font-medium">
+                        Manage access and roles for <span className="text-foreground">{workspace?.name || "this workspace"}</span>
                     </p>
                 </div>
-                {canManage && (
-                    <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                        <DialogTrigger asChild>
-                            <Button className="gap-2 shadow-sm">
-                                <UserPlus className="w-4 h-4" />Invite
-                            </Button>
-                        </DialogTrigger>
-                        <DialogContent className="sm:max-w-md">
-                            <DialogHeader>
-                                <DialogTitle className="flex items-center gap-2">
-                                    <UserPlus className="w-5 h-5 text-primary" />
-                                    Invite Member
-                                </DialogTitle>
-                                <DialogDescription>Add a team member by their email address</DialogDescription>
-                            </DialogHeader>
-                            <div className="space-y-4 py-2">
-                                <div className="relative">
-                                    <div className="relative">
-                                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                                        <Input
-                                            placeholder="colleague@company.com"
-                                            value={inviteEmail}
-                                            onChange={(e) => setInviteEmail(e.target.value)}
-                                            onKeyDown={(e) => e.key === "Enter" && handleInvite()}
-                                            className="pl-9"
-                                        />
-                                    </div>
-                                    {userSuggestions.length > 0 && (
-                                        <div className="absolute top-full left-0 right-0 mt-1 bg-popover border rounded-lg shadow-xl z-50 max-h-48 overflow-auto py-1">
-                                            {userSuggestions.map((u) => (
-                                                <button key={u.id} className="w-full flex items-center gap-3 px-3 py-2 hover:bg-muted text-left transition-colors"
-                                                    onClick={() => { setInviteEmail(u.email); setUserSuggestions([]); }}>
-                                                    <UserAvatar user={u} className="h-7 w-7" showStatus={false} />
-                                                    <div className="min-w-0">
-                                                        <p className="text-sm font-medium truncate">{u.name}</p>
-                                                        <p className="text-xs text-muted-foreground truncate">{u.email}</p>
-                                                    </div>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="space-y-1.5">
-                                    <Label className="text-sm font-medium">Role</Label>
-                                    <Select value={inviteRole} onValueChange={setInviteRole}>
-                                        <SelectTrigger><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="admin">
-                                                <div className="flex items-center gap-2">
-                                                    <Shield className="w-3.5 h-3.5 text-blue-500" />
-                                                    <span>Admin</span>
-                                                    <span className="text-xs text-muted-foreground">— Full access</span>
-                                                </div>
-                                            </SelectItem>
-                                            <SelectItem value="member">
-                                                <div className="flex items-center gap-2">
-                                                    <Users className="w-3.5 h-3.5 text-emerald-500" />
-                                                    <span>Member</span>
-                                                    <span className="text-xs text-muted-foreground">— Can edit</span>
-                                                </div>
-                                            </SelectItem>
-                                            <SelectItem value="viewer">
-                                                <div className="flex items-center gap-2">
-                                                    <Eye className="w-3.5 h-3.5 text-muted-foreground" />
-                                                    <span>Viewer</span>
-                                                    <span className="text-xs text-muted-foreground">— Read only</span>
-                                                </div>
-                                            </SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <Button onClick={handleInvite} disabled={inviting || !inviteEmail.trim()} className="w-full gap-2">
-                                    {inviting ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
-                                    Send Invite
+                    {canManage && (
+                        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                            <DialogTrigger asChild>
+                                <Button size="lg" className="gap-2 shadow-md rounded-xl hover:-translate-y-0.5 transition-transform">
+                                    <UserPlus className="w-4 h-4" />Invite Colleague
                                 </Button>
-                            </div>
-                        </DialogContent>
-                    </Dialog>
-                )}
+                            </DialogTrigger>
+                            <DialogContent className="sm:max-w-md rounded-[20px] border-border/50 bg-card/95 backdrop-blur-xl">
+                                <DialogHeader>
+                                    <DialogTitle className="flex items-center gap-2 text-xl">
+                                        <div className="p-2 bg-primary/10 rounded-lg text-primary">
+                                            <UserPlus className="w-5 h-5" />
+                                        </div>
+                                        Invite Member
+                                    </DialogTitle>
+                                    <DialogDescription className="pt-2">Add a new team member by their email address.</DialogDescription>
+                                </DialogHeader>
+                                <div className="space-y-5 py-3">
+                                    <div className="relative space-y-2">
+                                        <Label className="text-sm font-semibold">Email Address</Label>
+                                        <div className="relative">
+                                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                                            <Input
+                                                placeholder="colleague@company.com"
+                                                value={inviteEmail}
+                                                onChange={(e) => setInviteEmail(e.target.value)}
+                                                onKeyDown={(e) => e.key === "Enter" && handleInvite()}
+                                                className="pl-9 bg-background/50 h-11 rounded-xl"
+                                            />
+                                        </div>
+                                        {userSuggestions.length > 0 && (
+                                            <div className="absolute top-full left-0 right-0 mt-2 bg-popover/90 backdrop-blur-md border border-border/50 rounded-xl shadow-xl z-50 max-h-48 overflow-auto py-1">
+                                                {userSuggestions.map((u) => (
+                                                    <button key={u.id} className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted/50 text-left transition-colors"
+                                                        onClick={() => { setInviteEmail(u.email); setUserSuggestions([]); }}>
+                                                        <UserAvatar user={u} className="h-8 w-8" showStatus={false} />
+                                                        <div className="min-w-0">
+                                                            <p className="text-sm font-medium truncate">{u.name}</p>
+                                                            <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                                                        </div>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label className="text-sm font-semibold">Role Access</Label>
+                                        <Select value={inviteRole} onValueChange={setInviteRole}>
+                                            <SelectTrigger className="bg-background/50 h-11 rounded-xl"><SelectValue /></SelectTrigger>
+                                            <SelectContent className="rounded-xl border-border/50">
+                                                <SelectItem value="admin">
+                                                    <div className="flex items-center gap-2">
+                                                        <Shield className="w-4 h-4 text-blue-500" />
+                                                        <span className="font-medium">Admin</span>
+                                                        <span className="text-xs text-muted-foreground hidden sm:inline">— Full access</span>
+                                                    </div>
+                                                </SelectItem>
+                                                <SelectItem value="member">
+                                                    <div className="flex items-center gap-2">
+                                                        <Users className="w-4 h-4 text-emerald-500" />
+                                                        <span className="font-medium">Member</span>
+                                                        <span className="text-xs text-muted-foreground hidden sm:inline">— Can edit workflow</span>
+                                                    </div>
+                                                </SelectItem>
+                                                <SelectItem value="viewer">
+                                                    <div className="flex items-center gap-2">
+                                                        <Eye className="w-4 h-4 text-muted-foreground" />
+                                                        <span className="font-medium">Viewer</span>
+                                                        <span className="text-xs text-muted-foreground hidden sm:inline">— Read-only access</span>
+                                                    </div>
+                                                </SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <Button onClick={handleInvite} disabled={inviting || !inviteEmail.trim()} className="w-full gap-2 h-10 rounded-lg font-medium">
+                                        {inviting ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
+                                        Send Invitation
+                                    </Button>
+                                </div>
+                            </DialogContent>
+                        </Dialog>
+                    )}
             </div>
 
-            {/* Stats Row */}
-            <div className="flex gap-3">
-                {(["owner", "admin", "member", "viewer"] as const).map((role) => {
-                    const config = roleConfig[role];
-                    const count = roleCounts[role] || 0;
-                    if (count === 0) return null;
-                    return (
-                        <button
-                            key={role}
-                            onClick={() => setRoleFilter(roleFilter === role ? "all" : role)}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm transition-all ${roleFilter === role
-                                    ? "border-primary bg-primary/5 text-primary shadow-sm"
-                                    : "border-border hover:border-primary/30 hover:bg-muted/30"
-                                }`}
-                        >
-                            <config.icon className={`w-3.5 h-3.5 ${config.color}`} />
-                            <span className="font-medium capitalize">{config.label}</span>
-                            <span className="text-xs text-muted-foreground">{count}</span>
-                        </button>
-                    );
-                })}
+            {/* ── Control Bar ── */}
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+                <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-medium text-muted-foreground mr-1 hidden sm:inline-block">Filter:</span>
+                    {(["owner", "admin", "member", "viewer"] as const).map((role) => {
+                        const config = roleConfig[role];
+                        const count = roleCounts[role] || 0;
+                        if (count === 0) return null;
+                        return (
+                            <button
+                                key={role}
+                                onClick={() => setRoleFilter(roleFilter === role ? "all" : role)}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 border ${roleFilter === role
+                                        ? `bg-muted text-foreground border-border`
+                                        : "bg-transparent text-muted-foreground border-transparent hover:bg-muted/50"
+                                    }`}
+                            >
+                                <config.icon className={`w-3.5 h-3.5 ${roleFilter === role ? config.color : "opacity-70"}`} />
+                                <span className="capitalize tracking-tight">{config.label}</span>
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-sm bg-background border border-border/50 ml-1">
+                                    {count}
+                                </span>
+                            </button>
+                        );
+                    })}
+                </div>
+                
+                <div className="relative w-full lg:w-80 flex-shrink-0">
+                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/70" />
+                    <Input
+                        placeholder="Search team members..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-9 h-9 bg-muted/40 border-border/60 rounded-lg text-sm transition-all focus-visible:ring-1 focus-visible:ring-primary/50"
+                    />
+                </div>
             </div>
 
-            {/* Search */}
-            <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                    placeholder="Search by name or email..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-9"
-                />
-            </div>
-
-            <Separator />
-
-            {/* Members List */}
-            <div className="space-y-1">
+            {/* ── Directory Grid ── */}
+            <div className="py-2">
                 {sortedMembers.length === 0 ? (
-                    <div className="py-12 text-center">
-                        <Users className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-                        <p className="text-sm text-muted-foreground">
-                            {searchQuery || roleFilter !== "all" ? "No members match your filter" : "No members yet"}
+                    <div className="py-20 text-center rounded-[20px] border border-dashed border-border mb-4 bg-muted/10 backdrop-blur-sm">
+                        <div className="mx-auto w-16 h-16 mb-4 rounded-2xl bg-muted/50 flex items-center justify-center">
+                            <Users className="w-8 h-8 text-muted-foreground/50" />
+                        </div>
+                        <h3 className="text-lg font-semibold mb-1">No matches found</h3>
+                        <p className="text-muted-foreground">
+                            {searchQuery || roleFilter !== "all" ? "Try adjusting your filters or search query" : "No team members are here yet"}
                         </p>
                     </div>
                 ) : (
-                    sortedMembers.map((member) => {
-                        const config = roleConfig[member.role] || roleConfig.member;
-                        const RoleIcon = config.icon;
-                        return (
-                            <div
-                                key={member.id}
-                                className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/40 transition-colors group"
-                            >
-                                {/* Avatar */}
-                                <UserAvatar user={{ name: member.user?.name, image: member.user?.image }} className="h-9 w-9 flex-shrink-0" showStatus={false} />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-5">
+                        {sortedMembers.map((member) => {
+                            const config = roleConfig[member.role] || roleConfig.member;
+                            const RoleIcon = config.icon;
+                            return (
+                                <div
+                                    key={member.id}
+                                    className="relative flex flex-col p-5 rounded-xl border border-border/40 bg-card/20 hover:bg-card/60 transition-colors duration-200 group"
+                                >
+                                    <div className="flex items-start justify-between mb-3">
+                                        <div className="relative">
+                                            <UserAvatar user={{ name: member.user?.name, image: member.user?.image }} className="h-12 w-12 ring-2 ring-background shadow-sm" showStatus={false} />
+                                            {/* Minimal status dot */}
+                                            <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-background"></div>
+                                        </div>
 
-                                {/* Name + Email */}
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2">
-                                        <p className="text-sm font-medium truncate">{member.user?.name || "Unknown"}</p>
-                                        {member.role === "owner" && <Crown className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />}
-                                    </div>
-                                    <p className="text-xs text-muted-foreground truncate">{member.user?.email}</p>
-                                </div>
-
-                                {/* Role Badge */}
-                                <Badge variant={config.badgeVariant} className="capitalize text-[11px] gap-1 flex-shrink-0">
-                                    <RoleIcon className={`w-3 h-3 ${config.color}`} />
-                                    {config.label}
-                                </Badge>
-
-                                {/* Actions */}
-                                {canManage && member.role !== "owner" ? (
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                            <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <MoreHorizontal className="w-4 h-4" />
-                                            </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end" className="w-44">
-                                            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Change Role</div>
-                                            {(["admin", "member", "viewer"] as const).map((role) => {
-                                                const rc = roleConfig[role];
-                                                return (
-                                                    <DropdownMenuItem
-                                                        key={role}
-                                                        onClick={() => handleRoleChange(member.userId, role)}
-                                                        className={member.role === role ? "bg-muted" : ""}
-                                                    >
-                                                        <rc.icon className={`w-3.5 h-3.5 mr-2 ${rc.color}`} />
-                                                        {rc.label}
-                                                        {member.role === role && <span className="ml-auto text-xs text-muted-foreground">Current</span>}
+                                        {/* Minimal Action Dropdown */}
+                                        {canManage && member.role !== "owner" && (
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity -mr-1 -mt-1">
+                                                        <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" className="w-44 rounded-lg border-border/50 p-1">
+                                                    <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">Change Role</div>
+                                                    {(["admin", "member", "viewer"] as const).map((role) => {
+                                                        const rc = roleConfig[role];
+                                                        return (
+                                                            <DropdownMenuItem
+                                                                key={role}
+                                                                onClick={() => handleRoleChange(member.userId, role)}
+                                                                className="rounded-md cursor-pointer text-sm"
+                                                            >
+                                                                <rc.icon className={`w-3.5 h-3.5 mr-2 ${member.role === role ? rc.color : "text-muted-foreground/50"}`} />
+                                                                <span>{rc.label}</span>
+                                                                {member.role === role && <Shield className="ml-auto w-3 h-3 text-muted-foreground" />}
+                                                            </DropdownMenuItem>
+                                                        );
+                                                    })}
+                                                    <DropdownMenuSeparator className="my-1" />
+                                                    <DropdownMenuItem onClick={() => handleRemove(member.userId)} className="rounded-md text-destructive focus:bg-destructive/10 cursor-pointer text-sm">
+                                                        <Trash2 className="w-3.5 h-3.5 mr-2" />
+                                                        Remove Access
                                                     </DropdownMenuItem>
-                                                );
-                                            })}
-                                            <DropdownMenuSeparator />
-                                            <DropdownMenuItem onClick={() => handleRemove(member.userId)} className="text-destructive focus:text-destructive">
-                                                <Trash2 className="w-3.5 h-3.5 mr-2" />
-                                                Remove
-                                            </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
-                                ) : (
-                                    <div className="w-7" /> /* spacer for alignment */
-                                )}
-                            </div>
-                        );
-                    })
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        )}
+                                    </div>
+
+                                    {/* Profile Text */}
+                                    <div>
+                                        <h3 className="text-sm font-semibold truncate text-foreground group-hover:text-primary transition-colors">
+                                            {member.user?.name || "Unknown"}
+                                        </h3>
+                                        <p className="text-xs text-muted-foreground truncate font-medium">
+                                            {member.user?.email}
+                                        </p>
+                                    </div>
+
+                                    {/* Minimal Role Badge */}
+                                    <div className="mt-4 pt-3 border-t border-border/30 flex items-center justify-between">
+                                        <div className="flex items-center gap-1.5 grayscale opacity-80 group-hover:grayscale-0 group-hover:opacity-100 transition-all">
+                                            <RoleIcon className={`w-3.5 h-3.5 ${config.color}`} />
+                                            <span className="text-[11px] font-semibold text-muted-foreground tracking-wide capitalize">{config.label}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
                 )}
             </div>
 
-            {/* Footer count */}
+            {/* Footer Summary */}
             {members.length > 0 && (
-                <p className="text-xs text-muted-foreground text-center pt-2">
-                    Showing {sortedMembers.length} of {members.length} member{members.length !== 1 ? "s" : ""}
-                </p>
+                <div className="flex justify-center pt-2 pb-8">
+                    <p className="inline-flex items-center justify-center px-4 py-1.5 rounded-full bg-muted/40 border border-border/40 text-xs font-medium text-muted-foreground">
+                        Showing {sortedMembers.length} of {members.length} team member{members.length !== 1 ? "s" : ""}
+                    </p>
+                </div>
             )}
         </div>
     );
 }
-

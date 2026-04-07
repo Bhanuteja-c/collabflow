@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { WorkspaceSidebar, MobileSidebar } from "@/components/WorkspaceSidebar";
 import { WorkspaceHeader } from "@/components/WorkspaceHeader";
+import { BottomNav } from "@/components/layout/BottomNav";
 import { KeyboardShortcutsDialog } from "@/components/KeyboardShortcutsDialog";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { SocketProvider } from "@/components/providers/SocketProvider";
@@ -20,7 +21,6 @@ export function WorkspaceShell({ workspaceSlug, children }: WorkspaceShellProps)
     const base = `/workspace/${workspaceSlug}`;
 
     // Detect if we're in an active video room (not the video listing page)
-    // Precise string splitting is much safer than regex across different operating system path styles / URL formations
     const segments = pathname.split('/').filter(Boolean);
     const isVideoRoom = segments.includes('video') && segments.length >= 4 && segments[segments.length - 1] !== 'video';
 
@@ -63,10 +63,17 @@ export function WorkspaceShell({ workspaceSlug, children }: WorkspaceShellProps)
                         onMenuClick={() => setIsMobileSidebarOpen(true)}
                         workspaceSlug={workspaceSlug}
                     />
-                    <div className="flex-1 overflow-auto">
+                    {/* pb-14 on mobile for bottom nav clearance, pb-0 on lg+ */}
+                    <div className="flex-1 flex flex-col overflow-auto pb-14 lg:pb-0">
                         {children}
                     </div>
                 </main>
+
+                {/* Mobile Bottom Nav */}
+                <BottomNav
+                    workspaceSlug={workspaceSlug}
+                    onMoreClick={() => setIsMobileSidebarOpen(true)}
+                />
 
                 {/* Keyboard shortcuts help (Shift+?) */}
                 <KeyboardShortcutsDialog />

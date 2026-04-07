@@ -1,7 +1,7 @@
 // src/components/landing/HeroSection.tsx
 "use client";
 
-import { motion } from "framer-motion";
+import { LazyMotion, domAnimation, m } from "framer-motion";
 import Link from "next/link";
 import { ArrowRight, Github, Sparkles } from "lucide-react";
 import { useSession } from "next-auth/react";
@@ -29,6 +29,7 @@ export default function HeroSection() {
     const isLoggedIn = status === "authenticated";
 
     return (
+        <LazyMotion features={domAnimation}>
         <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
             {/* Aurora Background */}
             <div className="bg-aurora absolute inset-0" aria-hidden="true" />
@@ -57,14 +58,14 @@ export default function HeroSection() {
                 }}
             />
 
-            <motion.div
+            <m.div
                 variants={containerVariants}
                 initial="hidden"
                 animate="visible"
                 className="relative z-10 max-w-5xl mx-auto px-6 py-32 text-center"
             >
                 {/* Badge */}
-                <motion.div variants={itemVariants} className="mb-8">
+                <m.div variants={itemVariants} className="mb-8">
                     <Link
                         href="https://github.com"
                         target="_blank"
@@ -79,33 +80,33 @@ export default function HeroSection() {
                             <Github className="w-4 h-4" />
                         </span>
                     </Link>
-                </motion.div>
+                </m.div>
 
                 {/* Logo */}
-                <motion.div variants={itemVariants} className="mb-8 flex justify-center">
+                <m.div variants={itemVariants} className="mb-8 flex justify-center">
                     <Logo size="lg" showText={false} />
-                </motion.div>
+                </m.div>
 
                 {/* Heading */}
-                <motion.h1
+                <m.h1
                     variants={itemVariants}
                     className="text-5xl sm:text-6xl md:text-7xl font-bold tracking-tight mb-6"
                 >
                     <span className="block">The modern way to</span>
                     <span className="gradient-text">collaborate</span>
-                </motion.h1>
+                </m.h1>
 
                 {/* Subheading */}
-                <motion.p
+                <m.p
                     variants={itemVariants}
                     className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-12 leading-relaxed"
                 >
                     Documents, projects, and conversations—unified in one beautiful workspace.
                     Built for teams who ship fast.
-                </motion.p>
+                </m.p>
 
                 {/* CTA Buttons */}
-                <motion.div
+                <m.div
                     variants={itemVariants}
                     className="flex flex-col sm:flex-row gap-4 justify-center mb-16"
                 >
@@ -134,10 +135,10 @@ export default function HeroSection() {
                             </Link>
                         </>
                     )}
-                </motion.div>
+                </m.div>
 
                 {/* Social Proof */}
-                <motion.div
+                <m.div
                     variants={itemVariants}
                     className="flex flex-col sm:flex-row items-center justify-center gap-6"
                 >
@@ -180,24 +181,25 @@ export default function HeroSection() {
                             <div className="text-sm text-muted-foreground">Sync latency</div>
                         </div>
                     </div>
-                </motion.div>
-            </motion.div>
+                </m.div>
+            </m.div>
 
             {/* Scroll Indicator */}
-            <motion.div
+            <m.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 1.5 }}
                 className="absolute bottom-8 left-1/2 -translate-x-1/2"
             >
-                <motion.div
+                <m.div
                     animate={{ y: [0, 8, 0] }}
                     transition={{ duration: 2, repeat: Infinity }}
                     className="w-6 h-10 rounded-full border-2 border-muted-foreground/30 flex items-start justify-center p-2"
                 >
-                    <motion.div className="w-1.5 h-1.5 rounded-full bg-muted-foreground" />
-                </motion.div>
-            </motion.div>
+                    <m.div className="w-1.5 h-1.5 rounded-full bg-muted-foreground" />
+                </m.div>
+            </m.div>
         </section>
+        </LazyMotion>
     );
 }

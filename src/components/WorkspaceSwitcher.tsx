@@ -1,4 +1,4 @@
-"use client";
+    "use client";
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
@@ -47,9 +47,10 @@ interface PublicWorkspace {
 
 interface WorkspaceSwitcherProps {
     currentSlug?: string;
+    compact?: boolean;
 }
 
-export function WorkspaceSwitcher({ currentSlug }: WorkspaceSwitcherProps) {
+export function WorkspaceSwitcher({ currentSlug, compact }: WorkspaceSwitcherProps) {
     const router = useRouter();
     const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
     const [loading, setLoading] = useState(true);
@@ -91,13 +92,16 @@ export function WorkspaceSwitcher({ currentSlug }: WorkspaceSwitcherProps) {
                 <DropdownMenuTrigger asChild>
                     <Button
                         variant="ghost"
-                        className="w-full justify-between px-3 h-10 bg-muted/30 hover:bg-muted/50"
+                        className={compact
+                            ? "justify-between px-2 h-8 hover:bg-muted/50 max-w-[160px]"
+                            : "w-full justify-between px-3 h-10 bg-muted/30 hover:bg-muted/50"
+                        }
                     >
                         <div className="flex items-center gap-2 truncate">
                             {currentWorkspace ? (
                                 <>
-                                    <UserAvatar user={{ name: currentWorkspace.name, image: currentWorkspace.image }} className="h-6 w-6" showStatus={false} />
-                                    <span className="truncate font-medium">{currentWorkspace.name}</span>
+                                    {!compact && <UserAvatar user={{ name: currentWorkspace.name, image: currentWorkspace.image }} className="h-6 w-6" showStatus={false} />}
+                                    <span className={`truncate font-medium ${compact ? "text-xs" : ""}`}>{currentWorkspace.name}</span>
                                 </>
                             ) : (
                                 <>
@@ -106,7 +110,7 @@ export function WorkspaceSwitcher({ currentSlug }: WorkspaceSwitcherProps) {
                                 </>
                             )}
                         </div>
-                        <ChevronsUpDown className="w-4 h-4 shrink-0 opacity-50" />
+                        <ChevronsUpDown className={`shrink-0 opacity-50 ${compact ? "w-3 h-3" : "w-4 h-4"}`} />
                     </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-56">

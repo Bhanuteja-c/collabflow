@@ -5,10 +5,12 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar } from "@/components/ui/avatar";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useSocket } from "@/hooks/useSocket";
@@ -35,6 +37,7 @@ import {
   Paperclip,
   RefreshCw,
   Reply,
+  ArrowLeft,
   Pin,
   PinOff,
   ChevronDown,
@@ -234,6 +237,20 @@ export default function ChatPage() {
   } | null>(null);
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const channelIdParam = searchParams.get("channelId");
+
+  // Sync route param changes to state natively without full page reloads
+  useEffect(() => {
+    if (channelIdParam && channels.length > 0) {
+      const found = channels.find((c) => c.id === channelIdParam);
+      if (found && found.id !== selectedChannel?.id) {
+        setSelectedChannel(found);
+        // Clear active thread view when switching channels
+        setActiveThread(null);
+      }
+    }
+  }, [channelIdParam, channels, selectedChannel?.id]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -929,7 +946,7 @@ export default function ChatPage() {
     return (
       <div className="flex h-[calc(100vh-3.5rem)] bg-background">
         {/* Skeleton Sidebar */}
-        <div className="hidden md:flex w-64 border-r flex-col bg-muted/10">
+        <div className="hidden lg:flex w-64 border-r flex-col bg-muted/10">
           <div className="p-4 border-b flex justify-between items-center">
             <div className="h-6 w-24 bg-muted animate-pulse rounded-md" />
             <div className="h-8 w-8 bg-muted animate-pulse rounded-md" />
@@ -994,295 +1011,190 @@ export default function ChatPage() {
   const displayAvatar = isDirectMessage ? targetUser?.image : null;
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] bg-background overflow-hidden">
-      {/* Mobile sidebar overlay */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-40 md:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      {/* Sidebar - Channel List */}
-      <div
-        className={`
-                fixed md:relative inset-y-0 left-0 z-50 md:z-auto
-                w-72 md:w-64 border-r flex flex-col flex-shrink-0
-                bg-card
-                transform transition-transform duration-200 ease-in-out
-                ${sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
-            `}
-      >
-        <div className="px-4 py-3 border-b">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="w-6 h-6 rounded bg-primary flex items-center justify-center flex-shrink-0">
-                <MessageSquare className="w-3.5 h-3.5 text-primary-foreground" />
+    <div className="flex h-full bg-background overflow-hidden relative">
+      
+      {/* ── Mobile Sidebar Overlay ── */}
+      <AnimatePresence>
+        {sidebarOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 z-40 md:hidden"
+              onClick={() => setSidebarOpen(false)}
+            />
+            {/* Drawer */}
+            <motion.div
+              initial={{ x: -280 }}
+              animate={{ x: 0 }}
+              exit={{ x: -280 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="fixed inset-y-0 left-0 w-[280px] bg-background border-r border-border/50 z-50 flex flex-col md:hidden shadow-2xl"
+            >
+              {/* Mobile Sidebar Header */}
+              <div className="px-4 py-3 border-b border-border/50 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-3 truncate">
+                  <UserAvatar user={{ name: session?.user?.name, image: session?.user?.image }} className="w-8 h-8 rounded-md shrink-0 ring-1 ring-border/50" showStatus={false} />
+                  <div className="min-w-0 flex flex-col pt-0.5">
+                    <span className="font-bold text-[14px] text-foreground truncate leading-none tracking-tight">{session?.user?.name || "User"}</span>
+                    <span className="text-[11px] text-emerald-500 font-semibold flex items-center gap-1.5 mt-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      Active
+                    </span>
+                  </div>
+                </div>
+                <Button variant="ghost" size="icon" className="h-7 w-7 rounded-sm hover:bg-muted text-muted-foreground hover:text-foreground shrink-0" onClick={() => setSidebarOpen(false)}>
+                  <X className="w-4 h-4" />
+                </Button>
               </div>
-              <div className="min-w-0">
-                <p className="font-semibold text-sm leading-tight truncate">
-                  {workspace?.slug || "Workspace"}
-                </p>
-                <div className="flex items-center gap-1">
-                  {connected ? (
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />
-                  ) : (
-                    <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 flex-shrink-0" />
-                  )}
-                  <span className="text-[10px] text-muted-foreground">{connected ? "Online" : "Offline"}</span>
+              {/* Mobile Sidebar Nav */}
+              <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 space-y-6 pb-10 custom-scrollbar">
+                <div>
+                  <div className="px-2 mb-2 flex items-center justify-between">
+                    <span className="text-[11px] font-bold tracking-wider text-muted-foreground">CHANNELS</span>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 rounded-sm text-muted-foreground hover:text-foreground" onClick={() => { setShowNewChannel(true); setSidebarOpen(false); }}>
+                      <Plus className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                  <div className="space-y-[1px]">
+                    {channels.filter(c => c.type !== "direct").map(ch => (
+                      <Link key={ch.id} href={`/workspace/${params?.slug}/chat?channelId=${ch.id}`} onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-2 px-2 py-2 rounded-md text-[13px] group select-none transition-colors", (selectedChannel?.id === ch.id) ? "bg-muted font-medium text-foreground" : "hover:bg-muted/50 text-muted-foreground hover:text-foreground")}>
+                        <Hash className={cn("w-4 h-4 shrink-0 opacity-70", selectedChannel?.id === ch.id ? "text-foreground opacity-100" : "group-hover:opacity-100")} />
+                        <span className="truncate flex-1">{ch.name}</span>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div className="px-2 mb-2"><span className="text-[11px] font-bold tracking-wider text-muted-foreground">DIRECT MESSAGES</span></div>
+                  <div className="space-y-[1px]">
+                    {channels.filter(c => c.type === "direct").map(ch => {
+                      const otherUser = workspaceMembers.find(m => m.id !== (session?.user as any)?.id && ch.members?.some((mem: any) => mem.userId === m.id || mem.user?.id === m.id));
+                      const isOnline = otherUser ? workspaceOnlineUsers.some(u => u.user.id === otherUser.id) : false;
+                      return (
+                        <Link key={ch.id} href={`/workspace/${params?.slug}/chat?channelId=${ch.id}`} onClick={() => setSidebarOpen(false)} className={cn("flex items-center gap-2 px-2 py-2 rounded-md text-[13px] group select-none transition-colors", (selectedChannel?.id === ch.id) ? "bg-muted font-medium text-foreground" : "hover:bg-muted/50 text-muted-foreground hover:text-foreground")}>
+                          <div className="relative shrink-0 flex items-center justify-center">
+                            <UserAvatar user={{ name: otherUser?.name || "User", image: otherUser?.image }} className={cn("w-5 h-5 rounded-sm", selectedChannel?.id === ch.id ? "opacity-100" : "opacity-80 group-hover:opacity-100")} showStatus={false} />
+                            {isOnline && <span className="absolute -bottom-0.5 -right-0.5 w-[6px] h-[6px] rounded-full bg-emerald-500 ring-1 ring-background" />}
+                          </div>
+                          <span className="truncate flex-1">{otherUser?.name || "Unknown"}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
-            </div>
-            <Button variant="ghost" size="icon" onClick={() => setShowNewChannel(!showNewChannel)} className="h-7 w-7 flex-shrink-0">
-              {showNewChannel ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
-            </Button>
-          </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
-          <AnimatePresence>
-            {showNewChannel && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="space-y-2"
-              >
-                <Input
-                  placeholder="Channel name"
-                  value={newChannelName}
-                  onChange={(e) => setNewChannelName(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && createChannel()}
-                  className="h-9"
-                  autoFocus
-                />
-                <Button
-                  onClick={createChannel}
-                  className="w-full h-9"
-                  size="sm"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create Channel
-                </Button>
-              </motion.div>
-            )}
-          </AnimatePresence>
+      {/* ── Chat Sidebar (Desktop) ── */}
+      <div className="w-60 border-r border-border/50 bg-muted/10 hidden md:flex flex-col shrink-0 h-full overflow-hidden z-20">
+        {/* Header */}
+        <div className="px-4 py-3 border-b border-border/50 flex items-center justify-between sticky top-0 z-10 shrink-0 bg-transparent">
+          <div className="flex items-center gap-3 truncate">
+            <UserAvatar user={{ name: session?.user?.name, image: session?.user?.image }} className="w-8 h-8 rounded-md shrink-0 ring-1 ring-border/50" showStatus={false} />
+            <div className="min-w-0 flex flex-col pt-0.5">
+              <span className="font-bold text-[14px] text-foreground truncate leading-none tracking-tight">{session?.user?.name || "User"}</span>
+              <span className="text-[11px] text-emerald-500 font-semibold flex items-center gap-1.5 mt-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                Active
+              </span>
+            </div>
+          </div>
+          <Button variant="ghost" size="icon" className="h-7 w-7 rounded-sm hover:bg-muted text-muted-foreground hover:text-foreground shrink-0" onClick={() => setShowNewChannel(true)}>
+            <Plus className="w-4 h-4" />
+          </Button>
         </div>
 
-        <ScrollArea className="flex-1">
-          <div className="py-2">
-            {/* Channels section */}
-            <div className="px-3 pb-1">
-              <button
-                onClick={() => setChannelsSectionOpen(!channelsSectionOpen)}
-                className="w-full flex items-center gap-1.5 px-1 mb-1.5 group hover:text-foreground transition-colors"
-              >
-                {channelsSectionOpen
-                  ? <ChevronDown className="w-3 h-3 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors" />
-                  : <ChevronRight className="w-3 h-3 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors" />}
-                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 group-hover:text-muted-foreground/80 transition-colors">Channels</span>
-                <span className="text-[9px] text-muted-foreground/40 ml-auto">
-                  {channels.filter((c) => c.type !== "direct").length}
-                </span>
-              </button>
-              <AnimatePresence initial={false}>
-                {channelsSectionOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0 }}
-                    transition={{ duration: 0.15 }}
-                  >
-              {channels.filter((c) => c.type !== "direct").length === 0 ? (
-                <div className="text-center py-6 px-4">
-                  <MessageSquare className="w-8 h-8 mx-auto text-muted-foreground/40 mb-2" />
-                  <p className="text-xs text-muted-foreground/60">No channels yet</p>
-                  <Button
-                    variant="link"
-                    size="sm"
-                    onClick={() => setShowNewChannel(true)}
-                    className="mt-1 text-xs h-7"
-                  >
-                    Create your first channel
-                  </Button>
-                </div>
-              ) : (
-                channels
-                  .filter((c) => c.type !== "direct")
-                  .map((channel) => (
-                    <button
-                      key={channel.id}
-                      onClick={() => {
-                        setSelectedChannel(channel);
-                        setSidebarOpen(false);
-                        setChannels((prev) =>
-                          prev.map((ch) =>
-                            ch.id === channel.id ? { ...ch, unreadCount: 0 } : ch,
-                          ),
-                        );
-                      }}
-                      className={`w-full text-left px-3 py-2 rounded-md flex items-center gap-2 transition-all relative touch-manipulation active:scale-[0.98] ${selectedChannel?.id === channel.id
-                        ? "text-primary-foreground font-medium"
-                        : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"
-                        }`}
-                    >
-                      {selectedChannel?.id === channel.id && (
-                        <motion.div
-                          layoutId="activeSidebarItem"
-                          className="absolute inset-0 bg-primary/90 shadow-sm rounded-md"
-                          initial={false}
-                          transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                        />
-                      )}
-                      <Hash className="w-4 h-4 flex-shrink-0 relative z-10" />
-                      <div className="flex-1 min-w-0 relative z-10">
-                        <span className="truncate text-sm block">
-                          {channel.name}
-                        </span>
-                        {channel.description && selectedChannel?.id !== channel.id && (
-                          <span className="truncate text-[10px] text-muted-foreground/50 block">
-                            {channel.description}
-                          </span>
-                        )}
-                      </div>
-                      {(channel.unreadCount ?? 0) > 0 &&
-                        selectedChannel?.id !== channel.id && (
-                          <Badge
-                            variant="destructive"
-                            className="h-5 min-w-5 px-1.5 text-[10px] font-bold relative z-10 scale-90"
-                          >
-                            {channel.unreadCount! > 99
-                              ? "99+"
-                              : channel.unreadCount}
-                          </Badge>
-                        )}
-                    </button>
-                  ))
-              )}
-                  </motion.div>
-                )}
-              </AnimatePresence>
+        {/* Scrollable Nav items */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 space-y-6 pb-10 custom-scrollbar">
+          
+          {/* Channels */}
+          <div>
+            <div className="px-2 mb-2 flex items-center justify-between group cursor-pointer">
+              <span className="text-[11px] font-bold tracking-wider text-muted-foreground hover:text-foreground transition-colors">CHANNELS</span>
+            </div>
+            <div className="space-y-[1px]">
+              {channels.filter(c => c.type !== "direct").map(ch => (
+                <Link key={ch.id} href={`/workspace/${params?.slug}/chat?channelId=${ch.id}`} className={cn("flex items-center gap-2 px-2 py-1.5 rounded-md text-[13px] group select-none transition-colors", (selectedChannel?.id === ch.id) ? "bg-muted font-medium text-foreground" : "hover:bg-muted/50 text-muted-foreground hover:text-foreground")}>
+                  <Hash className={cn("w-4 h-4 shrink-0 opacity-70", selectedChannel?.id === ch.id ? "text-foreground opacity-100" : "group-hover:opacity-100")} />
+                  <span className="truncate flex-1">{ch.name}</span>
+                </Link>
+              ))}
             </div>
           </div>
 
-          {/* Direct Messages Section */}
-          <div className="px-3 pt-4 border-t border-border/50">
-            <button
-              onClick={() => setDmsSectionOpen(!dmsSectionOpen)}
-              className="w-full flex items-center gap-1.5 px-1 mb-1.5 group hover:text-foreground transition-colors"
-            >
-              {dmsSectionOpen
-                ? <ChevronDown className="w-3 h-3 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors" />
-                : <ChevronRight className="w-3 h-3 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors" />}
-              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 group-hover:text-muted-foreground/80 transition-colors">Direct Messages</span>
-              {workspaceOnlineUsers.filter(u => u.user.id !== currentUser?.id).length > 0 && (
-                <span className="ml-auto flex items-center gap-1 text-[9px] text-emerald-500">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  {workspaceOnlineUsers.filter(u => u.user.id !== currentUser?.id).length} online
-                </span>
-              )}
-            </button>
-            <AnimatePresence initial={false}>
-              {dmsSectionOpen && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.15 }}
-                  className="space-y-0.5"
-                >
-              {workspaceMembers
-                .filter((m) => m.id !== currentUser?.id)
-                .map((member) => {
-                  const activeDmChannel = channels.find(
-                    (c) =>
-                      c.type === "direct" &&
-                      c.members &&
-                      c.members.some(
-                        (mem) =>
-                          (mem as any).userId === member.id ||
-                          (mem as any).user?.id === member.id,
-                      ),
-                  );
-
-                  const isSelected =
-                    selectedChannel?.id === activeDmChannel?.id &&
-                    selectedChannel !== null;
-
-                  const isOnline = workspaceOnlineUsers.some(
-                    (u) => u.user.id === member.id,
-                  );
-
+          {/* Direct Messages */}
+          <div>
+            <div className="px-2 mb-2 flex items-center justify-between group cursor-pointer">
+              <span className="text-[11px] font-bold tracking-wider text-muted-foreground hover:text-foreground transition-colors">DIRECT MESSAGES</span>
+            </div>
+            <div className="space-y-[1px]">
+              {channels.filter(c => c.type === "direct").map(ch => {
+                  const otherUser = workspaceMembers.find(m => m.id !== (session?.user as any)?.id && ch.members?.some((mem: any) => mem.userId === m.id || mem.user?.id === m.id));
+                  const isOnline = otherUser ? workspaceOnlineUsers.some(u => u.user.id === otherUser.id) : false;
                   return (
-                    <button
-                      key={member.id}
-                      onClick={() => handleDirectMessage(member.id)}
-                      className={`w-full text-left px-3 py-1.5 rounded-md flex items-center gap-2 transition-all relative touch-manipulation active:scale-[0.98] ${isSelected
-                        ? "text-primary-foreground font-medium"
-                        : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"
-                        }`}
-                    >
-                      {isSelected && (
-                        <motion.div
-                          layoutId="activeSidebarItem"
-                          className="absolute inset-0 bg-primary/90 shadow-sm rounded-md"
-                          initial={false}
-                          transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                        />
-                      )}
-                      <div className="relative z-10">
-                        <UserAvatar user={member} className="w-5 h-5 flex-shrink-0" showStatus={false} />
+                    <Link key={ch.id} href={`/workspace/${params?.slug}/chat?channelId=${ch.id}`} className={cn("flex items-center gap-2 px-2 py-1.5 rounded-md text-[13px] group select-none transition-colors", (selectedChannel?.id === ch.id) ? "bg-muted font-medium text-foreground" : "hover:bg-muted/50 text-muted-foreground hover:text-foreground")}>
+                      <div className="relative shrink-0 flex items-center justify-center">
+                        <UserAvatar user={{ name: otherUser?.name || "User", image: otherUser?.image }} className={cn("w-4 h-4 rounded-sm transition-opacity", selectedChannel?.id === ch.id ? "opacity-100" : "opacity-80 group-hover:opacity-100")} showStatus={false} />
                         {isOnline && (
-                          <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 border border-background"></span>
+                          <span className="absolute -bottom-0.5 -right-0.5 w-[6px] h-[6px] rounded-full bg-emerald-500 ring-1 ring-background" />
                         )}
                       </div>
-                      <span className="truncate text-sm flex-1 relative z-10">
-                        {member.name}
-                      </span>
-                      {isOnline && !isSelected && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/60 relative z-10 shrink-0" />
-                      )}
-                    </button>
+                      <span className="truncate flex-1">{otherUser?.name || "Unknown"}</span>
+                    </Link>
                   );
-                })}
-                </motion.div>
-              )}
-            </AnimatePresence>
+              })}
+            </div>
           </div>
-        </ScrollArea>
+
+        </div>
       </div>
 
-      {/* Main Chat Area */}
+      {/* Chat messages column */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {selectedChannel ? (
           <div className="flex-1 flex flex-col min-h-0">
             {/* Channel header */}
-            <div className="px-4 py-3 border-b flex items-center justify-between bg-background/95 backdrop-blur-sm">
-              <div className="flex items-center gap-3 min-w-0">
-                <Button variant="ghost" size="icon" className="md:hidden h-9 w-9 flex-shrink-0" onClick={() => setSidebarOpen(true)}>
+            <div className="px-3 md:px-5 py-3 border-b border-border flex items-center justify-between bg-background z-10 sticky top-0">
+              <div className="flex items-center gap-2 md:gap-3 min-w-0">
+                {/* Mobile hamburger to open sidebar */}
+                <Button variant="ghost" size="icon" className="md:hidden h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground" onClick={() => setSidebarOpen(true)}>
                   <Menu className="w-5 h-5" />
                 </Button>
 
                 {/* Channel Icon or User Avatar */}
                 {isDirectMessage ? (
                   <div className="relative flex-shrink-0">
-                    <UserAvatar user={{ name: displayName, image: displayAvatar }} className="w-9 h-9" showStatus={false} />
+                    <UserAvatar user={{ name: displayName, image: displayAvatar }} className="w-8 h-8 rounded-md" showStatus={false} />
                     {workspaceOnlineUsers.some((u) => u.user.id === targetUser?.id) && (
-                      <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-background" />
+                      <span className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full bg-emerald-500 border-2 border-background" />
                     )}
                   </div>
                 ) : (
-                  <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    <Hash className="w-4.5 h-4.5 text-primary" />
+                  <div className="flex-shrink-0">
+                    <Hash className="w-6 h-6 text-muted-foreground/50" />
                   </div>
                 )}
 
-                <div className="min-w-0">
-                  <h1 className="font-bold text-sm leading-tight truncate">{displayName}</h1>
-                  <p className="text-[11px] text-muted-foreground leading-tight">
+                <div className="min-w-0 flex flex-col justify-center">
+                  <h1 className="font-bold text-[15px] leading-tight truncate text-foreground">{displayName}</h1>
+                  <p className="text-[12px] text-muted-foreground leading-tight mt-0.5 flex items-center gap-1.5">
                     {isDirectMessage
-                      ? workspaceOnlineUsers.some((u) => u.user.id === targetUser?.id) ? "Active now" : "Offline"
-                      : `${selectedChannel.members?.length || 0} members`}
+                      ? workspaceOnlineUsers.some((u) => u.user.id === targetUser?.id) ? <span className="text-emerald-500">Active now</span> : "Offline"
+                      : <span className="flex items-center gap-1"><Users className="w-3 h-3" /> {selectedChannel.members?.length || 0} members</span>}
                     {!isDirectMessage && onlineUsers.length > 0 && (
-                      <span className="text-emerald-500 ml-1">· {onlineUsers.length + 1} online</span>
+                      <>
+                        <span className="text-border mx-0.5">•</span>
+                        <span className="text-emerald-500 flex items-center gap-1">
+                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          {onlineUsers.length + 1} online
+                        </span>
+                      </>
                     )}
                   </p>
                 </div>
@@ -1291,24 +1203,25 @@ export default function ChatPage() {
               <div className="flex items-center gap-2 flex-shrink-0">
                 {/* Online user avatars */}
                 {!isDirectMessage && onlineUsers.length > 0 && (
-                  <div className="hidden sm:flex -space-x-1.5">
-                    {onlineUsers.slice(0, 3).map((viewer) => (
-                      <UserAvatar user={viewer.user} className="w-6 h-6" showStatus={false} />
+                  <div className="hidden sm:flex -space-x-1.5 mr-2 px-2 py-0.5">
+                    {onlineUsers.slice(0, 3).map((viewer, i) => (
+                      <div key={i} className="relative z-10 hover:z-20 transition-transform">
+                        <UserAvatar user={viewer.user} className="w-[24px] h-[24px] rounded-full border border-background shadow-xs" showStatus={false} />
+                      </div>
                     ))}
                     {onlineUsers.length > 3 && (
-                      <div className="w-6 h-6 rounded-full bg-muted border-2 border-background flex items-center justify-center text-[9px] font-medium">+{onlineUsers.length - 3}</div>
+                      <div className="w-[24px] h-[24px] rounded-full bg-muted border border-background flex items-center justify-center text-[9px] font-bold text-muted-foreground z-10">+{onlineUsers.length - 3}</div>
                     )}
                   </div>
                 )}
                 {!isDirectMessage && (
-                  <Button variant="outline" size="sm" className="hidden sm:flex items-center gap-1.5 h-8 px-3 text-xs text-muted-foreground hover:bg-muted" onClick={() => setSearchOpen(true)}>
-                    <Search className="w-3.5 h-3.5" />
-                    Search
+                  <Button variant="ghost" size="icon" className="hidden sm:flex h-8 w-8 rounded-md text-muted-foreground hover:text-foreground" onClick={() => setSearchOpen(true)}>
+                    <Search className="w-4 h-4" />
                   </Button>
                 )}
-                <Button variant="outline" size="sm" className="hidden sm:flex items-center gap-1.5 h-8 px-3 text-xs border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10 hover:border-emerald-500/50" onClick={startHuddle}>
-                  <Video className="w-3.5 h-3.5" />
-                  Start Call
+                <Button variant="outline" size="sm" className="hidden sm:flex items-center gap-1.5 h-8 px-3 rounded-md text-[13px] font-medium transition-colors hover:bg-muted" onClick={startHuddle}>
+                  <Video className="w-4 h-4 text-emerald-500" />
+                  Call
                 </Button>
               </div>
             </div>
@@ -1399,9 +1312,8 @@ export default function ChatPage() {
               </div>
             )}
 
-            {/* Messages */}
             <div
-              className="flex-1 min-h-0 overflow-y-auto p-4"
+              className="flex-1 min-h-0 overflow-y-auto px-1 py-4"
               ref={scrollAreaRef}
               onScroll={(e) => {
                 const el = e.currentTarget;
@@ -1409,7 +1321,7 @@ export default function ChatPage() {
                 setScrolledUp(distFromBottom > 200);
               }}
             >
-              <div className="space-y-[2px]">
+              <div className="flex flex-col">
                 {allMessages.length === 0 ? (
                   <div className="text-center py-16">
                     <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
@@ -1459,7 +1371,6 @@ export default function ChatPage() {
                       /^📋\s/,   // Assigned
                       /^✅\s/,   // Completed
                       /^📊\s/,   // Board created
-                      /^🎥\s/,   // Huddle started
                       /^👋\s/,   // Joined
                       /^──\s/,   // Generic system marker
                     ];
@@ -1516,14 +1427,14 @@ export default function ChatPage() {
                         <motion.div
                           initial={{ opacity: 0, y: 3 }}
                           animate={{ opacity: 1, y: 0 }}
-                          className={`relative group flex items-start gap-2 px-4 -mx-4 py-0.5 hover:bg-muted/30 transition-colors ${showAvatar ? "mt-3 pt-1" : ""} ${message.status === "pending" ? "opacity-50" : ""} ${message.status === "failed" ? "bg-red-500/5" : ""}`}
+                          className={`relative group flex items-start gap-4 px-4 py-0.5 hover:bg-foreground/[0.04] transition-colors ${showAvatar ? "mt-4 pt-1" : ""} ${message.status === "pending" ? "opacity-50" : ""} ${message.status === "failed" ? "bg-red-500/5" : ""}`}
                         >
                           {/* Avatar gutter */}
                           {showAvatar ? (
-                            <UserAvatar user={{ name: message.author?.name, image: message.author?.image }} className="h-8 w-8 mt-0.5 flex-shrink-0" showStatus={false} />
+                            <UserAvatar user={{ name: message.author?.name, image: message.author?.image }} className="h-[40px] w-[40px] mt-0.5 flex-shrink-0 border-none shadow-none rounded-[8px]" showStatus={false} />
                           ) : (
-                            <div className="w-8 flex-shrink-0 flex items-center justify-center">
-                              <span className="text-[10px] text-muted-foreground/0 group-hover:text-muted-foreground/50 transition-colors tabular-nums">
+                            <div className="w-[40px] flex-shrink-0 flex items-center justify-center">
+                              <span className="text-[10px] font-medium text-muted-foreground/0 group-hover:text-muted-foreground/50 transition-colors tabular-nums">
                                 {new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}
                               </span>
                             </div>
@@ -1533,11 +1444,11 @@ export default function ChatPage() {
                           <div className="flex-1 min-w-0">
                             {/* Author + timestamp header (only for first in group) */}
                             {showAvatar && (
-                              <div className="flex items-baseline gap-1.5">
-                                <span className="font-bold text-[13px] hover:underline cursor-pointer">
+                              <div className="flex items-baseline gap-2 mb-0.5">
+                                <span className="font-bold text-[15px] text-foreground hover:underline cursor-pointer tracking-tight">
                                   {message.author.name}
                                 </span>
-                                <span className="text-[11px] text-muted-foreground/60 leading-none">
+                                <span className="text-[12px] font-medium text-muted-foreground/60 leading-none">
                                   {formatTime(message.createdAt)}
                                 </span>
                                 {isOwnMessage && (() => {
@@ -1549,27 +1460,27 @@ export default function ChatPage() {
                                   const tickStatus = message.status === "pending" ? "sending" : isRead ? "read" : "sent";
                                   return <MessageTicks status={tickStatus} />;
                                 })()}
-                                {message.isEdited && <span className="text-[10px] text-muted-foreground/50">(edited)</span>}
+                                {message.isEdited && <span className="text-[10px] text-muted-foreground/40 font-medium">(edited)</span>}
                               </div>
                             )}
 
                             {/* Reply quote */}
                             {message.parentMessage && (
-                              <div className="mb-0.5 pl-2 border-l-2 border-primary/30 py-0.5 mt-0.5">
-                                <span className="text-[11px] font-semibold text-primary/60">{message.parentMessage.author?.name}</span>
-                                <span className="text-[11px] text-muted-foreground ml-1.5 truncate">{message.parentMessage.content}</span>
+                              <div className="mb-1.5 pl-3 border-l-2 border-primary/40 py-1 mt-1 bg-muted/20 rounded-r-md">
+                                <span className="text-[11px] font-bold text-primary/70 block mb-0.5">{message.parentMessage.author?.name}</span>
+                                <span className="text-[12px] text-muted-foreground/90 line-clamp-1">{message.parentMessage.content}</span>
                               </div>
                             )}
 
                             {isEditing ? (
-                              <div className="flex items-center gap-2 my-0.5">
-                                <Input value={editContent} onChange={(e) => setEditContent(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") cancelEditing(); }} className="flex-1 h-7 text-sm" autoFocus />
-                                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={saveEdit}><Check className="w-3.5 h-3.5 text-emerald-500" /></Button>
-                                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={cancelEditing}><X className="w-3.5 h-3.5" /></Button>
+                              <div className="flex items-center gap-2 my-1">
+                                <Input value={editContent} onChange={(e) => setEditContent(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") cancelEditing(); }} className="flex-1 h-9 text-[14px] rounded-md border-border/60 focus-visible:ring-1 focus-visible:ring-foreground/20 bg-background" autoFocus />
+                                <Button size="icon" variant="ghost" className="h-9 w-9 rounded-md bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20" onClick={saveEdit}><Check className="w-4 h-4" /></Button>
+                                <Button size="icon" variant="ghost" className="h-9 w-9 rounded-md hover:bg-destructive/10 hover:text-destructive" onClick={cancelEditing}><X className="w-4 h-4" /></Button>
                               </div>
                             ) : (
                               <>
-                                <div className={`text-[13px] leading-snug break-words ${message.isDeleted ? "italic text-muted-foreground" : ""}`}>
+                                <div className={`text-[15px] leading-relaxed break-words text-foreground/90 ${message.isDeleted ? "italic text-muted-foreground/50" : ""}`}>
                                   {message.isDeleted ? message.content : (
                                     <MessageContent 
                                       content={message.content} 
@@ -1729,6 +1640,8 @@ export default function ChatPage() {
               displayName={displayName || ""}
               selectedChannelName={selectedChannel.name}
               isDirectMessage={isDirectMessage}
+              workspaceId={workspace?.id}
+              channelId={selectedChannel.id}
             />
           </div>
         ) : (
@@ -1738,13 +1651,16 @@ export default function ChatPage() {
               <h2 className="font-semibold text-lg mb-2">
                 No channel selected
               </h2>
-              <p className="text-muted-foreground text-sm">
+              <p className="text-muted-foreground text-sm mb-4">
                 Select a channel or create a new one
               </p>
+              <Button variant="outline" className="md:hidden gap-2" onClick={() => setSidebarOpen(true)}>
+                <Menu className="w-4 h-4" />
+                Browse Channels
+              </Button>
             </div>
           </div>
         )}
-      </div>
 
       {workspace && (
         <MessageSearch
@@ -1757,15 +1673,14 @@ export default function ChatPage() {
             if (el) {
               el.scrollIntoView({ behavior: "smooth", block: "center" });
               el.classList.add("bg-accent/20", "transition-colors", "duration-500");
-              setTimeout(() => {
-                el.classList.remove("bg-accent/20");
-              }, 2000);
+              setTimeout(() => el.classList.remove("bg-accent/20"), 2000);
             }
           }}
         />
       )}
+      </div>
 
-      {/* Thread Panel */}
+      {/* Thread Panel — renders as sibling on desktop */}
       <AnimatePresence>
         {activeThread && selectedChannel && (
           <motion.div
@@ -1773,7 +1688,7 @@ export default function ChatPage() {
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: "100%", opacity: 0 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
-            className="fixed inset-0 sm:absolute sm:right-0 sm:top-0 sm:bottom-0 bg-background overflow-hidden flex-shrink-0 z-[100] w-full sm:w-[400px] border-l shadow-2xl"
+            className="fixed inset-0 z-[100] lg:static lg:block lg:w-[400px] shrink-0 border-l flex flex-col overflow-hidden bg-background shadow-2xl lg:shadow-none"
           >
             <ThreadPanel
               parentMessage={activeThread}

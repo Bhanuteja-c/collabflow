@@ -255,7 +255,18 @@ export function CreateProjectModal({
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
                             channelId: channel.id,
-                            content: `🚀 **Welcome to the ${name} project!**\n\nResources are ready — let's build something great!`,
+                            content: [
+                            `🚀 **Welcome to the ${name} project!**`,
+                            description ? `\n> ${description}` : '',
+                            `\n---\n`,
+                            `**Here's everything that's been set up for you:**\n`,
+                            assets.boardId ? `📋 [**Kanban Board**](/workspace/${workspaceSlug}/kanban) — track tasks and progress` : '',
+                            assets.whiteboardId ? `\n🎨 [**Whiteboard**](/workspace/${workspaceSlug}/whiteboard/${assets.whiteboardId}) — brainstorm and sketch ideas` : '',
+                            assets.documentId ? `\n📄 [**Project Brief**](/workspace/${workspaceSlug}/editor/${assets.documentId}) — goals, specs, and notes` : '',
+                            assets.epicId ? `\n🎯 **Epic** created — group related tasks under one goal` : '',
+                            targetDate ? `\n\n📅 **Target Date:** ${new Date(targetDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}` : '',
+                            `\n\nLet's build something great! 💪`,
+                        ].filter(Boolean).join(''),
                         }),
                     });
                     updateProgress("channel", "done");

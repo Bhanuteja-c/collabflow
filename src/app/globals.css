@@ -868,3 +868,14 @@ textarea,
         scrollbar-width: none;
     }
 }
+
+/* Kanban: allow horizontal pan on scroll container, disable on drag handles */
+@media (max-width: 1024px) {
+    .kanban-scroll-container {
+        touch-action: pan-x pan-y;
+    }
+
+    .kanban-scroll-container [data-kanban-card] {
+        touch-action: none;
+    }
+}

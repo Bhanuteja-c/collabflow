@@ -5,9 +5,12 @@ const nextConfig: NextConfig = {
   // Enable standalone output for production deployment
   output: 'standalone',
 
-  // Disable image optimization for Azure
+  // Image optimization — allow remote images from any domain
   images: {
-    unoptimized: true,
+    remotePatterns: [
+      { protocol: 'https', hostname: '**' },
+      { protocol: 'http', hostname: 'localhost' },
+    ],
   },
 
   // Server configuration

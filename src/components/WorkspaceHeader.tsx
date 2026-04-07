@@ -2,10 +2,13 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { UserAvatar, UserStatus } from "@/components/ui/UserAvatar";
 import { useSession } from "next-auth/react";
-import { Menu, LogOut, Settings as SettingsIcon, User } from "lucide-react";
+import { usePathname } from "next/navigation";
+import {
+    Menu, LogOut, Settings as SettingsIcon,
+    MessageSquare, Kanban, FileText,
+} from "lucide-react";
 import { NotificationsDropdown } from "./NotificationsDropdown";
 import { CommandPalette } from "./CommandPalette";
 import {
@@ -18,7 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { signOut } from "next-auth/react";
 import Link from "next/link";
-import { getDiceBearAvatar } from "@/lib/avatar-colors";
+import { cn } from "@/lib/utils";
 
 interface WorkspaceHeaderProps {
     onMenuClick?: () => void;
@@ -26,9 +29,18 @@ interface WorkspaceHeaderProps {
     workspaceId?: string;
 }
 
+// Only the 3 most-used pages stay in the navbar
+const PRIMARY_NAV = [
+    { label: "Chat", href: "/chat", icon: MessageSquare },
+    { label: "Kanban", href: "/kanban", icon: Kanban },
+    { label: "Docs", href: "/documents", icon: FileText },
+];
+
 export function WorkspaceHeader({ onMenuClick, workspaceSlug, workspaceId }: WorkspaceHeaderProps) {
     const { data: session, update } = useSession();
     const user = session?.user;
+    const pathname = usePathname();
+    const baseUrl = `/workspace/${workspaceSlug}`;
 
     const handleStatusChange = async (status: UserStatus) => {
         try {
@@ -37,44 +49,74 @@ export function WorkspaceHeader({ onMenuClick, workspaceSlug, workspaceId }: Wor
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ status })
             });
-            // Instantly update UI without reloading the page
             await update({ status });
         } catch (e) {
             console.error("Failed to update status", e);
         }
     };
 
-    return (
-        <header className="sticky top-0 z-10 flex h-14 items-center gap-2 sm:gap-4 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-3 sm:px-4">
-            {/* Mobile Menu Button */}
-            <Button
-                variant="ghost"
-                size="icon"
-                className="lg:hidden h-9 w-9 flex-shrink-0"
-                onClick={onMenuClick}
-                aria-label="Open menu"
-            >
-                <Menu className="h-5 w-5" />
-            </Button>
+    const isNavActive = (href: string) => {
+        const fullHref = `${baseUrl}${href}`;
+        if (href === "") return pathname === baseUrl;
+        return pathname?.startsWith(fullHref) ?? false;
+    };
 
-            {/* Search / Command Palette */}
-            <div className="flex-1 flex items-center">
+    return (
+        <header className="sticky top-0 z-30 flex h-12 items-center border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-2 sm:px-3">
+            {/* Left: Hamburger (mobile only) */}
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="lg:hidden h-8 w-8 flex-shrink-0"
+                    onClick={onMenuClick}
+                    aria-label="Open menu"
+                >
+                    <Menu className="h-4 w-4" />
+                </Button>
+            </div>
+
+            {/* Center: Top 3 nav links (desktop) */}
+            <nav className="hidden lg:flex items-center gap-0.5 flex-1 justify-center">
+                {PRIMARY_NAV.map((item) => {
+                    const active = isNavActive(item.href);
+                    return (
+                        <Link
+                            key={item.label}
+                            href={`${baseUrl}${item.href}`}
+                            className={cn(
+                                "flex items-center gap-1.5 px-3 py-1.5 rounded-md",
+                                "text-[13px] font-medium transition-colors whitespace-nowrap",
+                                "hover:bg-accent hover:text-accent-foreground",
+                                active
+                                    ? "bg-accent text-accent-foreground"
+                                    : "text-muted-foreground"
+                            )}
+                        >
+                            <item.icon className="w-3.5 h-3.5" />
+                            {item.label}
+                        </Link>
+                    );
+                })}
+            </nav>
+
+            {/* Mobile: spacer */}
+            <div className="flex-1 lg:hidden" />
+
+            {/* Right: Search + Notifications + Avatar */}
+            <div className="flex items-center gap-3 lg:gap-4 flex-shrink-0 ml-auto mr-1">
                 <CommandPalette
                     workspaceSlug={workspaceSlug}
                     workspaceId={workspaceId}
                 />
-            </div>
 
-            {/* Right Actions */}
-            <div className="flex items-center gap-1 sm:gap-2">
-                {/* Notifications */}
                 <NotificationsDropdown />
 
                 {/* User Avatar */}
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full p-0">
-                            <UserAvatar user={user as any} className="h-8 w-8" />
+                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full p-0">
+                            <UserAvatar user={user as any} className="h-7 w-7" />
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-56">

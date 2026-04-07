@@ -15,7 +15,7 @@ import { format } from "date-fns";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, AreaChart, Area, Legend, RadialBarChart, RadialBar,
-} from "recharts";
+} from "@/components/analytics/Charts";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 
 // ── Types ─────────────────────────────────────────────────────────────

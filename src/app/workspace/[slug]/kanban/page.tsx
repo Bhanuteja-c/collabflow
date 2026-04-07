@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { useSession } from "next-auth/react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
@@ -62,6 +63,7 @@ import {
   User as UserIcon,
   Flag,
   Trash2,
+  Target,
 } from "lucide-react";
 import { TouchSensor } from "@dnd-kit/core";
 import { useKanbanSync } from "@/hooks/useKanbanSync";
@@ -1633,6 +1635,13 @@ export default function WorkspaceKanbanPage() {
               <List className="w-3.5 h-3.5" />
               List
             </button>
+            <Link
+              href={`/workspace/${params.slug}/epics`}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all text-muted-foreground hover:text-foreground"
+            >
+              <Target className="w-3.5 h-3.5" />
+              Epics
+            </Link>
           </div>
 
           {/* Search */}

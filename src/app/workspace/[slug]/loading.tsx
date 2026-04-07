@@ -1,66 +1,39 @@
 // Workspace Dashboard Loading Skeleton
+// Layout exactly mirrors the real dashboard to prevent CLS
 export default function WorkspaceDashboardLoading() {
     return (
-        <div className="flex-1 p-6 space-y-8 animate-pulse">
-            {/* Header skeleton */}
-            <div className="space-y-2">
-                <div className="h-8 w-72 bg-muted rounded-lg" />
-                <div className="h-4 w-48 bg-muted/60 rounded" />
-            </div>
+        <div className="min-h-full p-4 md:p-6 space-y-5 max-w-7xl mx-auto">
+            {/* Welcome Banner */}
+            <div className="h-[120px] md:h-[136px] bg-muted/40 shimmer border border-border/40 rounded-2xl mb-4" />
 
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Overview Stats — grid-cols-2 lg:grid-cols-4 */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {Array.from({ length: 4 }).map((_, i) => (
-                    <div key={i} className="rounded-xl border bg-card p-6 space-y-3">
-                        <div className="flex items-center justify-between">
-                            <div className="h-4 w-20 bg-muted rounded" />
-                            <div className="h-8 w-8 bg-muted rounded-lg" />
-                        </div>
-                        <div className="h-8 w-16 bg-muted rounded-lg" />
-                        <div className="h-3 w-24 bg-muted/60 rounded" />
-                    </div>
+                    <div key={i} className="h-[104px] bg-muted/40 shimmer border border-border/40 rounded-[20px]" />
                 ))}
             </div>
 
-            {/* Quick Actions */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {/* Quick Access — grid-cols-2 md:grid-cols-4 */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {Array.from({ length: 4 }).map((_, i) => (
-                    <div key={i} className="rounded-xl border bg-card p-4 space-y-2">
-                        <div className="h-10 w-10 bg-muted rounded-lg" />
-                        <div className="h-4 w-20 bg-muted rounded" />
-                        <div className="h-3 w-28 bg-muted/60 rounded" />
-                    </div>
+                    <div key={i} className="h-[76px] bg-muted/40 shimmer border border-border/40 rounded-[18px]" />
                 ))}
             </div>
 
-            {/* Two column layout */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Recent Documents */}
-                <div className="rounded-xl border bg-card p-6 space-y-4">
-                    <div className="h-5 w-36 bg-muted rounded" />
-                    {Array.from({ length: 4 }).map((_, i) => (
-                        <div key={i} className="flex items-center gap-3 py-2">
-                            <div className="h-9 w-9 bg-muted rounded-lg shrink-0" />
-                            <div className="flex-1 space-y-1.5">
-                                <div className="h-4 w-40 bg-muted rounded" />
-                                <div className="h-3 w-24 bg-muted/60 rounded" />
-                            </div>
-                        </div>
-                    ))}
+            {/* Main Content Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <div className="lg:col-span-8 space-y-6">
+                    {/* My Tasks */}
+                    <div className="w-full min-h-[400px] bg-muted/40 shimmer border border-border/40 rounded-[20px]" />
+                    {/* Recent Work */}
+                    <div className="w-full min-h-[180px] bg-muted/40 shimmer border border-border/40 rounded-[20px]" />
                 </div>
 
-                {/* Activity Feed */}
-                <div className="rounded-xl border bg-card p-6 space-y-4">
-                    <div className="h-5 w-28 bg-muted rounded" />
-                    {Array.from({ length: 5 }).map((_, i) => (
-                        <div key={i} className="flex items-start gap-3 py-2">
-                            <div className="h-8 w-8 bg-muted rounded-full shrink-0" />
-                            <div className="flex-1 space-y-1.5">
-                                <div className="h-3.5 w-52 bg-muted rounded" />
-                                <div className="h-3 w-20 bg-muted/60 rounded" />
-                            </div>
-                        </div>
-                    ))}
+                <div className="lg:col-span-4 space-y-5">
+                    {/* Activity Feed */}
+                    <div className="w-full min-h-[280px] bg-muted/40 shimmer border border-border/40 rounded-[20px]" />
+                    {/* Online Team */}
+                    <div className="w-full min-h-[200px] bg-muted/40 shimmer border border-border/40 rounded-[20px]" />
                 </div>
             </div>
         </div>

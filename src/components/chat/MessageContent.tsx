@@ -57,6 +57,30 @@ export function MessageContent({ content, workspaceMembers, onMentionClick, onCa
     );
   }
 
+  // Check if this is a video call invitation
+  if (content.includes("#huddle:")) {
+    const match = content.match(/#huddle:([a-zA-Z0-9_-]+)/);
+    if (match) {
+      const roomId = match[1];
+      const text = content.replace(match[0], "").trim();
+      return (
+        <div className="flex flex-col gap-2 mt-1">
+          <span className="text-[13px]">{text}</span>
+          <Button 
+            variant="default" 
+            className="w-fit bg-emerald-600 hover:bg-emerald-700 text-white gap-2 h-9 shadow-sm"
+            asChild
+          >
+            <Link href={`/workspace/${params?.slug}/video/${roomId}`}>
+              <Video className="w-4 h-4" />
+              Join Call
+            </Link>
+          </Button>
+        </div>
+      );
+    }
+  }
+
   // Use the TipTap ReadOnly renderer as explicitly verified for parsing fallback HTML strings
   const editor = useEditor({
     extensions: [StarterKit],

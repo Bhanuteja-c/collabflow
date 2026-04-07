@@ -130,7 +130,7 @@ export function ActivityFeed() {
 
     if (loading) {
         return (
-            <div className="bg-card rounded-xl border p-6">
+            <div className="rounded-[20px] border border-border/40 bg-card/60 backdrop-blur-md shadow-sm p-6 overflow-hidden">
                 <div className="flex items-center justify-center py-8">
                     <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
                 </div>
@@ -139,21 +139,23 @@ export function ActivityFeed() {
     }
 
     return (
-        <div className="bg-card rounded-xl border overflow-hidden">
+        <div className="rounded-[20px] border border-border/40 bg-card/60 backdrop-blur-md shadow-sm overflow-hidden flex flex-col">
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/30">
-                <div className="flex items-center gap-2">
-                    <ActivityIcon className="w-4 h-4 text-primary" />
-                    <h3 className="font-semibold text-sm">Activity Feed</h3>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border/40 bg-muted/20">
+                <div className="flex items-center gap-2.5">
+                    <div className="p-1.5 rounded-lg bg-primary/10">
+                        <ActivityIcon className="w-4 h-4 text-primary" />
+                    </div>
+                    <h3 className="font-bold text-[15px] tracking-tight text-foreground/90">Activity Feed</h3>
                 </div>
                 <Button
                     variant="ghost"
-                    size="sm"
+                    size="icon"
                     onClick={() => fetchActivities(true)}
                     disabled={refreshing}
-                    className="h-7 w-7 p-0"
+                    className="h-8 w-8 rounded-md hover:bg-muted"
                 >
-                    <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+                    <RefreshCw className={`w-4 h-4 text-muted-foreground/70 ${refreshing ? 'animate-spin text-primary' : ''}`} />
                 </Button>
             </div>
 
@@ -166,65 +168,69 @@ export function ActivityFeed() {
                 )}
 
                 {!error && activities.length === 0 && (
-                    <div className="p-8 text-center">
-                        <ActivityIcon className="w-10 h-10 mx-auto text-muted-foreground/50 mb-2" />
-                        <p className="text-sm text-muted-foreground">No activity yet</p>
-                        <p className="text-xs text-muted-foreground/70 mt-1">
+                    <div className="p-8 text-center flex flex-col items-center justify-center h-full">
+                        <div className="w-12 h-12 rounded-full bg-muted/50 flex items-center justify-center mb-3">
+                            <ActivityIcon className="w-6 h-6 text-muted-foreground/40" />
+                        </div>
+                        <p className="text-[14px] font-medium text-foreground/70 tracking-tight">No activity yet</p>
+                        <p className="text-xs text-muted-foreground/60 mt-0.5">
                             Actions will appear here
                         </p>
                     </div>
                 )}
 
                 <AnimatePresence mode="popLayout">
-                    {activities.map((activity, index) => {
-                        const iconInfo = activityIcons[activity.type] || {
-                            icon: <ActivityIcon className="w-4 h-4" />,
-                            color: "text-muted-foreground bg-muted"
-                        };
-                        const entityLink = getEntityLink(workspaceSlug, activity);
+                    <div className="divide-y divide-border/30">
+                        {activities.map((activity, index) => {
+                            const iconInfo = activityIcons[activity.type] || {
+                                icon: <ActivityIcon className="w-4 h-4" />,
+                                color: "text-muted-foreground bg-muted"
+                            };
+                            const entityLink = getEntityLink(workspaceSlug, activity);
 
-                        return (
-                            <motion.div
-                                key={activity.id}
-                                initial={{ opacity: 0, y: -10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0 }}
-                                transition={{ delay: index * 0.03 }}
-                                className="flex items-start gap-3 px-4 py-3 hover:bg-muted/30 transition-colors border-b last:border-0"
-                            >
-                                {/* User Avatar */}
-                                <UserAvatar user={activity.user} className="h-8 w-8" showStatus={false} />
+                            return (
+                                <motion.div
+                                    key={activity.id}
+                                    initial={{ opacity: 0, y: 5 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0 }}
+                                    transition={{ delay: index * 0.03 }}
+                                    className="flex items-start gap-3.5 px-5 py-3.5 hover:bg-muted/30 transition-colors group"
+                                >
+                                    {/* User Avatar */}
+                                    <UserAvatar user={activity.user} className="h-9 w-9 border border-border/50 shadow-sm" showStatus={false} />
 
-                                {/* Content */}
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2">
-                                        <span className="font-medium text-sm truncate">
-                                            {activity.user.name || "Unknown"}
-                                        </span>
-                                        <span className={`p-1 rounded-md ${iconInfo.color}`}>
-                                            {iconInfo.icon}
-                                        </span>
+                                    {/* Content */}
+                                    <div className="flex-1 min-w-0 pt-0.5">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className="font-semibold text-[13px] tracking-tight truncate text-foreground/90">
+                                                {activity.user.name || "Unknown"}
+                                            </span>
+                                            <span className={`p-1 rounded-md shadow-sm border border-black/5 dark:border-white/5 ${iconInfo.color}`}>
+                                                {iconInfo.icon}
+                                            </span>
+                                        </div>
+                                        <p className="text-[13px] text-muted-foreground/90 leading-snug line-clamp-2 pr-4">
+                                            {activity.action}
+                                        </p>
+                                        {entityLink && (
+                                            <Link
+                                                href={entityLink}
+                                                className="text-[11px] font-medium text-primary/80 hover:text-primary transition-colors hover:underline mt-1.5 inline-flex items-center gap-1 group/link"
+                                            >
+                                                View <ArrowRight className="w-3 h-3 group-hover/link:translate-x-0.5 transition-transform" />
+                                            </Link>
+                                        )}
                                     </div>
-                                    <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">
-                                        {activity.action}
-                                    </p>
-                                    {entityLink && (
-                                        <Link
-                                            href={entityLink}
-                                            className="text-xs text-primary hover:underline mt-1 inline-block"
-                                        >
-                                            View →
-                                        </Link>
-                                    )}
-                                </div>
 
-                                {/* Time */}
-                                <span className="text-xs text-muted-foreground whitespace-nowrap">
-                                    {formatTimeAgo(activity.createdAt)}
-                                </span>
-                            </motion.div>
-                        );
-                    })}
+                                    {/* Time */}
+                                    <span className="text-[11px] font-medium text-muted-foreground/60 whitespace-nowrap pt-1">
+                                        {formatTimeAgo(activity.createdAt)}
+                                    </span>
+                                </motion.div>
+                            );
+                        })}
+                    </div>
                 </AnimatePresence>
             </ScrollArea>
         </div>
