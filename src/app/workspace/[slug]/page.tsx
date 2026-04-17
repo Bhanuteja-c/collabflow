@@ -202,45 +202,6 @@ export default function WorkspaceDashboard({ params }: WorkspaceDashboardProps) 
         },
     ];
 
-    // Quick access shortcuts
-    const quickLinks = [
-        {
-            label: "Kanban Board",
-            description: "Manage tasks & sprints",
-            href: `/workspace/${slug}/kanban`,
-            icon: Kanban,
-            color: "text-primary",
-            bgColor: "bg-primary/10",
-            hoverBg: "hover:bg-primary/5 hover:border-primary/30",
-        },
-        {
-            label: "Chat",
-            description: "Team messaging",
-            href: `/workspace/${slug}/chat`,
-            icon: MessageSquare,
-            color: "text-emerald-500",
-            bgColor: "bg-emerald-500/10",
-            hoverBg: "hover:bg-emerald-500/5 hover:border-emerald-500/30",
-        },
-        {
-            label: "Documents",
-            description: "Collaborate on docs",
-            href: `/workspace/${slug}/documents`,
-            icon: FileText,
-            color: "text-blue-500",
-            bgColor: "bg-blue-500/10",
-            hoverBg: "hover:bg-blue-500/5 hover:border-blue-500/30",
-        },
-        {
-            label: "Whiteboard",
-            description: "Visual brainstorming",
-            href: `/workspace/${slug}/whiteboard`,
-            icon: PenTool,
-            color: "text-orange-500",
-            bgColor: "bg-orange-500/10",
-            hoverBg: "hover:bg-orange-500/5 hover:border-orange-500/30",
-        },
-    ];
 
     if (loading) {
         return (
@@ -265,12 +226,7 @@ export default function WorkspaceDashboard({ params }: WorkspaceDashboardProps) 
                     ))}
                 </div>
 
-                {/* Quick Access Section — matches grid-cols-2 md:grid-cols-4 gap-4 */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {[...Array(4)].map((_, i) => (
-                        <div key={i} className="h-[76px] bg-muted/40 shimmer border border-border/40 rounded-[18px]" />
-                    ))}
-                </div>
+
 
                 {/* Two column layout: My Tasks | Recent Work/Activity Feed */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -425,32 +381,6 @@ export default function WorkspaceDashboard({ params }: WorkspaceDashboardProps) 
             ))}
         </div>
 
-        {/* ── Quick Access Grid ── */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {quickLinks.map((link, i) => (
-                <div
-                    key={link.label}
-                >
-                    <Link href={link.href} className="block h-full">
-                        <div className={`relative overflow-hidden rounded-[18px] border border-border/40 bg-card/50 backdrop-blur-sm p-4 h-full transition-all duration-300 cursor-pointer group ${link.hoverBg} hover:shadow-md`}>
-                            <div className="flex flex-col gap-3">
-                                <div className="flex items-center justify-between">
-                                    <div className={`p-2 rounded-xl ${link.bgColor} ring-1 ring-black/5 dark:ring-white/5 transition-transform duration-300 group-hover:scale-110`}>
-                                        <link.icon className={`w-4 h-4 ${link.color}`} />
-                                    </div>
-                                    <ArrowRight className="w-4 h-4 text-muted-foreground/30 group-hover:text-foreground/70 transition-all duration-300 group-hover:translate-x-1" />
-                                </div>
-                                <div>
-                                    <p className="text-[15px] font-semibold tracking-tight text-foreground/90">{link.label}</p>
-                                    <p className="text-[12px] text-muted-foreground/70 mt-0.5 line-clamp-1 hidden sm:block">{link.description}</p>
-                                </div>
-                            </div>
-                        </div>
-                    </Link>
-                </div>
-
-            ))}
-        </div>
 
             {/* ── Onboarding (conditional) ── */}
             {workspace && workspace.onboardingCompleted === false && (workspace.userRole === "owner" || workspace.userRole === "admin") && (

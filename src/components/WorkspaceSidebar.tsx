@@ -36,6 +36,12 @@ import {
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { useSidebarUnread } from "@/hooks/useSidebarUnread";
 import { cn } from "@/lib/utils";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { LucideIcon } from "lucide-react";
 
 // ─── Sidebar nav groups ───────────────────────────────────────────────
@@ -391,18 +397,34 @@ function SidebarContent({ workspaceSlug, onItemClick, showNav }: {
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50 mb-1.5 px-1">
                         Online — {onlineUsers.length}
                     </p>
-                    <div className="flex flex-wrap gap-1 px-1">
-                        {onlineUsers.slice(0, 8).map((u) => (
-                            <div key={u.socketId} title={u.user.name || ""} className="flex-shrink-0">
-                                <UserAvatar user={{ ...u.user, status: (u.user as any).status || "AVAILABLE" }} className="h-6 w-6" />
-                            </div>
-                        ))}
-                        {onlineUsers.length > 8 && (
-                            <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-[9px] text-muted-foreground font-medium">
-                                +{onlineUsers.length - 8}
-                            </div>
-                        )}
-                    </div>
+                    <TooltipProvider delayDuration={150}>
+                        <div className="flex flex-wrap gap-1 px-1">
+                            {onlineUsers.slice(0, 8).map((u) => (
+                                <Tooltip key={u.socketId}>
+                                    <TooltipTrigger asChild>
+                                        <div className="flex-shrink-0 cursor-pointer">
+                                            <UserAvatar user={{ ...u.user, status: (u.user as any).status || "AVAILABLE" }} className="h-6 w-6" />
+                                        </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top" className="text-xs font-medium px-2.5 py-1">
+                                        {u.user.name || "Anonymous"}
+                                    </TooltipContent>
+                                </Tooltip>
+                            ))}
+                            {onlineUsers.length > 8 && (
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-[9px] text-muted-foreground font-medium cursor-pointer">
+                                            +{onlineUsers.length - 8}
+                                        </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top" className="text-xs">
+                                        {onlineUsers.length - 8} more online
+                                    </TooltipContent>
+                                </Tooltip>
+                            )}
+                        </div>
+                    </TooltipProvider>
                 </div>
             )}
 

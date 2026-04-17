@@ -53,8 +53,8 @@ export async function GET(
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
 
-        // Get board for this workspace
-        const board = await prisma.board.findFirst({
+        // Get ALL boards for this workspace
+        const boards = await prisma.board.findMany({
             where: { workspaceId: workspace.id },
             include: {
                 columns: {
@@ -69,7 +69,7 @@ export async function GET(
             },
         });
 
-        if (!board) {
+        if (boards.length === 0) {
             return NextResponse.json({
                 summary: { total: 0, completed: 0, inProgress: 0, totalPoints: 0, completedPoints: 0, totalTimeLogged: 0 },
                 columnDistribution: [],
@@ -81,15 +81,14 @@ export async function GET(
             });
         }
 
-        // Get all cards for this board (non-backlog)
+        const boardIds = boards.map((b) => b.id);
+        const allColumns = boards.flatMap((b) => b.columns);
+
+        // Get all cards across ALL boards (no date filter — summary must show current state)
         const cards = await prisma.card.findMany({
             where: { 
-                boardId: board.id, 
+                boardId: { in: boardIds }, 
                 isBacklog: false,
-                updatedAt: {
-                    gte: dateStart,
-                    lte: dateEnd
-                }
             },
             select: {
                 id: true,
@@ -113,7 +112,7 @@ export async function GET(
             },
         });
 
-        // Get time logs for the board's cards
+        // Get time logs for all cards (date-filtered for period metrics)
         const cardIds = cards.map((c) => c.id);
         const timeLogs = await prisma.timeLog.findMany({
             where: { 
@@ -130,7 +129,7 @@ export async function GET(
             },
         });
 
-        // --- Summary ---
+        // --- Summary (current state — no date filter) ---
         const completed = cards.filter((c) => c.status === "completed").length;
         const inProgress = cards.filter((c) => c.status === "active").length;
         const totalPoints = cards.reduce((sum, c) => sum + (c.storyPoints || 0), 0);
@@ -139,18 +138,30 @@ export async function GET(
             .reduce((sum, c) => sum + (c.storyPoints || 0), 0);
         const totalTimeLogged = timeLogs.reduce((sum, t) => sum + t.duration, 0);
 
-        // --- Column Distribution ---
-        const columnDistribution = board.columns.map((col) => {
+
+        // --- Column Distribution (merged by name across all boards) ---
+        const columnMap = new Map<string, { title: string; category: string; color: string; count: number; points: number }>();
+        for (const col of allColumns) {
+            const key = col.title.toLowerCase().trim();
             const colCards = cards.filter((c) => c.columnId === col.id);
-            return {
-                columnId: col.id,
-                title: col.title,
-                category: col.category || "todo",
-                color: col.color || "#6366f1",
-                count: colCards.length,
-                points: colCards.reduce((sum, c) => sum + (c.storyPoints || 0), 0),
-            };
-        });
+            const cardCount = colCards.length;
+            const cardPoints = colCards.reduce((sum, c) => sum + (c.storyPoints || 0), 0);
+            const existing = columnMap.get(key);
+            if (existing) {
+                existing.count += cardCount;
+                existing.points += cardPoints;
+            } else {
+                columnMap.set(key, {
+                    title: col.title,
+                    category: (col as any).category || "todo",
+                    color: col.color || "#6366f1",
+                    count: cardCount,
+                    points: cardPoints,
+                });
+            }
+        }
+        const columnDistribution = Array.from(columnMap.values());
+
 
         // --- Priority Distribution ---
         const priorities = ["high", "medium", "low"];

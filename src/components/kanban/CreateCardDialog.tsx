@@ -25,6 +25,8 @@ import {
     User,
     Tag,
     Loader2,
+    Target,
+    AlertCircle,
 } from "lucide-react";
 
 interface UserType {
@@ -245,52 +247,6 @@ export default function CreateCardDialog({
                             </DropdownMenuContent>
                         </DropdownMenu>
 
-                        {/* Epic */}
-                        {epics && epics.length > 0 && (
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button variant="outline" size="sm" className="gap-1.5 h-8 rounded-lg text-xs">
-                                        {epicId ? (
-                                            <>
-                                                <span 
-                                                    className="w-2.5 h-2.5 rounded-full" 
-                                                    style={{ backgroundColor: epics.find(e => e.id === epicId)?.color }} 
-                                                />
-                                                <span className="max-w-24 truncate">
-                                                    {epics.find(e => e.id === epicId)?.title}
-                                                </span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <div className="w-2.5 h-2.5 rounded-full border border-current" />
-                                                No Epic
-                                            </>
-                                        )}
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent>
-                                    <DropdownMenuItem onClick={() => setEpicId("")}>
-                                        <div className="w-2.5 h-2.5 rounded-full border border-current mr-2" />
-                                        None
-                                    </DropdownMenuItem>
-                                    {epics.map((epic) => (
-                                        <DropdownMenuItem
-                                            key={epic.id}
-                                            onClick={() => setEpicId(epic.id)}
-                                            className="gap-2"
-                                        >
-                                            <span 
-                                                className="w-2.5 h-2.5 rounded-full" 
-                                                style={{ backgroundColor: epic.color }} 
-                                            />
-                                            {epic.title}
-                                            {epicId === epic.id && <span className="ml-auto">✓</span>}
-                                        </DropdownMenuItem>
-                                    ))}
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        )}
-
                         {/* Due Date */}
                         <div className="inline-flex items-center rounded-lg border border-border h-8 px-2 text-xs">
                             <Calendar className="w-3.5 h-3.5 mr-1.5 text-muted-foreground" />
@@ -301,6 +257,80 @@ export default function CreateCardDialog({
                                 className="border-0 bg-transparent p-0 h-auto text-xs w-[110px] focus-visible:ring-0 shadow-none"
                             />
                         </div>
+                    </div>
+
+                    {/* Epic — Always visible and prominent */}
+                    <div>
+                        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                            <Target className="w-3.5 h-3.5 text-primary" />
+                            Epic
+                            <span className="text-[10px] text-muted-foreground/70 font-normal normal-case ml-0.5">(recommended)</span>
+                        </label>
+                        {epics && epics.length > 0 ? (
+                            <div className="space-y-1.5">
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className={`w-full justify-start gap-2 h-9 rounded-lg text-xs ${
+                                                epicId
+                                                    ? "border-primary/30 bg-primary/5"
+                                                    : "border-dashed border-border/80"
+                                            }`}
+                                        >
+                                            {epicId ? (
+                                                <>
+                                                    <span
+                                                        className="w-2.5 h-2.5 rounded-full"
+                                                        style={{ backgroundColor: epics.find(e => e.id === epicId)?.color }}
+                                                    />
+                                                    <span className="truncate">
+                                                        {epics.find(e => e.id === epicId)?.title}
+                                                    </span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <div className="w-2.5 h-2.5 rounded-full border border-dashed border-muted-foreground/50" />
+                                                    <span className="text-muted-foreground">Select an epic...</span>
+                                                </>
+                                            )}
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
+                                        <DropdownMenuItem onClick={() => setEpicId("")}>
+                                            <div className="w-2.5 h-2.5 rounded-full border border-current mr-2" />
+                                            None
+                                        </DropdownMenuItem>
+                                        {epics.map((epic) => (
+                                            <DropdownMenuItem
+                                                key={epic.id}
+                                                onClick={() => setEpicId(epic.id)}
+                                                className="gap-2"
+                                            >
+                                                <span
+                                                    className="w-2.5 h-2.5 rounded-full"
+                                                    style={{ backgroundColor: epic.color }}
+                                                />
+                                                {epic.title}
+                                                {epicId === epic.id && <span className="ml-auto">✓</span>}
+                                            </DropdownMenuItem>
+                                        ))}
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                                {!epicId && (
+                                    <p className="text-[11px] text-amber-500/80 flex items-center gap-1 pl-0.5">
+                                        <AlertCircle className="w-3 h-3" />
+                                        Linking to an epic helps track progress
+                                    </p>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="flex items-center gap-2 p-2.5 rounded-lg bg-muted/30 border border-dashed border-muted-foreground/30">
+                                <Target className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                                <span className="text-xs text-muted-foreground">No epics yet — create one from the Epics page to organize tasks.</span>
+                            </div>
+                        )}
                     </div>
 
                     {/* Labels */}

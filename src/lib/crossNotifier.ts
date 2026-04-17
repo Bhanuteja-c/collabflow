@@ -59,7 +59,7 @@ export const CrossNotifier = {
             await postSystemMessage(
                 channel.id,
                 opts.userId,
-                `✅ Completed task **"${opts.cardTitle}"** on board *${opts.boardName}*`
+                `✅ Completed task <strong>"${opts.cardTitle}"</strong> on board <em>${opts.boardName}</em>`
             );
         } catch (e) {
             console.error("[CrossNotifier] cardCompleted error:", e);
@@ -79,7 +79,7 @@ export const CrossNotifier = {
             await postSystemMessage(
                 channel.id,
                 opts.userId,
-                `📋 Assigned **"${opts.cardTitle}"** to **${opts.assigneeName}**`
+                `📋 Assigned <strong>"${opts.cardTitle}"</strong> to <strong>${opts.assigneeName}</strong>`
             );
         } catch (e) {
             console.error("[CrossNotifier] cardAssigned error:", e);
@@ -98,7 +98,7 @@ export const CrossNotifier = {
             await postSystemMessage(
                 channel.id,
                 opts.userId,
-                `📊 Created a new Kanban board: **"${opts.boardName}"**`
+                `📊 Created a new Kanban board: <strong>"${opts.boardName}"</strong>`
             );
         } catch (e) {
             console.error("[CrossNotifier] boardCreated error:", e);

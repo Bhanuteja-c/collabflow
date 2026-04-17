@@ -457,6 +457,10 @@ const KanbanCard = memo(KanbanCardInner, (prev, next) =>
   prev.card.order === next.card.order &&
   prev.card.priority === next.card.priority &&
   prev.card.assigneeId === next.card.assigneeId &&
+  prev.card.assignee?.id === next.card.assignee?.id &&
+  prev.card.status === next.card.status &&
+  prev.card.dueDate === next.card.dueDate &&
+  prev.card.epic?.id === next.card.epic?.id &&
   prev.isDragging === next.isDragging &&
   prev.isSelected === next.isSelected
 );

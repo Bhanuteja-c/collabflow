@@ -26,7 +26,7 @@ import {
 import {
     Calendar,
     Flag,
-    User,
+    User as UserIcon,
     MessageSquare,
     CheckSquare,
     Plus,
@@ -612,7 +612,16 @@ export default function CardDetailModal({
 
     const handleAssigneeChange = (userId: string) => {
         setAssigneeId(userId);
+        // Pass both assigneeId and the full assignee object so the board state
+        // has the name/image needed for KanbanCard to render the avatar
+        const assigneeUser = userId ? workspaceMembers.find(m => m.id === userId) : null;
         saveField("assigneeId", userId || null);
+        if (!isSubtaskLevel) {
+            onUpdate(currentCard!.id, {
+                assigneeId: userId || null,
+                assignee: assigneeUser ? { id: assigneeUser.id, name: assigneeUser.name, image: assigneeUser.image } : null,
+            });
+        }
     };
 
     const handleStartDateChange = (value: string) => {
@@ -801,8 +810,8 @@ export default function CardDetailModal({
     const totalItems = checklist.length;
     const checklistProgress = totalItems > 0 ? (completedItems / totalItems) * 100 : 0;
 
-    const isOverdue = currentCard?.dueDate != null && isBefore(new Date(currentCard.dueDate), new Date()) && status !== "completed";
-    const isDueSoon = currentCard?.dueDate != null && !isOverdue && isBefore(new Date(currentCard.dueDate), addDays(new Date(), 1)) && status !== "completed";
+    const isOverdue = dueDate != null && dueDate !== "" && isBefore(new Date(dueDate), new Date()) && status !== "completed";
+    const isDueSoon = dueDate != null && dueDate !== "" && !isOverdue && isBefore(new Date(dueDate), addDays(new Date(), 1)) && status !== "completed";
 
     const selectedAssignee = workspaceMembers.find(m => m.id === assigneeId);
 
@@ -901,7 +910,7 @@ export default function CardDetailModal({
                                 <Calendar className="w-3.5 h-3.5 mr-1.5 text-muted-foreground" />
                                 <Input
                                     type="date"
-                                    value={formatDateForInput(currentCard.dueDate ?? null)}
+                                    value={formatDateForInput(dueDate ?? null)}
                                     onChange={(e) => handleDueDateChange(e.target.value)}
                                     className="border-0 bg-transparent p-0 h-auto text-xs w-[110px] focus-visible:ring-0 shadow-none"
                                 />
@@ -918,7 +927,7 @@ export default function CardDetailModal({
                             <Clock className="w-3.5 h-3.5 mr-1.5 text-muted-foreground" />
                             <Input
                                 type="date"
-                                value={formatDateForInput(currentCard.startDate ?? null)}
+                                value={formatDateForInput(startDate ?? null)}
                                 onChange={(e) => handleStartDateChange(e.target.value)}
                                 className="border-0 bg-transparent p-0 h-auto text-xs w-[110px] focus-visible:ring-0 shadow-none"
                                 title="Start date"
@@ -936,7 +945,7 @@ export default function CardDetailModal({
                                         </>
                                     ) : (
                                         <>
-                                            <User className="w-3.5 h-3.5" />
+                                            <UserIcon className="w-3.5 h-3.5" />
                                             Assign
                                         </>
                                     )}
@@ -944,7 +953,7 @@ export default function CardDetailModal({
                             </DropdownMenuTrigger>
                             <DropdownMenuContent>
                                 <DropdownMenuItem onClick={() => handleAssigneeChange("")}>
-                                    <User className="w-4 h-4 mr-2 text-muted-foreground" />
+                                    <UserIcon className="w-4 h-4 mr-2 text-muted-foreground" />
                                     Unassigned
                                 </DropdownMenuItem>
                                 {workspaceMembers.map((member) => (

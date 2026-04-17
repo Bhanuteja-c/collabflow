@@ -148,6 +148,13 @@ export async function PUT(
                         workspaceId,
                         link: `/workspace/${boardSlug}/kanban`,
                     });
+                    // Chat notification in project channel
+                    CrossNotifier.cardAssigned({
+                        workspaceId,
+                        userId,
+                        cardTitle: card.title,
+                        assigneeName: assignee.name || "someone",
+                    });
                 }
             }
 
