@@ -3,7 +3,7 @@
 
 import { LazyMotion, domAnimation, m } from "framer-motion";
 import Link from "next/link";
-import { ArrowRight, Github, Sparkles } from "lucide-react";
+import { ArrowRight, Github, Sparkles, Zap, Globe, Shield } from "lucide-react";
 import { useSession } from "next-auth/react";
 import Logo from "@/components/ui/Logo";
 
@@ -58,39 +58,56 @@ export default function HeroSection() {
                 }}
             />
 
+            {/* Floating Orbs */}
+            <m.div
+                animate={{ y: [-20, 20, -20], x: [-10, 10, -10] }}
+                transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+                className="absolute top-1/4 left-1/4 w-64 h-64 rounded-full opacity-10"
+                style={{ background: "radial-gradient(circle, hsl(260 80% 60%) 0%, transparent 70%)" }}
+                aria-hidden="true"
+            />
+            <m.div
+                animate={{ y: [15, -15, 15], x: [8, -8, 8] }}
+                transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
+                className="absolute bottom-1/3 right-1/4 w-48 h-48 rounded-full opacity-10"
+                style={{ background: "radial-gradient(circle, hsl(190 80% 50%) 0%, transparent 70%)" }}
+                aria-hidden="true"
+            />
+
             <m.div
                 variants={containerVariants}
                 initial="hidden"
                 animate="visible"
-                className="relative z-10 max-w-5xl mx-auto px-6 py-32 text-center"
+                className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 py-24 sm:py-32 text-center"
             >
                 {/* Badge */}
-                <m.div variants={itemVariants} className="mb-8">
+                <m.div variants={itemVariants} className="mb-6 sm:mb-8">
                     <Link
-                        href="https://github.com"
+                        href="https://github.com/Bhanuteja-c/collabflow"
                         target="_blank"
-                        className="inline-flex items-center gap-3 px-4 py-2 rounded-full glass shimmer text-sm font-medium text-foreground/80 hover:text-foreground transition-colors group"
+                        className="inline-flex flex-col sm:flex-row items-center gap-2 sm:gap-3 px-4 py-2 rounded-full glass shimmer text-xs sm:text-sm font-medium text-foreground/80 hover:text-foreground transition-colors group"
                     >
                         <span className="flex items-center gap-2">
-                            <Sparkles className="w-4 h-4 text-accent" />
+                            <Sparkles className="w-4 h-4 text-accent flex-shrink-0" />
                             <span>Introducing CollabFlow v1.0</span>
                         </span>
                         <span className="flex items-center gap-1 text-accent group-hover:translate-x-0.5 transition-transform">
+                            <span className="hidden sm:inline">• </span>
                             <span>Star on GitHub</span>
-                            <Github className="w-4 h-4" />
+                            <Github className="w-3 h-3 sm:w-4 sm:h-4" />
                         </span>
                     </Link>
                 </m.div>
 
                 {/* Logo */}
-                <m.div variants={itemVariants} className="mb-8 flex justify-center">
+                <m.div variants={itemVariants} className="mb-6 sm:mb-8 flex justify-center scale-90 sm:scale-100">
                     <Logo size="lg" showText={false} />
                 </m.div>
 
                 {/* Heading */}
                 <m.h1
                     variants={itemVariants}
-                    className="text-5xl sm:text-6xl md:text-7xl font-bold tracking-tight mb-6"
+                    className="text-4xl sm:text-5xl md:text-7xl font-bold tracking-tight mb-6"
                 >
                     <span className="block">The modern way to</span>
                     <span className="gradient-text">collaborate</span>
@@ -99,7 +116,7 @@ export default function HeroSection() {
                 {/* Subheading */}
                 <m.p
                     variants={itemVariants}
-                    className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-12 leading-relaxed"
+                    className="text-base sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10 sm:mb-12 leading-relaxed px-4 sm:px-0"
                 >
                     Documents, projects, and conversations—unified in one beautiful workspace.
                     Built for teams who ship fast.
@@ -108,28 +125,28 @@ export default function HeroSection() {
                 {/* CTA Buttons */}
                 <m.div
                     variants={itemVariants}
-                    className="flex flex-col sm:flex-row gap-4 justify-center mb-16"
+                    className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center mb-12 sm:mb-16 w-full sm:w-auto px-4 sm:px-0"
                 >
                     {isLoggedIn ? (
                         <Link
                             href="/dashboard"
-                            className="btn-glow px-8 py-4 rounded-xl text-base inline-flex items-center justify-center gap-2"
+                            className="btn-glow w-full sm:w-auto px-8 py-3.5 sm:py-4 rounded-xl text-sm sm:text-base inline-flex items-center justify-center gap-2"
                         >
-                            Go to Dashboard
-                            <ArrowRight className="w-5 h-5" />
+                            Open Workspace
+                            <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
                         </Link>
                     ) : (
                         <>
                             <Link
                                 href="/sign-in"
-                                className="btn-glow px-8 py-4 rounded-xl text-base inline-flex items-center justify-center gap-2"
+                                className="btn-glow w-full sm:w-auto px-8 py-3.5 sm:py-4 rounded-xl text-sm sm:text-base inline-flex items-center justify-center gap-2"
                             >
                                 Start for free
-                                <ArrowRight className="w-5 h-5" />
+                                <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
                             </Link>
                             <Link
                                 href="#features"
-                                className="btn-secondary px-8 py-4 rounded-xl text-base inline-flex items-center justify-center gap-2"
+                                className="btn-secondary w-full sm:w-auto px-8 py-3.5 sm:py-4 rounded-xl text-sm sm:text-base inline-flex items-center justify-center gap-2"
                             >
                                 See how it works
                             </Link>
@@ -137,50 +154,36 @@ export default function HeroSection() {
                     )}
                 </m.div>
 
-                {/* Social Proof */}
+                {/* Tech Badges — Honest social proof */}
                 <m.div
                     variants={itemVariants}
-                    className="flex flex-col sm:flex-row items-center justify-center gap-6"
+                    className="flex flex-wrap items-center justify-center gap-3"
                 >
-                    {/* Avatars */}
-                    <div className="flex items-center">
-                        <div className="flex -space-x-3">
-                            {["bg-blue-500", "bg-emerald-500", "bg-violet-500", "bg-amber-500", "bg-rose-500"].map((color, i) => (
-                                <div
-                                    key={i}
-                                    className={`w-10 h-10 rounded-full ${color} border-[3px] border-background flex items-center justify-center text-white text-xs font-semibold`}
-                                >
-                                    {String.fromCharCode(65 + i)}
-                                </div>
-                            ))}
+                    {[
+                        { icon: Zap, label: "Real-time Sync", color: "text-amber-400" },
+                        { icon: Globe, label: "Open Source", color: "text-emerald-400" },
+                        { icon: Shield, label: "Self-Hostable", color: "text-blue-400" },
+                    ].map((badge) => (
+                        <div
+                            key={badge.label}
+                            className="flex items-center gap-2 px-4 py-2 rounded-full border border-border/50 bg-card/30 backdrop-blur-sm text-sm text-muted-foreground"
+                        >
+                            <badge.icon className={`w-4 h-4 ${badge.color}`} />
+                            {badge.label}
                         </div>
-                        <div className="ml-4 text-left">
-                            <div className="flex items-center gap-1 text-amber-500">
-                                {[1, 2, 3, 4, 5].map((i) => (
-                                    <svg key={i} className="w-4 h-4 fill-current" viewBox="0 0 20 20">
-                                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                                    </svg>
-                                ))}
-                            </div>
-                            <p className="text-sm text-muted-foreground">
-                                Loved by <span className="text-foreground font-medium">1,000+</span> teams
-                            </p>
-                        </div>
-                    </div>
+                    ))}
+                </m.div>
 
-                    <div className="hidden sm:block w-px h-12 bg-border" />
-
-                    {/* Stats */}
-                    <div className="flex gap-8 text-center">
-                        <div>
-                            <div className="text-2xl font-bold">99.9%</div>
-                            <div className="text-sm text-muted-foreground">Uptime</div>
-                        </div>
-                        <div>
-                            <div className="text-2xl font-bold">&lt;50ms</div>
-                            <div className="text-sm text-muted-foreground">Sync latency</div>
-                        </div>
-                    </div>
+                {/* Built With Strip */}
+                <m.div variants={itemVariants} className="mt-6 flex items-center justify-center gap-2 text-xs text-muted-foreground/50">
+                    <span>Built with</span>
+                    <span className="font-semibold text-muted-foreground/70">Next.js 15</span>
+                    <span>•</span>
+                    <span className="font-semibold text-muted-foreground/70">TypeScript</span>
+                    <span>•</span>
+                    <span className="font-semibold text-muted-foreground/70">Socket.io</span>
+                    <span>•</span>
+                    <span className="font-semibold text-muted-foreground/70">Prisma</span>
                 </m.div>
             </m.div>
 

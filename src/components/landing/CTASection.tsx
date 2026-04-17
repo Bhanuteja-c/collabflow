@@ -3,7 +3,7 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight, Sparkles, Github } from "lucide-react";
 import { useSession } from "next-auth/react";
 
 export default function CTASection() {
@@ -49,7 +49,7 @@ export default function CTASection() {
                 </h2>
 
                 <p className="text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto">
-                    Join teams who've already made the switch. Your workspace awaits.
+                    Set up your workspace in seconds. Start collaborating instantly.
                 </p>
 
                 {/* CTAs */}
@@ -59,7 +59,7 @@ export default function CTASection() {
                             href="/dashboard"
                             className="btn-glow px-8 py-4 rounded-xl text-base inline-flex items-center justify-center gap-2"
                         >
-                            Go to Dashboard
+                            Open Workspace
                             <ArrowRight className="w-5 h-5" />
                         </Link>
                     ) : (
@@ -71,12 +71,15 @@ export default function CTASection() {
                                 Get started for free
                                 <ArrowRight className="w-5 h-5" />
                             </Link>
-                            <Link
-                                href="/sign-in"
+                            <a
+                                href="https://github.com/Bhanuteja-c/collabflow"
+                                target="_blank"
+                                rel="noopener noreferrer"
                                 className="btn-secondary px-8 py-4 rounded-xl text-base inline-flex items-center justify-center gap-2"
                             >
-                                Schedule a demo
-                            </Link>
+                                <Github className="w-5 h-5" />
+                                View on GitHub
+                            </a>
                         </>
                     )}
                 </div>
